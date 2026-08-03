@@ -164,3 +164,38 @@
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 .taskplus-toast--error { background: #c92a2a; }
+
+/* ===================== Etapa 2a: rotinas recorrentes ===================== */
+
+/* Rotina pausada: mesmo esmaecido usado para concluídas na tela Hoje */
+.taskplus-card--paused { opacity: 0.65; }
+.taskplus-card--routine .taskplus-card__actions { align-items: flex-start; }
+
+/* Modal mais largo para caber os blocos de recorrência */
+.taskplus-modal__box--wide { width: min(560px, calc(100vw - 32px)); }
+
+.taskplus-checkline {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.88rem; color: #45525e; cursor: pointer; margin: 0;
+}
+
+/* Seletor de dias da semana (weekly) */
+.taskplus-weekdays {
+    display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;
+}
+.taskplus-weekdays label {
+    display: flex; align-items: center; gap: 4px;
+    border: 1px solid #c6d0d9; border-radius: 6px;
+    padding: 4px 8px; font-size: 0.82rem; color: #45525e; cursor: pointer;
+}
+.taskplus-weekdays input:checked + label,
+.taskplus-weekdays label:has(input:checked) {
+    background: #e3f0fa; border-color: #2a76a8; color: #2a76a8;
+}
+
+/* Alternância dia fixo / posição (monthly) */
+.taskplus-monthly-mode {
+    display: flex; gap: 14px; margin-bottom: 8px;
+    font-size: 0.85rem; color: #45525e;
+}
+.taskplus-monthly-mode label { display: flex; align-items: center; gap: 5px; cursor: pointer; }

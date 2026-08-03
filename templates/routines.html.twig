@@ -1,0 +1,141 @@
+{# Task+ — tela "Rotinas" (Etapa 2a: CRUD de rotinas recorrentes) #}
+
+<link rel="stylesheet" href="{{ plugin_web_dir }}/css/taskplus.css">
+
+<div class="taskplus-app" id="taskplus-routines"
+     data-csrf="{{ csrf_token }}"
+     data-user-id="{{ current_user_id }}"
+     data-ajax-url="{{ plugin_web_dir }}/ajax/routine.php">
+
+    {% include '@taskplus/_sidebar.html.twig' with {'active': 'routines'} %}
+
+    {# ================= ÁREA PRINCIPAL (Etapa 2a: rotinas) ================= #}
+    <div class="taskplus-main">
+
+        <div class="taskplus-toolbar">
+            <button type="button" class="btn btn-primary" id="tpr-btn-new">
+                <i class="ti ti-plus"></i>&nbsp;{{ __('Nova rotina', 'taskplus') }}
+            </button>
+            <label class="taskplus-toolbar__toggle">
+                <input type="checkbox" id="tpr-show-paused">
+                {{ __('Mostrar pausadas', 'taskplus') }}
+            </label>
+        </div>
+
+        {# Lista de rotinas renderizada pelo JS #}
+        <div id="tpr-list"></div>
+    </div>
+</div>
+
+{# ================= MODAL de nova/edição de rotina ================= #}
+<div class="taskplus-modal" id="tpr-modal" hidden>
+    <div class="taskplus-modal__box taskplus-modal__box--wide">
+        <h3 id="tpr-modal-title">{{ __('Nova rotina', 'taskplus') }}</h3>
+
+        <label class="taskplus-field">
+            <span>{{ __('Nome', 'taskplus') }} *</span>
+            <input type="text" id="tpr-f-name" maxlength="255" autocomplete="off">
+        </label>
+
+        <label class="taskplus-field">
+            <span>{{ __('Instruções (como fazer)', 'taskplus') }}</span>
+            <textarea id="tpr-f-instructions" rows="2"></textarea>
+        </label>
+
+        <label class="taskplus-field">
+            <span>{{ __('Frequência', 'taskplus') }}</span>
+            <select id="tpr-f-frequency">
+                <option value="daily">{{ __('Diária', 'taskplus') }}</option>
+                <option value="weekly">{{ __('Semanal', 'taskplus') }}</option>
+                <option value="monthly">{{ __('Mensal', 'taskplus') }}</option>
+            </select>
+        </label>
+
+        {# Bloco diário #}
+        <div id="tpr-block-daily" class="taskplus-field">
+            <label class="taskplus-checkline">
+                <input type="checkbox" id="tpr-f-only-workdays">
+                {{ __('Só dias úteis (segunda a sexta)', 'taskplus') }}
+            </label>
+        </div>
+
+        {# Bloco semanal #}
+        <div id="tpr-block-weekly" class="taskplus-field" hidden>
+            <span>{{ __('Dias da semana', 'taskplus') }}</span>
+            <div class="taskplus-weekdays" id="tpr-f-weekdays">
+                <label><input type="checkbox" value="1">{{ __('Seg', 'taskplus') }}</label>
+                <label><input type="checkbox" value="2">{{ __('Ter', 'taskplus') }}</label>
+                <label><input type="checkbox" value="3">{{ __('Qua', 'taskplus') }}</label>
+                <label><input type="checkbox" value="4">{{ __('Qui', 'taskplus') }}</label>
+                <label><input type="checkbox" value="5">{{ __('Sex', 'taskplus') }}</label>
+                <label><input type="checkbox" value="6">{{ __('Sáb', 'taskplus') }}</label>
+                <label><input type="checkbox" value="7">{{ __('Dom', 'taskplus') }}</label>
+            </div>
+        </div>
+
+        {# Bloco mensal #}
+        <div id="tpr-block-monthly" class="taskplus-field" hidden>
+            <div class="taskplus-monthly-mode">
+                <label><input type="radio" name="tpr-monthly-mode" value="day" checked>{{ __('Dia fixo do mês', 'taskplus') }}</label>
+                <label><input type="radio" name="tpr-monthly-mode" value="pos">{{ __('Posição (ex.: última sexta)', 'taskplus') }}</label>
+            </div>
+            <div class="taskplus-modal__row" id="tpr-monthly-day-row">
+                <label class="taskplus-field">
+                    <span>{{ __('Dia do mês', 'taskplus') }}</span>
+                    <input type="number" id="tpr-f-monthday" min="1" max="31">
+                </label>
+            </div>
+            <div class="taskplus-modal__row" id="tpr-monthly-pos-row" hidden>
+                <label class="taskplus-field">
+                    <span>{{ __('Posição', 'taskplus') }}</span>
+                    <select id="tpr-f-monthweek">
+                        <option value="1">{{ __('1ª', 'taskplus') }}</option>
+                        <option value="2">{{ __('2ª', 'taskplus') }}</option>
+                        <option value="3">{{ __('3ª', 'taskplus') }}</option>
+                        <option value="4">{{ __('4ª', 'taskplus') }}</option>
+                        <option value="5">{{ __('5ª', 'taskplus') }}</option>
+                        <option value="-1">{{ __('Última', 'taskplus') }}</option>
+                    </select>
+                </label>
+                <label class="taskplus-field">
+                    <span>{{ __('Dia da semana', 'taskplus') }}</span>
+                    <select id="tpr-f-monthweekday">
+                        <option value="1">{{ __('Segunda-feira', 'taskplus') }}</option>
+                        <option value="2">{{ __('Terça-feira', 'taskplus') }}</option>
+                        <option value="3">{{ __('Quarta-feira', 'taskplus') }}</option>
+                        <option value="4">{{ __('Quinta-feira', 'taskplus') }}</option>
+                        <option value="5">{{ __('Sexta-feira', 'taskplus') }}</option>
+                        <option value="6">{{ __('Sábado', 'taskplus') }}</option>
+                        <option value="7">{{ __('Domingo', 'taskplus') }}</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+
+        <div class="taskplus-modal__row">
+            <label class="taskplus-field">
+                <span>{{ __('Horário-limite', 'taskplus') }}</span>
+                <input type="time" id="tpr-f-time">
+            </label>
+            <label class="taskplus-field">
+                <span>{{ __('Início', 'taskplus') }}</span>
+                <input type="date" id="tpr-f-begin">
+            </label>
+            <label class="taskplus-field">
+                <span>{{ __('Término (opcional)', 'taskplus') }}</span>
+                <input type="date" id="tpr-f-end">
+            </label>
+        </div>
+
+        <div class="taskplus-modal__actions">
+            <button type="button" class="btn btn-ghost-secondary" id="tpr-btn-cancel">{{ __('Cancelar', 'taskplus') }}</button>
+            <button type="button" class="btn btn-primary" id="tpr-btn-save">{{ __('Salvar', 'taskplus') }}</button>
+        </div>
+    </div>
+</div>
+
+{# Estado inicial da tela. O front gera este JSON com JSON_HEX_TAG & cia,
+   então um "</script>" em nome/instruções de rotina NÃO quebra a página —
+   por isso (e só por isso) o |raw é seguro aqui. #}
+<script type="application/json" id="taskplus-routines-data">{{ payload_json|raw }}</script>
+<script src="{{ plugin_web_dir }}/js/routines.js?v={{ plugin_version }}"></script>

@@ -7,58 +7,9 @@
      data-user-id="{{ current_user_id }}"
      data-ajax-url="{{ plugin_web_dir }}/ajax/occurrence.php">
 
-    {# ================= COLUNA ESQUERDA: título + sidebar ================= #}
-    <div class="taskplus-left">
-        <div class="taskplus-pagetitle">
-            <div class="taskplus-brand">
-                <img class="taskplus-brand__mark" alt=""
-                     src="{{ plugin_web_dir }}/img/taskplus-mark.svg">
-                <h2>{{ __('Task+', 'taskplus') }}</h2>
-            </div>
-            <span>{{ __('Suas tarefas do dia, num lugar só', 'taskplus') }}</span>
-        </div>
-        <nav class="taskplus-sidebar">
-            <ul>
-                {% if nav.today %}
-                <li class="taskplus-sidebar__item taskplus-sidebar__item--active">
-                    <a href="{{ plugin_web_dir }}/front/today.php"><i class="ti ti-checkbox"></i>{{ __('Hoje', 'taskplus') }}</a>
-                </li>
-                {% endif %}
-                {# Telas das próximas etapas: entradas desabilitadas de propósito
-                   (link morto daria 404). Viram <a> quando cada etapa fechar. #}
-                {% if nav.routines %}
-                <li class="taskplus-sidebar__item taskplus-sidebar__item--disabled" title="{{ __('Em breve (Etapa 2)', 'taskplus') }}">
-                    <span><i class="ti ti-repeat"></i>{{ __('Rotinas', 'taskplus') }}</span>
-                </li>
-                {% endif %}
-                {% if nav.week %}
-                <li class="taskplus-sidebar__item taskplus-sidebar__item--disabled" title="{{ __('Em breve (Etapa 5)', 'taskplus') }}">
-                    <span><i class="ti ti-calendar-week"></i>{{ __('Semana', 'taskplus') }}</span>
-                </li>
-                {% endif %}
-                {% if nav.team %}
-                <li class="taskplus-sidebar__item taskplus-sidebar__item--disabled" title="{{ __('Em breve (Etapa 4)', 'taskplus') }}">
-                    <span><i class="ti ti-users"></i>{{ __('Equipe', 'taskplus') }}</span>
-                </li>
-                {% endif %}
-                {% if nav.panel %}
-                <li class="taskplus-sidebar__item taskplus-sidebar__item--disabled" title="{{ __('Em breve (Etapa 5)', 'taskplus') }}">
-                    <span><i class="ti ti-chart-bar"></i>{{ __('Painel', 'taskplus') }}</span>
-                </li>
-                {% endif %}
-                {% if nav.history %}
-                <li class="taskplus-sidebar__item taskplus-sidebar__item--disabled" title="{{ __('Em breve (Etapa 5)', 'taskplus') }}">
-                    <span><i class="ti ti-history"></i>{{ __('Histórico', 'taskplus') }}</span>
-                </li>
-                {% endif %}
-                {% if nav.config %}
-                <li class="taskplus-sidebar__item">
-                    <a href="{{ plugin_web_dir }}/front/config.form.php"><i class="ti ti-settings"></i>{{ __('Configurações', 'taskplus') }}</a>
-                </li>
-                {% endif %}
-            </ul>
-        </nav>
-    </div>
+    {# ================= COLUNA ESQUERDA: título + sidebar =================
+       Extraída para partial na Etapa 2a (deixou de ser a única tela). #}
+    {% include '@taskplus/_sidebar.html.twig' with {'active': 'today'} %}
 
     {# ================= ÁREA PRINCIPAL (Etapa 1: avulsas) ================= #}
     <div class="taskplus-main">

@@ -88,9 +88,6 @@ msgstr ""
 msgid "Salvar"
 msgstr ""
 
-msgid "Em breve (Etapa 2)"
-msgstr ""
-
 msgid "Em breve (Etapa 4)"
 msgstr ""
 
@@ -153,4 +150,169 @@ msgid "Task+: gera as ocorrências do dia (rotinas)"
 msgstr ""
 
 msgid "Task+: alertas de horário-limite e pendências"
+msgstr ""
+
+#: front/routines.php
+msgid "Task+ — Rotinas"
+msgstr ""
+
+#: templates/routines.html.twig
+msgid "Nova rotina"
+msgstr ""
+
+msgid "Mostrar pausadas"
+msgstr ""
+
+msgid "Nome"
+msgstr ""
+
+msgid "Instruções (como fazer)"
+msgstr ""
+
+msgid "Frequência"
+msgstr ""
+
+msgid "Diária"
+msgstr ""
+
+msgid "Semanal"
+msgstr ""
+
+msgid "Mensal"
+msgstr ""
+
+msgid "Só dias úteis (segunda a sexta)"
+msgstr ""
+
+msgid "Dias da semana"
+msgstr ""
+
+msgid "Seg"
+msgstr ""
+
+msgid "Ter"
+msgstr ""
+
+msgid "Qua"
+msgstr ""
+
+msgid "Qui"
+msgstr ""
+
+msgid "Sex"
+msgstr ""
+
+msgid "Sáb"
+msgstr ""
+
+msgid "Dom"
+msgstr ""
+
+msgid "Dia fixo do mês"
+msgstr ""
+
+msgid "Posição (ex.: última sexta)"
+msgstr ""
+
+msgid "Dia do mês"
+msgstr ""
+
+msgid "Posição"
+msgstr ""
+
+msgid "1ª"
+msgstr ""
+
+msgid "2ª"
+msgstr ""
+
+msgid "3ª"
+msgstr ""
+
+msgid "4ª"
+msgstr ""
+
+msgid "5ª"
+msgstr ""
+
+msgid "Última"
+msgstr ""
+
+msgid "Dia da semana"
+msgstr ""
+
+msgid "Segunda-feira"
+msgstr ""
+
+msgid "Terça-feira"
+msgstr ""
+
+msgid "Quarta-feira"
+msgstr ""
+
+msgid "Quinta-feira"
+msgstr ""
+
+msgid "Sexta-feira"
+msgstr ""
+
+msgid "Sábado"
+msgstr ""
+
+msgid "Domingo"
+msgstr ""
+
+msgid "Início"
+msgstr ""
+
+msgid "Término (opcional)"
+msgstr ""
+
+#: src/Routine.php
+msgid "Rotina criada"
+msgstr ""
+
+msgid "Rotina atualizada"
+msgstr ""
+
+msgid "Rotina excluída"
+msgstr ""
+
+msgid "Rotina não encontrada"
+msgstr ""
+
+msgid "Rotina pausada"
+msgstr ""
+
+msgid "Rotina retomada"
+msgstr ""
+
+msgid "Informe o nome da rotina"
+msgstr ""
+
+msgid "Frequência inválida"
+msgstr ""
+
+msgid "Selecione ao menos um dia da semana"
+msgstr ""
+
+msgid "Informe o dia fixo OU a posição do mês, não os dois"
+msgstr ""
+
+msgid "Dia do mês inválido"
+msgstr ""
+
+msgid "Posição do mês inválida"
+msgstr ""
+
+msgid "Dia da semana inválido"
+msgstr ""
+
+msgid "Data de início inválida"
+msgstr ""
+
+msgid "Data de término inválida"
+msgstr ""
+
+msgid "Término não pode ser antes do início"
 msgstr ""
