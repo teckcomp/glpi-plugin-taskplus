@@ -1,0 +1,42 @@
+/* Task+ — estilos base (Etapa 0). Derivados do padrão visual do ProjectPlus. */
+
+/* Layout geral: coluna esquerda (título + sidebar) + área principal */
+.taskplus-app {
+    display: flex; gap: 18px; align-items: flex-start;
+    padding: 12px 18px;
+}
+.taskplus-left { flex: 0 0 210px; }
+.taskplus-main { flex: 1 1 auto; min-width: 0; }
+
+/* Título / marca */
+.taskplus-pagetitle { margin-bottom: 14px; }
+.taskplus-pagetitle span { color: #8a97a5; font-size: 0.85rem; }
+.taskplus-brand { display: flex; align-items: center; gap: 8px; }
+.taskplus-brand__mark { width: 28px; height: 28px; }
+.taskplus-brand h2 { margin: 0; font-size: 1.25rem; }
+
+/* Sidebar */
+.taskplus-sidebar ul { list-style: none; margin: 0; padding: 0; }
+.taskplus-sidebar__item a,
+.taskplus-sidebar__item span {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 6px;
+    color: #45525e; text-decoration: none; font-size: 0.9rem;
+}
+.taskplus-sidebar__item a:hover { background: #eaf4fb; color: #2a76a8; }
+.taskplus-sidebar__item--active a {
+    background: #e3f0fa; color: #2a76a8; font-weight: 600;
+}
+.taskplus-sidebar__item--disabled span {
+    color: #b3bcc5; cursor: not-allowed;
+}
+.taskplus-sidebar__item i { font-size: 1rem; }
+
+/* Estado vazio (Etapa 0) */
+.taskplus-empty {
+    background: #fff; border: 1px dashed #c6d0d9; border-radius: 8px;
+    padding: 48px 24px; text-align: center; color: #5a7684;
+}
+.taskplus-empty__icon { font-size: 2.4rem; color: #b3bcc5; }
+.taskplus-empty h3 { margin: 10px 0 6px; }
+.taskplus-empty p { margin: 0 auto; max-width: 460px; color: #8a97a5; }

@@ -1,0 +1,86 @@
+# Task+ — catalogo de strings traduziveis (modelo).
+# Copyright (C) Teckcomp I.T. Services
+# Distribuido sob a mesma licenca do plugin Task+ (GPL-2.0-or-later).
+#
+# ATENCAO: o msgid esta em PORTUGUES DO BRASIL de proposito (mesmo padrao
+# do ProjectPlus). O plugin exibe pt-BR sem precisar de .mo; as traducoes
+# levam de pt_BR para o outro idioma (en_GB entra em etapa futura).
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Task+ 0.1.0-dev\n"
+"Report-Msgid-Bugs-To: https://github.com/teckcomp/glpi-plugin-taskplus/issues\n"
+"POT-Creation-Date: 2026-08-02 00:00+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/Today.php
+msgid "Task+"
+msgstr ""
+
+#: front/today.php
+msgid "Task+ — Hoje"
+msgstr ""
+
+#: templates/today.html.twig
+msgid "Hoje"
+msgstr ""
+
+msgid "Rotinas"
+msgstr ""
+
+msgid "Semana"
+msgstr ""
+
+msgid "Equipe"
+msgstr ""
+
+msgid "Painel"
+msgstr ""
+
+msgid "Histórico"
+msgstr ""
+
+msgid "Configurações"
+msgstr ""
+
+msgid "Suas tarefas do dia, num lugar só"
+msgstr ""
+
+msgid "Nenhuma tarefa por aqui — ainda"
+msgstr ""
+
+msgid "A fundação do Task+ está instalada. As tarefas avulsas chegam na Etapa 1; as rotinas recorrentes, na Etapa 2."
+msgstr ""
+
+msgid "Em breve (Etapa 2)"
+msgstr ""
+
+msgid "Em breve (Etapa 4)"
+msgstr ""
+
+msgid "Em breve (Etapa 5)"
+msgstr ""
+
+#: src/Config.php
+msgid "Configuração do Task+"
+msgstr ""
+
+msgid "Enviar e-mails (além do sino)"
+msgstr ""
+
+msgid "Apagar tabelas, dados e direitos ao desinstalar"
+msgstr ""
+
+#: front/config.form.php
+msgid "Configuração salva"
+msgstr ""
+
+#: src/Cron.php
+msgid "Task+: gera as ocorrências do dia (rotinas)"
+msgstr ""
+
+msgid "Task+: alertas de horário-limite e pendências"
+msgstr ""
