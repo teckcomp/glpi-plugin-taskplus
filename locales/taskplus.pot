@@ -49,10 +49,43 @@ msgstr ""
 msgid "Suas tarefas do dia, num lugar só"
 msgstr ""
 
-msgid "Nenhuma tarefa por aqui — ainda"
+msgid "Para hoje"
 msgstr ""
 
-msgid "A fundação do Task+ está instalada. As tarefas avulsas chegam na Etapa 1; as rotinas recorrentes, na Etapa 2."
+msgid "Concluídas"
+msgstr ""
+
+msgid "Atrasadas"
+msgstr ""
+
+msgid "Nova tarefa"
+msgstr ""
+
+msgid "Mostrar concluídas"
+msgstr ""
+
+msgid "Nova tarefa avulsa"
+msgstr ""
+
+msgid "Título"
+msgstr ""
+
+msgid "Data"
+msgstr ""
+
+msgid "Horário-limite"
+msgstr ""
+
+msgid "Categoria"
+msgstr ""
+
+msgid "Descrição"
+msgstr ""
+
+msgid "Cancelar"
+msgstr ""
+
+msgid "Salvar"
 msgstr ""
 
 msgid "Em breve (Etapa 2)"
@@ -76,6 +109,43 @@ msgstr ""
 
 #: front/config.form.php
 msgid "Configuração salva"
+msgstr ""
+
+#: src/Occurrence.php
+msgid "Ação desconhecida"
+msgstr ""
+
+msgid "Tarefa criada"
+msgstr ""
+
+msgid "Tarefa atualizada"
+msgstr ""
+
+msgid "Tarefa excluída"
+msgstr ""
+
+msgid "Tarefa concluída"
+msgstr ""
+
+msgid "Conclusão desfeita"
+msgstr ""
+
+msgid "Tarefa não encontrada"
+msgstr ""
+
+msgid "Ocorrência de rotina não pode ser editada aqui"
+msgstr ""
+
+msgid "Ocorrência de rotina não pode ser excluída aqui"
+msgstr ""
+
+msgid "Informe o título da tarefa"
+msgstr ""
+
+msgid "Data inválida"
+msgstr ""
+
+msgid "Horário-limite inválido"
 msgstr ""
 
 #: src/Cron.php

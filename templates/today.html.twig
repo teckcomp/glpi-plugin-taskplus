@@ -1,10 +1,11 @@
-{# Task+ — tela "Hoje" (Etapa 0: casca vazia, sidebar completa) #}
+{# Task+ — tela "Hoje" (Etapa 1: avulsas, check 1 clique, KPIs) #}
 
 <link rel="stylesheet" href="{{ plugin_web_dir }}/css/taskplus.css">
 
 <div class="taskplus-app" id="taskplus-today"
      data-csrf="{{ csrf_token }}"
-     data-user-id="{{ current_user_id }}">
+     data-user-id="{{ current_user_id }}"
+     data-ajax-url="{{ plugin_web_dir }}/ajax/occurrence.php">
 
     {# ================= COLUNA ESQUERDA: título + sidebar ================= #}
     <div class="taskplus-left">
@@ -59,12 +60,75 @@
         </nav>
     </div>
 
-    {# ================= ÁREA PRINCIPAL (vazia na Etapa 0) ================= #}
+    {# ================= ÁREA PRINCIPAL (Etapa 1: avulsas) ================= #}
     <div class="taskplus-main">
-        <div class="taskplus-empty">
-            <i class="ti ti-checklist taskplus-empty__icon"></i>
-            <h3>{{ __('Nenhuma tarefa por aqui — ainda', 'taskplus') }}</h3>
-            <p>{{ __('A fundação do Task+ está instalada. As tarefas avulsas chegam na Etapa 1; as rotinas recorrentes, na Etapa 2.', 'taskplus') }}</p>
+
+        {# KPIs do dia — valores preenchidos pelo JS a partir do payload #}
+        <div class="taskplus-kpis">
+            <div class="taskplus-kpi">
+                <span class="taskplus-kpi__value" id="tp-kpi-today">0</span>
+                <span class="taskplus-kpi__label">{{ __('Para hoje', 'taskplus') }}</span>
+            </div>
+            <div class="taskplus-kpi taskplus-kpi--done">
+                <span class="taskplus-kpi__value" id="tp-kpi-done">0</span>
+                <span class="taskplus-kpi__label">{{ __('Concluídas', 'taskplus') }}</span>
+            </div>
+            <div class="taskplus-kpi taskplus-kpi--late">
+                <span class="taskplus-kpi__value" id="tp-kpi-late">0</span>
+                <span class="taskplus-kpi__label">{{ __('Atrasadas', 'taskplus') }}</span>
+            </div>
+        </div>
+
+        <div class="taskplus-toolbar">
+            <button type="button" class="btn btn-primary" id="tp-btn-new">
+                <i class="ti ti-plus"></i>&nbsp;{{ __('Nova tarefa', 'taskplus') }}
+            </button>
+            <label class="taskplus-toolbar__toggle">
+                <input type="checkbox" id="tp-show-done">
+                {{ __('Mostrar concluídas', 'taskplus') }}
+            </label>
+        </div>
+
+        {# Lista (seções Atrasadas/Hoje) renderizada pelo JS #}
+        <div id="tp-list"></div>
+    </div>
+</div>
+
+{# ================= MODAL de nova/edição de avulsa ================= #}
+<div class="taskplus-modal" id="tp-modal" hidden>
+    <div class="taskplus-modal__box">
+        <h3 id="tp-modal-title">{{ __('Nova tarefa avulsa', 'taskplus') }}</h3>
+        <label class="taskplus-field">
+            <span>{{ __('Título', 'taskplus') }} *</span>
+            <input type="text" id="tp-f-name" maxlength="255" autocomplete="off">
+        </label>
+        <div class="taskplus-modal__row">
+            <label class="taskplus-field">
+                <span>{{ __('Data', 'taskplus') }}</span>
+                <input type="date" id="tp-f-date">
+            </label>
+            <label class="taskplus-field">
+                <span>{{ __('Horário-limite', 'taskplus') }}</span>
+                <input type="time" id="tp-f-time">
+            </label>
+        </div>
+        <label class="taskplus-field">
+            <span>{{ __('Categoria', 'taskplus') }}</span>
+            <input type="text" id="tp-f-category" maxlength="255" autocomplete="off">
+        </label>
+        <label class="taskplus-field">
+            <span>{{ __('Descrição', 'taskplus') }}</span>
+            <textarea id="tp-f-description" rows="3"></textarea>
+        </label>
+        <div class="taskplus-modal__actions">
+            <button type="button" class="btn btn-ghost-secondary" id="tp-btn-cancel">{{ __('Cancelar', 'taskplus') }}</button>
+            <button type="button" class="btn btn-primary" id="tp-btn-save">{{ __('Salvar', 'taskplus') }}</button>
         </div>
     </div>
 </div>
+
+{# Estado inicial da tela. O front gera este JSON com JSON_HEX_TAG & cia,
+   então um "</script>" em nome de tarefa NÃO quebra a página — por isso
+   (e só por isso) o |raw é seguro aqui. #}
+<script type="application/json" id="taskplus-data">{{ payload_json|raw }}</script>
+<script src="{{ plugin_web_dir }}/js/taskplus.js?v={{ plugin_version }}"></script>

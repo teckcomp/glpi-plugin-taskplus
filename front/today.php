@@ -1,14 +1,16 @@
 <?php
 
 /**
- * Task+ — tela "Hoje" (Etapa 0: casca vazia).
+ * Task+ — tela "Hoje" (Etapa 1: avulsas + check 1 clique + KPIs).
  *
- * O hub real (avulsas em 1 clique, grupos de rotinas, chips das origens
- * nativas) chega nas Etapas 1–3.
+ * O controlador entrega TUDO pronto: o payload inicial vai embutido como
+ * JSON na página (o public/js/taskplus.js renderiza e, depois de cada
+ * ação no ajax/occurrence.php, re-renderiza com o payload da resposta).
  */
 
 use Glpi\Application\View\TemplateRenderer;
 use GlpiPlugin\Taskplus\Access;
+use GlpiPlugin\Taskplus\Occurrence;
 use GlpiPlugin\Taskplus\Today;
 use GlpiPlugin\Taskplus\Url;
 
@@ -23,15 +25,24 @@ Html::header(
     Today::class
 );
 
+$payload = Occurrence::payload((int) Session::getLoginUserID());
+
 // Twig do GLPI é strict: TODA variável usada no template TEM que estar
 // aqui, e `nav` traz TODAS as chaves sempre (Access::sidebar()).
+// JSON com HEX_TAG & cia: um "</script>" num nome de tarefa não pode
+// quebrar a página (lição herdada do ProjectPlus).
 TemplateRenderer::getInstance()->display(
     '@taskplus/today.html.twig',
     [
         'plugin_web_dir'  => Url::base(),
+        'plugin_version'  => PLUGIN_TASKPLUS_VERSION,
         'nav'             => Access::sidebar(),
         'current_user_id' => (int) Session::getLoginUserID(),
         'csrf_token'      => Session::getNewCSRFToken(),
+        'payload_json'    => json_encode(
+            $payload,
+            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+        ),
     ]
 );
 

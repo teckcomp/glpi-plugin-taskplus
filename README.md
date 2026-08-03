@@ -7,8 +7,10 @@ usuário e gestor, painel de indicadores e histórico auditável.
 Derivado da base do [ProjectPlus](https://github.com/teckcomp/glpi-plugin-projectplus),
 sem os módulos de Projetos, Modelos, Orçamento, Custos e Relatórios.
 
-**Estado:** em desenvolvimento (Etapa 0 — fundação). Ver `ROADMAP` no
-projeto para o plano completo.
+**Estado:** em desenvolvimento (Etapa 1 — tarefas avulsas + tela Hoje:
+CRUD de avulsa, conclusão em 1 clique com autor/hora, badges de
+horário-limite/atraso e KPIs do dia). Ver `ROADMAP` no projeto para o
+plano completo.
 
 ## Requisitos
 
