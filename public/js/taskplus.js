@@ -1,5 +1,5 @@
 /**
- * Task+ — tela "Hoje" (Etapa 1).
+ * Task+ — tela "Hoje" (Etapa 1; grupos de rotina na Etapa 2b).
  *
  * Contrato com o servidor:
  *  - estado inicial embutido em <script type="application/json" id="taskplus-data">
@@ -124,6 +124,14 @@
     // Render
     // ------------------------------------------------------------------
 
+    /** Ordem e rótulo dos grupos da seção "Hoje" (Etapa 2b). */
+    var GROUPS = [
+        ['daily', 'Rotinas diárias'],
+        ['weekly', 'Rotinas semanais'],
+        ['monthly', 'Rotinas mensais'],
+        ['avulsa', 'Avulsas']
+    ];
+
     function render() {
         $('tp-kpi-today').textContent = String(state.data.kpis.today);
         $('tp-kpi-done').textContent = String(state.data.kpis.done);
@@ -145,8 +153,27 @@
         if (overdueItems.length > 0) {
             list.appendChild(section('Atrasadas', overdueItems, true));
         }
+
         if (todayItems.length > 0) {
-            list.appendChild(section('Hoje', todayItems, false));
+            // Sem nenhuma ocorrência de rotina no dia, a tela continua
+            // exatamente como na Etapa 1 (uma seção "Hoje") — dividir em
+            // "Avulsas" sozinho seria ruído.
+            var hasRoutine = todayItems.some(function (item) {
+                return item.group && item.group !== 'avulsa';
+            });
+
+            if (!hasRoutine) {
+                list.appendChild(section('Hoje', todayItems, false));
+            } else {
+                GROUPS.forEach(function (group) {
+                    var items = todayItems.filter(function (item) {
+                        return (item.group || 'avulsa') === group[0];
+                    });
+                    if (items.length > 0) {
+                        list.appendChild(section(group[1], items, false));
+                    }
+                });
+            }
         }
     }
 
@@ -204,6 +231,11 @@
         var badges = el('div', 'taskplus-card__badges');
         if (isOverdue && item.date_label) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--late', item.date_label));
+        }
+        // Na seção "Atrasadas" as origens se misturam (o agrupamento por
+        // rotina só existe na seção do dia) — marca de onde a tarefa veio.
+        if (isOverdue && item.is_routine) {
+            badges.appendChild(el('span', 'taskplus-badge', 'rotina'));
         }
         if (item.time_limit) {
             badges.appendChild(el('span',

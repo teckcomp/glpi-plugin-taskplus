@@ -297,6 +297,189 @@ class Routine
     }
 
     // =====================================================================
+    // Geração de ocorrências (Etapa 2b — usada pelo cron taskplusgen)
+    // =====================================================================
+
+    /**
+     * A rotina $routine deve gerar ocorrência no dia $date ('Y-m-d')?
+     *
+     * Função PURA (nenhum acesso a banco) de propósito: é a regra mais
+     * sujeita a erro do plugin inteiro (meses de 28/29/30/31 dias,
+     * "última sexta", dia 31 em mês sem 31) e precisa ser exercitável por
+     * harness com bateria de datas.
+     *
+     * Decisões de calendário desta etapa:
+     *  - "só dias úteis" = segunda a sexta (ISO 1..5). Feriado NÃO é
+     *    considerado (o calendário de feriados do GLPI entra em etapa
+     *    futura, se o uso pedir);
+     *  - mensal por DIA FIXO em mês curto: dia 31 numa base de 30 dias cai
+     *    no ÚLTIMO dia do mês (31/jan, 28/fev, 31/mar...). A alternativa
+     *    seria simplesmente pular o mês, o que faria uma rotina "dia 31"
+     *    nunca rodar em fevereiro — pior para o usuário;
+     *  - mensal por POSIÇÃO com monthweek = 5 num mês em que aquele dia da
+     *    semana só ocorre 4 vezes: não gera (5ª segunda é 5ª segunda; quem
+     *    quer "a última" escolhe -1).
+     */
+    public static function isDueOn(array $routine, string $date): bool
+    {
+        if (((int) ($routine['is_deleted'] ?? 0)) === 1) {
+            return false;
+        }
+        if (((int) ($routine['is_paused'] ?? 0)) === 1) {
+            return false;
+        }
+
+        $begin = (string) ($routine['date_begin'] ?? '');
+        if ($begin !== '' && $date < $begin) {
+            return false;
+        }
+        $end = (string) ($routine['date_end'] ?? '');
+        if ($end !== '' && $date > $end) {
+            return false;
+        }
+
+        // Meio-dia para não sofrer com horário de verão na conversão
+        $ts = strtotime($date . ' 12:00:00');
+        if ($ts === false) {
+            return false;
+        }
+
+        $iso         = (int) date('N', $ts); // 1 = segunda … 7 = domingo
+        $dayOfMonth  = (int) date('j', $ts);
+        $daysInMonth = (int) date('t', $ts);
+
+        $frequency = (string) ($routine['frequency'] ?? 'daily');
+
+        if ($frequency === 'daily') {
+            if (((int) ($routine['only_workdays'] ?? 0)) === 1) {
+                return $iso <= 5;
+            }
+            return true;
+        }
+
+        if ($frequency === 'weekly') {
+            return in_array($iso, self::weekdaysToArray((string) ($routine['weekdays'] ?? '')), true);
+        }
+
+        if ($frequency === 'monthly') {
+            $monthday = (int) ($routine['monthday'] ?? 0);
+            if ($monthday > 0) {
+                // Mês curto: cai no último dia (ver comentário acima)
+                return $dayOfMonth === min($monthday, $daysInMonth);
+            }
+
+            $week    = (int) ($routine['monthweek'] ?? 0);
+            $weekday = (int) ($routine['monthweekday'] ?? 0);
+            if ($week === 0 || $weekday === 0 || $weekday !== $iso) {
+                return false;
+            }
+
+            if ($week === -1) {
+                // Última ocorrência daquele dia da semana no mês:
+                // não existe outra 7 dias depois.
+                return ($dayOfMonth + 7) > $daysInMonth;
+            }
+
+            // 1ª/2ª/…: a n-ésima ocorrência cai no bloco de 7 dias nº n
+            return (intdiv($dayOfMonth - 1, 7) + 1) === $week;
+        }
+
+        return false;
+    }
+
+    /**
+     * Materializa as ocorrências de $date a partir das rotinas ativas.
+     *
+     * Vive aqui (e não no Cron) para ser exercitável por harness — o
+     * Cron::cronTaskplusgen só chama e loga.
+     *
+     * IDEMPOTENTE: antes de inserir, checa se já existe ocorrência da
+     * rotina naquele dia (INCLUSIVE excluída — a UNIQUE `routine_day` do
+     * banco não distingue is_deleted, e reinserir ressuscitaria algo que o
+     * usuário tirou da frente). Rodar de hora em hora não duplica nada.
+     *
+     * Devolve ['created' => n, 'skipped' => n, 'routines' => n].
+     */
+    public static function generateForDate(?string $date = null): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $date = $date ?? date('Y-m-d');
+        $now  = date('Y-m-d H:i:s');
+
+        $created  = 0;
+        $skipped  = 0;
+        $examined = 0;
+
+        foreach ($DB->request([
+            'FROM'  => self::TABLE,
+            'WHERE' => [
+                self::TABLE . '.is_deleted' => 0,
+                self::TABLE . '.is_paused'  => 0,
+            ],
+        ]) as $routine) {
+            $examined++;
+
+            if (!self::isDueOn($routine, $date)) {
+                continue;
+            }
+
+            if (self::occurrenceExists((int) $routine['id'], $date)) {
+                $skipped++;
+                continue;
+            }
+
+            $DB->insert(Occurrence::TABLE, [
+                'plugin_taskplus_routines_id' => (int) $routine['id'],
+                'name'             => (string) ($routine['name'] ?? ''),
+                // As instruções da rotina viram a descrição do dia: quem
+                // executa vê o "como fazer" sem sair da tela Hoje.
+                'description'      => (string) ($routine['instructions'] ?? ''),
+                'category'         => '',
+                'users_id'         => (int) ($routine['users_id'] ?? 0),
+                'users_id_creator' => (int) ($routine['users_id_creator'] ?? 0),
+                'date'             => $date,
+                'time_limit'       => $routine['time_limit'] ?? null,
+                'is_done'          => 0,
+                'is_skipped'       => 0,
+                'is_deleted'       => 0,
+                'date_creation'    => $now,
+                'date_mod'         => $now,
+            ]);
+            $created++;
+        }
+
+        return [
+            'created'  => $created,
+            'skipped'  => $skipped,
+            'routines' => $examined,
+        ];
+    }
+
+    /**
+     * Já existe ocorrência desta rotina neste dia? Propositalmente SEM
+     * filtro de is_deleted (ver comentário de generateForDate).
+     */
+    private static function occurrenceExists(int $routineId, string $date): bool
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        foreach ($DB->request([
+            'FROM'  => Occurrence::TABLE,
+            'WHERE' => [
+                Occurrence::TABLE . '.plugin_taskplus_routines_id' => $routineId,
+                Occurrence::TABLE . '.date'                        => $date,
+            ],
+        ]) as $ignored) {
+            return true;
+        }
+
+        return false;
+    }
+
+    // =====================================================================
     // Helpers
     // =====================================================================
 

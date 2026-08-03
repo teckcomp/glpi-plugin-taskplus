@@ -3,7 +3,7 @@
 namespace GlpiPlugin\Taskplus;
 
 /**
- * Task+ — tarefas avulsas e ocorrências (Etapa 1).
+ * Task+ — tarefas avulsas e ocorrências (Etapa 1; JOIN com rotinas na 2b).
  *
  * Camada única de dados/ações da tabela glpi_plugin_taskplus_occurrences,
  * usada pelo endpoint ajax/occurrence.php e pelo front/today.php. Fica em
@@ -51,8 +51,7 @@ class Occurrence
         $nowTime = date('H:i:s');
 
         $todayRows = [];
-        foreach ($DB->request([
-            'FROM'  => self::TABLE,
+        foreach ($DB->request(self::baseQuery() + [
             'WHERE' => [
                 self::TABLE . '.users_id'   => $usersId,
                 self::TABLE . '.is_deleted' => 0,
@@ -63,8 +62,7 @@ class Occurrence
         }
 
         $overdueRows = [];
-        foreach ($DB->request([
-            'FROM'  => self::TABLE,
+        foreach ($DB->request(self::baseQuery() + [
             'WHERE' => [
                 self::TABLE . '.users_id'   => $usersId,
                 self::TABLE . '.is_deleted' => 0,
@@ -103,6 +101,44 @@ class Occurrence
     }
 
     /**
+     * SELECT + FROM + LEFT JOIN comuns às consultas da tela Hoje
+     * (Etapa 2b: a ocorrência passou a poder vir de rotina, e a tela
+     * agrupa por Diárias/Semanais/Mensais).
+     *
+     * TODA coluna vai qualificada e o SELECT é explícito de propósito:
+     * `id`, `name`, `date_mod` e `is_deleted` existem nas DUAS tabelas —
+     * `SELECT *` num JOIN devolveria a coluna errada e o WHERE sem
+     * qualificar daria erro 1052 ("Column ... is ambiguous").
+     */
+    private static function baseQuery(): array
+    {
+        return [
+            'SELECT' => [
+                self::TABLE . '.id',
+                self::TABLE . '.plugin_taskplus_routines_id',
+                self::TABLE . '.name',
+                self::TABLE . '.description',
+                self::TABLE . '.category',
+                self::TABLE . '.date',
+                self::TABLE . '.time_limit',
+                self::TABLE . '.is_done',
+                self::TABLE . '.done_date',
+                Routine::TABLE . '.name AS routine_name',
+                Routine::TABLE . '.frequency AS routine_frequency',
+            ],
+            'FROM'      => self::TABLE,
+            'LEFT JOIN' => [
+                Routine::TABLE => [
+                    'ON' => [
+                        Routine::TABLE => 'id',
+                        self::TABLE    => 'plugin_taskplus_routines_id',
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
      * Linha do banco → item do payload (formatos prontos para o JS).
      */
     private static function format(array $row, string $today, string $nowTime): array
@@ -118,10 +154,24 @@ class Occurrence
             || ($date === $today && $limit !== null && $limit !== '' && $limit < $nowTime)
         );
 
+        $isRoutine = ($row['plugin_taskplus_routines_id'] ?? null) !== null;
+
+        // Grupo da tela Hoje: 'daily'|'weekly'|'monthly' para ocorrência de
+        // rotina, 'avulsa' para o resto. Rotina excluída depois de gerar a
+        // ocorrência do dia deixa o JOIN sem par → cai em 'avulsa' de
+        // propósito: a tarefa continua existindo e concluível, só perde o
+        // agrupamento.
+        $group = 'avulsa';
+        if ($isRoutine && !empty($row['routine_frequency'])) {
+            $group = (string) $row['routine_frequency'];
+        }
+
         return [
             'id'          => (int) ($row['id'] ?? 0),
-            // Ocorrência de rotina (Etapa 2) não é editável/excluível aqui
-            'is_routine'  => ($row['plugin_taskplus_routines_id'] ?? null) !== null,
+            // Ocorrência de rotina não é editável/excluível na tela Hoje
+            'is_routine'  => $isRoutine,
+            'group'       => $group,
+            'routine_name' => (string) ($row['routine_name'] ?? ''),
             'name'        => (string) ($row['name'] ?? ''),
             'description' => (string) ($row['description'] ?? ''),
             'category'    => (string) ($row['category'] ?? ''),
