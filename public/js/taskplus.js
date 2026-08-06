@@ -1,5 +1,5 @@
 /**
- * Task+ — tela "Hoje" (Etapa 1; grupos na 2b; chamados nativos na 3a).
+ * Task+ — tela "Hoje" (Etapa 1; grupos na 2b; nativas e filtro na Etapa 3).
  *
  * Contrato com o servidor:
  *  - estado inicial embutido em <script type="application/json" id="taskplus-data">
@@ -21,6 +21,7 @@
         ajaxUrl: '',
         csrf: '',
         showDone: false,
+        source: 'all',
         editingId: null,
         busy: false,
         data: { date: '', kpis: { today: 0, done: 0, late: 0 }, today: [], overdue: [] }
@@ -130,8 +131,29 @@
         ['weekly', 'Rotinas semanais'],
         ['monthly', 'Rotinas mensais'],
         ['avulsa', 'Avulsas'],
-        ['ticket', 'Chamados']
+        ['ticket', 'Chamados'],
+        ['project', 'Projetos']
     ];
+
+    /**
+     * Filtro por origem da toolbar (Etapa 3b): valor do select → grupos
+     * que ele deixa passar. 'all' não filtra nada.
+     */
+    var SOURCE_FILTERS = {
+        routine: ['daily', 'weekly', 'monthly'],
+        avulsa: ['avulsa'],
+        ticket: ['ticket'],
+        project: ['project']
+    };
+
+    /** O item passa pelo filtro de origem ativo? */
+    function matchesSource(item) {
+        var allowed = SOURCE_FILTERS[state.source];
+        if (!allowed) {
+            return true; // 'all' ou valor desconhecido: não filtra
+        }
+        return allowed.indexOf(item.group || 'avulsa') !== -1;
+    }
 
     function render() {
         $('tp-kpi-today').textContent = String(state.data.kpis.today);
@@ -142,9 +164,9 @@
         list.textContent = ''; // limpa
 
         var todayItems = state.data.today.filter(function (item) {
-            return state.showDone || !item.is_done;
+            return (state.showDone || !item.is_done) && matchesSource(item);
         });
-        var overdueItems = state.data.overdue;
+        var overdueItems = state.data.overdue.filter(matchesSource);
 
         if (overdueItems.length === 0 && todayItems.length === 0) {
             list.appendChild(emptyBox());
@@ -180,6 +202,16 @@
     }
 
     function emptyBox() {
+        // Filtro ativo escondendo tudo é um estado diferente de "não há
+        // tarefa": dizer "nenhuma tarefa" aqui confundiria.
+        if (state.source !== 'all') {
+            var filtered = el('div', 'taskplus-empty');
+            filtered.appendChild(el('i', 'ti ti-filter-off taskplus-empty__icon'));
+            filtered.appendChild(el('h3', null, 'Nada nesta origem hoje'));
+            filtered.appendChild(el('p', null, 'Volte o filtro para "Todas" para ver as demais tarefas.'));
+            return filtered;
+        }
+
         var allDone = state.data.today.length > 0
             && state.data.today.every(function (item) { return item.is_done; })
             && state.data.overdue.length === 0;
@@ -219,10 +251,13 @@
             // Origem nativa é LEITURA (Etapa 3): não existe check, porque
             // concluir gravaria em tabela do GLPI — decisão adiada. No
             // lugar dele vai o ícone da origem, sem ação.
+            var isProject = item.source === 'project';
             var mark = el('span', 'taskplus-check taskplus-check--native');
-            mark.title = 'Tarefa de chamado — concluir pelo chamado';
+            mark.title = isProject
+                ? 'Tarefa de projeto — concluir pela tarefa do projeto'
+                : 'Tarefa de chamado — concluir pelo chamado';
             mark.setAttribute('aria-label', mark.title);
-            mark.appendChild(el('i', 'ti ti-headset'));
+            mark.appendChild(el('i', 'ti ' + (isProject ? 'ti-subtask' : 'ti-headset')));
             c.appendChild(mark);
         } else {
             // Check de conclusão em 1 clique
@@ -265,6 +300,13 @@
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--ticket',
                 'Chamado ' + item.ticket_label));
         }
+        if (isNative && item.project_name) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--project',
+                'Projeto: ' + item.project_name));
+        }
+        if (isNative && item.percent_label) {
+            badges.appendChild(el('span', 'taskplus-badge', item.percent_label));
+        }
         if (isNative && item.planned_label) {
             badges.appendChild(el('span', 'taskplus-badge', item.planned_label));
         }
@@ -284,7 +326,9 @@
             if (item.url) {
                 var open = el('a', 'taskplus-iconbtn');
                 open.href = item.url;
-                open.title = 'Abrir o chamado';
+                open.title = (item.source === 'project')
+                    ? 'Abrir a tarefa do projeto'
+                    : 'Abrir o chamado';
                 open.setAttribute('aria-label', open.title);
                 open.appendChild(el('i', 'ti ti-external-link'));
 
@@ -399,6 +443,13 @@
             state.showDone = !!ev.target.checked;
             render();
         });
+        var filter = $('tp-filter-source');
+        if (filter) { // template antigo sem o select não quebra
+            filter.addEventListener('change', function (ev) {
+                state.source = ev.target.value || 'all';
+                render();
+            });
+        }
         $('tp-modal').addEventListener('click', function (ev) {
             if (ev.target === $('tp-modal')) {
                 closeModal(); // clique no fundo fecha

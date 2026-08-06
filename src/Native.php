@@ -2,6 +2,7 @@
 
 namespace GlpiPlugin\Taskplus;
 
+use ProjectTask;
 use Ticket;
 
 /**
@@ -11,8 +12,8 @@ use Ticket;
  * tarefa de chamado ou de projeto continua sendo feito na tela do item
  * nativo (decisão de produto nº 2; gravação fica para etapa futura).
  *
- * 3a (esta entrega): tarefas de chamado (`glpi_tickettasks`).
- * 3b: tarefas de projeto (`glpi_projecttasks`) + filtro por origem.
+ * 3a: tarefas de chamado (`glpi_tickettasks`).
+ * 3b: tarefas de projeto (`glpi_projecttasks`) + filtro por origem na tela.
  *
  * Regras decididas em 03/08/2026 com o usuário:
  *  - aparecem TODAS as tarefas com estado "A fazer", sem filtro por data
@@ -29,6 +30,10 @@ class Native
 {
     public const TICKET_TASK_TABLE = 'glpi_tickettasks';
     public const TICKET_TABLE      = 'glpi_tickets';
+
+    public const PROJECT_TASK_TABLE      = 'glpi_projecttasks';
+    public const PROJECT_TASK_TEAM_TABLE = 'glpi_projecttaskteams';
+    public const PROJECT_TABLE           = 'glpi_projects';
 
     /**
      * Estado "A fazer" das tarefas de ITIL (Planning::TODO).
@@ -88,7 +93,7 @@ class Native
             ],
         ];
 
-        $entities = self::entityCriteria();
+        $entities = self::entityCriteria(self::TICKET_TABLE);
         if (!empty($entities)) {
             // Chaves distintas das de cima (entities_id), então merge é
             // seguro: nenhuma restrição sobrescreve a outra.
@@ -136,6 +141,166 @@ class Native
             'done_time'    => null,
             'is_late'      => false,
         ];
+    }
+
+    // =====================================================================
+    // Tarefas de projeto (Etapa 3b)
+    // =====================================================================
+
+    /**
+     * Tarefas de projeto do usuário, no formato de item da tela Hoje.
+     *
+     * Regras decididas em 03/08/2026 com o usuário:
+     *  - "minha" tarefa = estou na **equipe da tarefa**
+     *    (`glpi_projecttaskteams` com itemtype 'User'). A equipe do
+     *    PROJETO não conta: quem entra no projeto inteiro receberia todas
+     *    as tarefas dele na tela Hoje;
+     *  - aparecem todas com **percentual < 100%**, sem filtro de data
+     *    (mesmo espírito da regra das tarefas de chamado);
+     *  - projeto excluído não entra.
+     *
+     * A consulta é feita em dois passos (equipe → tarefas) em vez de um
+     * JOIN com condição composta: fica legível, testável, e a lista de
+     * ids de uma pessoa é sempre pequena.
+     */
+    public static function projectTasks(int $usersId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        if ($usersId <= 0) {
+            return [];
+        }
+
+        // 1) Em quais tarefas de projeto eu estou na equipe?
+        $taskIds = [];
+        foreach ($DB->request([
+            'SELECT' => [self::PROJECT_TASK_TEAM_TABLE . '.projecttasks_id'],
+            'FROM'   => self::PROJECT_TASK_TEAM_TABLE,
+            'WHERE'  => [
+                self::PROJECT_TASK_TEAM_TABLE . '.itemtype' => 'User',
+                self::PROJECT_TASK_TEAM_TABLE . '.items_id' => $usersId,
+            ],
+        ]) as $row) {
+            $id = (int) ($row['projecttasks_id'] ?? 0);
+            if ($id > 0 && !in_array($id, $taskIds, true)) {
+                $taskIds[] = $id;
+            }
+        }
+
+        if (empty($taskIds)) {
+            return [];
+        }
+
+        // 2) As tarefas em si, com o projeto por INNER JOIN.
+        $criteria = [
+            'SELECT' => [
+                self::PROJECT_TASK_TABLE . '.id',
+                self::PROJECT_TASK_TABLE . '.projects_id',
+                self::PROJECT_TASK_TABLE . '.name',
+                self::PROJECT_TASK_TABLE . '.content',
+                self::PROJECT_TASK_TABLE . '.percent_done',
+                self::PROJECT_TASK_TABLE . '.plan_start_date',
+                self::PROJECT_TASK_TABLE . '.plan_end_date',
+                self::PROJECT_TABLE . '.name AS project_name',
+            ],
+            'FROM'       => self::PROJECT_TASK_TABLE,
+            'INNER JOIN' => [
+                self::PROJECT_TABLE => [
+                    'ON' => [
+                        self::PROJECT_TABLE      => 'id',
+                        self::PROJECT_TASK_TABLE => 'projects_id',
+                    ],
+                ],
+            ],
+            'WHERE' => [
+                self::PROJECT_TASK_TABLE . '.id'           => $taskIds,
+                self::PROJECT_TASK_TABLE . '.percent_done' => ['<', 100],
+            ],
+            'ORDER' => [
+                self::PROJECT_TASK_TABLE . '.projects_id ASC',
+                self::PROJECT_TASK_TABLE . '.id ASC',
+            ],
+        ];
+
+        // `is_deleted` existe no projeto; na TAREFA de projeto depende da
+        // versão do schema. Filtrar coluna inexistente derruba a consulta
+        // com 1054, então só entra se existir mesmo.
+        foreach ([self::PROJECT_TABLE, self::PROJECT_TASK_TABLE] as $table) {
+            if (self::hasField($table, 'is_deleted')) {
+                $criteria['WHERE'][$table . '.is_deleted'] = 0;
+            }
+        }
+
+        $entities = self::entityCriteria(self::PROJECT_TABLE);
+        if (!empty($entities)) {
+            $criteria['WHERE'] = array_merge($criteria['WHERE'], $entities);
+        }
+
+        $items = [];
+        foreach ($DB->request($criteria) as $row) {
+            $items[] = self::formatProjectTask($row);
+        }
+
+        return $items;
+    }
+
+    private static function formatProjectTask(array $row): array
+    {
+        $taskId  = (int) ($row['id'] ?? 0);
+        $percent = (int) ($row['percent_done'] ?? 0);
+        $today   = date('Y-m-d');
+
+        return [
+            'id'            => $taskId,
+            'is_native'     => true,
+            'source'        => 'project',
+            'group'         => 'project',
+            'is_routine'    => false,
+            'name'          => (string) ($row['name'] ?? ''),
+            'description'   => self::excerpt((string) ($row['content'] ?? '')),
+            'category'      => '',
+            'project_name'  => (string) ($row['project_name'] ?? ''),
+            'percent_done'  => $percent,
+            'percent_label' => $percent . '%',
+            'url'           => self::projectTaskUrl($taskId),
+            'date'          => $today,
+            'date_label'    => substr($today, 8, 2) . '/' . substr($today, 5, 2),
+            'time_limit'    => null,
+            'planned_label' => self::plannedLabel(
+                $row['plan_start_date'] ?? null,
+                $row['plan_end_date'] ?? null
+            ),
+            'is_done'       => false,
+            'done_time'     => null,
+            'is_late'       => false,
+        ];
+    }
+
+    private static function projectTaskUrl(int $taskId): string
+    {
+        if ($taskId <= 0) {
+            return '';
+        }
+        if (class_exists(ProjectTask::class) && method_exists(ProjectTask::class, 'getFormURLWithID')) {
+            return (string) ProjectTask::getFormURLWithID($taskId);
+        }
+        return '/front/projecttask.form.php?id=' . $taskId;
+    }
+
+    /**
+     * A coluna existe na tabela? Evita 1054 em schema que varia entre
+     * versões do GLPI. Sem o core (harness), assume que existe.
+     */
+    private static function hasField(string $table, string $field): bool
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        if (is_object($DB) && method_exists($DB, 'fieldExists')) {
+            return (bool) $DB->fieldExists($table, $field);
+        }
+        return true;
     }
 
     /**
@@ -228,11 +393,11 @@ class Native
      * Restrição de entidade do perfil ativo. Isolada num método para o
      * harness poder rodar sem o core.
      */
-    private static function entityCriteria(): array
+    private static function entityCriteria(string $table): array
     {
         if (!function_exists('getEntitiesRestrictCriteria')) {
             return [];
         }
-        return getEntitiesRestrictCriteria(self::TICKET_TABLE);
+        return getEntitiesRestrictCriteria($table);
     }
 }

@@ -102,12 +102,18 @@ class Occurrence
 
         // Origens nativas (Etapa 3): leitura + link, no fim da lista.
         // Falha de leitura não pode derrubar a tela — o usuário ainda
-        // precisa das próprias tarefas.
+        // precisa das próprias tarefas. Cada origem tem o seu try: um
+        // schema diferente em chamados não pode esconder os projetos.
         $native = [];
         try {
-            $native = Native::ticketTasks($usersId);
+            $native = array_merge($native, Native::ticketTasks($usersId));
         } catch (\Throwable $e) {
-            $native = [];
+            // origem indisponível: segue sem ela
+        }
+        try {
+            $native = array_merge($native, Native::projectTasks($usersId));
+        } catch (\Throwable $e) {
+            // origem indisponível: segue sem ela
         }
 
         return [

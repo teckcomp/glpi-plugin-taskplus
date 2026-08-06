@@ -210,3 +210,16 @@
 }
 .taskplus-badge--ticket { background: #f1eefb; color: #6741d9; font-weight: 600; }
 .taskplus-card--native .taskplus-iconbtn { text-decoration: none; }
+
+/* ===================== Etapa 3b: projetos e filtro ===================== */
+
+.taskplus-toolbar__filter {
+    display: flex; align-items: center; gap: 6px; margin: 0;
+    font-size: 0.85rem; color: #45525e;
+}
+.taskplus-toolbar__filter select {
+    border: 1px solid #c6d0d9; border-radius: 6px;
+    padding: 3px 8px; font-size: 0.85rem; color: #2c3e50; background: #fff;
+}
+
+.taskplus-badge--project { background: #eaf6ee; color: #2f7d46; font-weight: 600; }

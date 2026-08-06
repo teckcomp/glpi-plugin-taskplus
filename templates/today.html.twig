@@ -34,6 +34,16 @@
             <button type="button" class="btn btn-primary" id="tp-btn-new">
                 <i class="ti ti-plus"></i>&nbsp;{{ __('Nova tarefa', 'taskplus') }}
             </button>
+            <label class="taskplus-toolbar__filter">
+                {{ __('Origem', 'taskplus') }}
+                <select id="tp-filter-source">
+                    <option value="all">{{ __('Todas', 'taskplus') }}</option>
+                    <option value="routine">{{ __('Rotinas', 'taskplus') }}</option>
+                    <option value="avulsa">{{ __('Avulsas', 'taskplus') }}</option>
+                    <option value="ticket">{{ __('Chamados', 'taskplus') }}</option>
+                    <option value="project">{{ __('Projetos', 'taskplus') }}</option>
+                </select>
+            </label>
             <label class="taskplus-toolbar__toggle">
                 <input type="checkbox" id="tp-show-done">
                 {{ __('Mostrar concluídas', 'taskplus') }}
