@@ -317,18 +317,24 @@ msgstr ""
 msgid "Término não pode ser antes do início"
 msgstr ""
 
-#: templates/today.html.twig (Etapa 3b — filtro por origem)
+#: templates/today.html.twig (Etapa 3b — filtro por origem; 4a — blocos)
 msgid "Origem"
 msgstr ""
 
 msgid "Todas"
 msgstr ""
 
-msgid "Avulsas"
-msgstr ""
-
 msgid "Chamados"
 msgstr ""
 
 msgid "Projetos"
+msgstr ""
+
+msgid "Minhas tarefas"
+msgstr ""
+
+msgid "Do GLPI"
+msgstr ""
+
+msgid "Pendentes"
 msgstr ""

@@ -1,5 +1,5 @@
 /**
- * Task+ — tela "Hoje" (Etapa 1; grupos na 2b; nativas e filtro na Etapa 3).
+ * Task+ — tela "Hoje" (Etapa 1; grupos na 2b; nativas na 3; dois blocos na 4a).
  *
  * Contrato com o servidor:
  *  - estado inicial embutido em <script type="application/json" id="taskplus-data">
@@ -52,9 +52,11 @@
         return {
             date: (typeof d.date === 'string') ? d.date : '',
             kpis: {
+                late: Number(k.late) || 0,
                 today: Number(k.today) || 0,
-                done: Number(k.done) || 0,
-                late: Number(k.late) || 0
+                // Chega com valor na Etapa 4b; payload antigo vira 0
+                pending: Number(k.pending) || 0,
+                done: Number(k.done) || 0
             },
             today: Array.isArray(d.today) ? d.today : [],
             overdue: Array.isArray(d.overdue) ? d.overdue : []
@@ -135,41 +137,60 @@
         ['project', 'Projetos']
     ];
 
+    /** Grupos que pertencem a cada bloco da tela (Etapa 4a). */
+    var OWN_GROUPS = ['daily', 'weekly', 'monthly', 'avulsa'];
+    var NATIVE_GROUPS = ['ticket', 'project'];
+
     /**
-     * Filtro por origem da toolbar (Etapa 3b): valor do select → grupos
-     * que ele deixa passar. 'all' não filtra nada.
+     * Filtro por origem (Etapa 3b, virou botões na 4a): vale APENAS para
+     * o bloco "Do GLPI" — rotinas e avulsas moram no outro bloco e não
+     * são afetadas.
      */
     var SOURCE_FILTERS = {
-        routine: ['daily', 'weekly', 'monthly'],
-        avulsa: ['avulsa'],
         ticket: ['ticket'],
         project: ['project']
     };
 
-    /** O item passa pelo filtro de origem ativo? */
+    /** O item nativo passa pelo filtro de origem ativo? */
     function matchesSource(item) {
         var allowed = SOURCE_FILTERS[state.source];
         if (!allowed) {
             return true; // 'all' ou valor desconhecido: não filtra
         }
-        return allowed.indexOf(item.group || 'avulsa') !== -1;
+        return allowed.indexOf(item.group || '') !== -1;
+    }
+
+    function groupOf(item) {
+        return item.group || 'avulsa';
     }
 
     function render() {
-        $('tp-kpi-today').textContent = String(state.data.kpis.today);
-        $('tp-kpi-done').textContent = String(state.data.kpis.done);
-        $('tp-kpi-late').textContent = String(state.data.kpis.late);
+        var kpis = state.data.kpis;
+        $('tp-kpi-late').textContent = String(kpis.late);
+        $('tp-kpi-today').textContent = String(kpis.today);
+        // "Pendentes" só ganha valor real na Etapa 4b
+        $('tp-kpi-pending').textContent = String(kpis.pending || 0);
+        $('tp-kpi-done').textContent = String(kpis.done);
 
-        var list = $('tp-list');
-        list.textContent = ''; // limpa
+        renderOwn();
+        renderNative();
+    }
+
+    /** Bloco 1 — tarefas do próprio Task+ (atrasadas, rotinas, avulsas). */
+    function renderOwn() {
+        var list = $('tp-list-own');
+        list.textContent = '';
 
         var todayItems = state.data.today.filter(function (item) {
-            return (state.showDone || !item.is_done) && matchesSource(item);
+            return OWN_GROUPS.indexOf(groupOf(item)) !== -1
+                && (state.showDone || !item.is_done);
         });
-        var overdueItems = state.data.overdue.filter(matchesSource);
+        var overdueItems = state.data.overdue.filter(function (item) {
+            return OWN_GROUPS.indexOf(groupOf(item)) !== -1;
+        });
 
         if (overdueItems.length === 0 && todayItems.length === 0) {
-            list.appendChild(emptyBox());
+            list.appendChild(emptyOwn());
             return;
         }
 
@@ -178,20 +199,21 @@
         }
 
         if (todayItems.length > 0) {
-            // Só com avulsas a tela continua exatamente como na Etapa 1
-            // (uma seção "Hoje") — dividir em "Avulsas" sozinho seria
-            // ruído. Basta UMA origem diferente (rotina ou chamado) para
-            // valer a pena agrupar.
-            var hasOtherSource = todayItems.some(function (item) {
-                return item.group && item.group !== 'avulsa';
+            // Só com avulsas mantém a seção única "Hoje" (Etapa 1);
+            // basta uma ocorrência de rotina para valer o agrupamento.
+            var hasRoutine = todayItems.some(function (item) {
+                return groupOf(item) !== 'avulsa';
             });
 
-            if (!hasOtherSource) {
+            if (!hasRoutine) {
                 list.appendChild(section('Hoje', todayItems, false));
             } else {
                 GROUPS.forEach(function (group) {
+                    if (OWN_GROUPS.indexOf(group[0]) === -1) {
+                        return;
+                    }
                     var items = todayItems.filter(function (item) {
-                        return (item.group || 'avulsa') === group[0];
+                        return groupOf(item) === group[0];
                     });
                     if (items.length > 0) {
                         list.appendChild(section(group[1], items, false));
@@ -201,19 +223,40 @@
         }
     }
 
-    function emptyBox() {
-        // Filtro ativo escondendo tudo é um estado diferente de "não há
-        // tarefa": dizer "nenhuma tarefa" aqui confundiria.
-        if (state.source !== 'all') {
-            var filtered = el('div', 'taskplus-empty');
-            filtered.appendChild(el('i', 'ti ti-filter-off taskplus-empty__icon'));
-            filtered.appendChild(el('h3', null, 'Nada nesta origem hoje'));
-            filtered.appendChild(el('p', null, 'Volte o filtro para "Todas" para ver as demais tarefas.'));
-            return filtered;
+    /** Bloco 2 — origens nativas do GLPI (chamados e projetos). */
+    function renderNative() {
+        var list = $('tp-list-native');
+        list.textContent = '';
+
+        var items = state.data.today.filter(function (item) {
+            return NATIVE_GROUPS.indexOf(groupOf(item)) !== -1 && matchesSource(item);
+        });
+
+        if (items.length === 0) {
+            list.appendChild(emptyNative());
+            return;
         }
 
-        var allDone = state.data.today.length > 0
-            && state.data.today.every(function (item) { return item.is_done; })
+        GROUPS.forEach(function (group) {
+            if (NATIVE_GROUPS.indexOf(group[0]) === -1) {
+                return;
+            }
+            var ofGroup = items.filter(function (item) {
+                return groupOf(item) === group[0];
+            });
+            if (ofGroup.length > 0) {
+                list.appendChild(section(group[1], ofGroup, false));
+            }
+        });
+    }
+
+    /** Estado vazio do bloco 1 (tarefas próprias). */
+    function emptyOwn() {
+        var own = state.data.today.filter(function (item) {
+            return OWN_GROUPS.indexOf(groupOf(item)) !== -1;
+        });
+        var allDone = own.length > 0
+            && own.every(function (item) { return item.is_done; })
             && state.data.overdue.length === 0;
 
         var box = el('div', 'taskplus-empty');
@@ -224,6 +267,22 @@
         box.appendChild(el('p', null, allDone
             ? 'Ative "Mostrar concluídas" para rever o que foi feito.'
             : 'Clique em "Nova tarefa" para lançar a primeira avulsa do dia.'));
+        return box;
+    }
+
+    /** Estado vazio do bloco 2 (origens do GLPI). */
+    function emptyNative() {
+        // Filtro ativo escondendo tudo é diferente de "não há nada":
+        // dizer "nenhuma tarefa" aqui confundiria.
+        var filtering = state.source !== 'all';
+        var box = el('div', 'taskplus-empty taskplus-empty--sm');
+        box.appendChild(el('i', 'ti ' + (filtering ? 'ti-filter-off' : 'ti-inbox') + ' taskplus-empty__icon'));
+        box.appendChild(el('h3', null, filtering
+            ? 'Nada nesta origem'
+            : 'Nada vindo do GLPI'));
+        box.appendChild(el('p', null, filtering
+            ? 'Volte para "Todas" para ver as demais.'
+            : 'Tarefas de chamado e de projeto atribuídas a você aparecem aqui.'));
         return box;
     }
 
@@ -444,10 +503,17 @@
             render();
         });
         var filter = $('tp-filter-source');
-        if (filter) { // template antigo sem o select não quebra
-            filter.addEventListener('change', function (ev) {
-                state.source = ev.target.value || 'all';
-                render();
+        if (filter) { // template antigo sem o filtro não quebra
+            filter.addEventListener('click', function (ev) {
+                var btn = ev.target.closest('.taskplus-segmented__btn');
+                if (!btn) {
+                    return;
+                }
+                state.source = btn.getAttribute('data-source') || 'all';
+                filter.querySelectorAll('.taskplus-segmented__btn').forEach(function (b) {
+                    b.classList.toggle('taskplus-segmented__btn--on', b === btn);
+                });
+                renderNative(); // o filtro não toca no bloco de tarefas próprias
             });
         }
         $('tp-modal').addEventListener('click', function (ev) {

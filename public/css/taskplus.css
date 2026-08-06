@@ -223,3 +223,60 @@
 }
 
 .taskplus-badge--project { background: #eaf6ee; color: #2f7d46; font-weight: 600; }
+
+/* ===================== Etapa 4a: duas colunas ===================== */
+
+/* 4 KPIs (ordem: atrasadas, hoje, pendentes, concluídas) */
+.taskplus-kpis { grid-template-columns: repeat(4, 1fr); }
+.taskplus-kpi--pending .taskplus-kpi__value { color: #b8860b; }
+
+/* Bloco 1 (Task+) mais largo que o bloco 2 (GLPI): é onde se trabalha */
+.taskplus-columns {
+    display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 14px; align-items: start;
+}
+@media (max-width: 1200px) {
+    .taskplus-columns { grid-template-columns: minmax(0, 1fr); }
+}
+
+.taskplus-block {
+    background: #fff; border: 1px solid #e4e9ee; border-radius: 10px;
+    padding: 12px 14px 14px;
+}
+.taskplus-block__head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
+    padding-bottom: 10px; border-bottom: 1px solid #eef2f5;
+}
+.taskplus-block__title {
+    margin: 0; font-size: 0.95rem; font-weight: 600; color: #2c3e50;
+}
+.taskplus-block__tools { display: flex; align-items: center; gap: 12px; }
+
+/* Filtro de origem: botões visíveis, no lugar do select apagado */
+.taskplus-segmented {
+    display: inline-flex; border: 1px solid #c6d0d9;
+    border-radius: 7px; overflow: hidden;
+}
+.taskplus-segmented__btn {
+    border: 0; background: #fff; cursor: pointer;
+    padding: 4px 12px; font-size: 0.82rem; color: #5a6b7b;
+    border-right: 1px solid #dde4ea;
+}
+.taskplus-segmented__btn:last-child { border-right: 0; }
+.taskplus-segmented__btn:hover { background: #f2f6f9; }
+.taskplus-segmented__btn--on { background: #2a76a8; color: #fff; font-weight: 600; }
+.taskplus-segmented__btn--on:hover { background: #2a76a8; }
+
+/* Cards mais baixos: em duas colunas a altura antiga desperdiçava tela */
+.taskplus-columns .taskplus-card { padding: 8px 10px; }
+.taskplus-columns .taskplus-card__desc { font-size: 0.78rem; margin-top: 1px; }
+.taskplus-columns .taskplus-card__badges { margin-top: 4px; gap: 4px; }
+.taskplus-columns .taskplus-badge { font-size: 0.7rem; padding: 1px 7px; }
+.taskplus-columns .taskplus-section { margin-bottom: 12px; }
+.taskplus-columns .taskplus-section:last-child { margin-bottom: 0; }
+
+.taskplus-empty--sm { padding: 18px 12px; }
+.taskplus-empty--sm .taskplus-empty__icon { font-size: 1.6rem; }
+.taskplus-empty--sm h3 { font-size: 0.9rem; }
+.taskplus-empty--sm p { font-size: 0.8rem; }

@@ -95,9 +95,12 @@ class Occurrence
         // estragariam a taxa de conclusão do Painel (Etapa 5). A contagem
         // das nativas aparece no cabeçalho da própria seção.
         $kpis = [
-            'today' => count($todayRows),
-            'done'  => $done,
-            'late'  => count($overdueRows) + $lateToday,
+            'late'    => count($overdueRows) + $lateToday,
+            'today'   => count($todayRows),
+            // Marcação de pendência chega na Etapa 4b; a chave já existe
+            // para o JS não precisar de defensiva depois.
+            'pending' => 0,
+            'done'    => $done,
         ];
 
         // Origens nativas (Etapa 3): leitura + link, no fim da lista.

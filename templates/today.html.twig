@@ -11,47 +11,72 @@
        Extraída para partial na Etapa 2a (deixou de ser a única tela). #}
     {% include '@taskplus/_sidebar.html.twig' with {'active': 'today'} %}
 
-    {# ================= ÁREA PRINCIPAL (Etapa 1: avulsas) ================= #}
+    {# ================= ÁREA PRINCIPAL ================= #}
     <div class="taskplus-main">
 
-        {# KPIs do dia — valores preenchidos pelo JS a partir do payload #}
+        {# KPIs do dia — ordem definida com o usuário em 05/08 (Etapa 4a):
+           atrasadas primeiro (o que cobra ação), concluídas por último.
+           "Pendentes" nasce em 0: a marcação chega na Etapa 4b. #}
         <div class="taskplus-kpis">
+            <div class="taskplus-kpi taskplus-kpi--late">
+                <span class="taskplus-kpi__value" id="tp-kpi-late">0</span>
+                <span class="taskplus-kpi__label">{{ __('Atrasadas', 'taskplus') }}</span>
+            </div>
             <div class="taskplus-kpi">
                 <span class="taskplus-kpi__value" id="tp-kpi-today">0</span>
                 <span class="taskplus-kpi__label">{{ __('Para hoje', 'taskplus') }}</span>
+            </div>
+            <div class="taskplus-kpi taskplus-kpi--pending">
+                <span class="taskplus-kpi__value" id="tp-kpi-pending">0</span>
+                <span class="taskplus-kpi__label">{{ __('Pendentes', 'taskplus') }}</span>
             </div>
             <div class="taskplus-kpi taskplus-kpi--done">
                 <span class="taskplus-kpi__value" id="tp-kpi-done">0</span>
                 <span class="taskplus-kpi__label">{{ __('Concluídas', 'taskplus') }}</span>
             </div>
-            <div class="taskplus-kpi taskplus-kpi--late">
-                <span class="taskplus-kpi__value" id="tp-kpi-late">0</span>
-                <span class="taskplus-kpi__label">{{ __('Atrasadas', 'taskplus') }}</span>
-            </div>
         </div>
 
-        <div class="taskplus-toolbar">
-            <button type="button" class="btn btn-primary" id="tp-btn-new">
-                <i class="ti ti-plus"></i>&nbsp;{{ __('Nova tarefa', 'taskplus') }}
-            </button>
-            <label class="taskplus-toolbar__filter">
-                {{ __('Origem', 'taskplus') }}
-                <select id="tp-filter-source">
-                    <option value="all">{{ __('Todas', 'taskplus') }}</option>
-                    <option value="routine">{{ __('Rotinas', 'taskplus') }}</option>
-                    <option value="avulsa">{{ __('Avulsas', 'taskplus') }}</option>
-                    <option value="ticket">{{ __('Chamados', 'taskplus') }}</option>
-                    <option value="project">{{ __('Projetos', 'taskplus') }}</option>
-                </select>
-            </label>
-            <label class="taskplus-toolbar__toggle">
-                <input type="checkbox" id="tp-show-done">
-                {{ __('Mostrar concluídas', 'taskplus') }}
-            </label>
-        </div>
+        {# Dois blocos lado a lado (Etapa 4a): o que é do Task+ à esquerda,
+           o que vem do GLPI à direita. Empilham sozinhos em tela estreita. #}
+        <div class="taskplus-columns">
 
-        {# Lista (seções Atrasadas/Hoje) renderizada pelo JS #}
-        <div id="tp-list"></div>
+            <section class="taskplus-block">
+                <header class="taskplus-block__head">
+                    <h3 class="taskplus-block__title">{{ __('Minhas tarefas', 'taskplus') }}</h3>
+                    <div class="taskplus-block__tools">
+                        <label class="taskplus-toolbar__toggle">
+                            <input type="checkbox" id="tp-show-done">
+                            {{ __('Mostrar concluídas', 'taskplus') }}
+                        </label>
+                        <button type="button" class="btn btn-primary btn-sm" id="tp-btn-new">
+                            <i class="ti ti-plus"></i>&nbsp;{{ __('Nova tarefa', 'taskplus') }}
+                        </button>
+                    </div>
+                </header>
+                {# Seções Atrasadas / rotinas / avulsas, renderizadas pelo JS #}
+                <div id="tp-list-own"></div>
+            </section>
+
+            <section class="taskplus-block">
+                <header class="taskplus-block__head">
+                    <h3 class="taskplus-block__title">{{ __('Do GLPI', 'taskplus') }}</h3>
+                    {# Filtro de origem em botões (antes era um select que
+                       passava despercebido) — vale só para este bloco. #}
+                    <div class="taskplus-segmented" id="tp-filter-source" role="group"
+                         aria-label="{{ __('Origem', 'taskplus') }}">
+                        <button type="button" class="taskplus-segmented__btn taskplus-segmented__btn--on"
+                                data-source="all">{{ __('Todas', 'taskplus') }}</button>
+                        <button type="button" class="taskplus-segmented__btn"
+                                data-source="ticket">{{ __('Chamados', 'taskplus') }}</button>
+                        <button type="button" class="taskplus-segmented__btn"
+                                data-source="project">{{ __('Projetos', 'taskplus') }}</button>
+                    </div>
+                </header>
+                {# Seções Chamados / Projetos, renderizadas pelo JS #}
+                <div id="tp-list-native"></div>
+            </section>
+
+        </div>
     </div>
 </div>
 
