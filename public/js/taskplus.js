@@ -1,5 +1,5 @@
 /**
- * Task+ — tela "Hoje" (Etapa 1; grupos de rotina na Etapa 2b).
+ * Task+ — tela "Hoje" (Etapa 1; grupos na 2b; chamados nativos na 3a).
  *
  * Contrato com o servidor:
  *  - estado inicial embutido em <script type="application/json" id="taskplus-data">
@@ -124,12 +124,13 @@
     // Render
     // ------------------------------------------------------------------
 
-    /** Ordem e rótulo dos grupos da seção "Hoje" (Etapa 2b). */
+    /** Ordem e rótulo dos grupos da seção "Hoje" (Etapa 2b; Chamados na 3a). */
     var GROUPS = [
         ['daily', 'Rotinas diárias'],
         ['weekly', 'Rotinas semanais'],
         ['monthly', 'Rotinas mensais'],
-        ['avulsa', 'Avulsas']
+        ['avulsa', 'Avulsas'],
+        ['ticket', 'Chamados']
     ];
 
     function render() {
@@ -155,14 +156,15 @@
         }
 
         if (todayItems.length > 0) {
-            // Sem nenhuma ocorrência de rotina no dia, a tela continua
-            // exatamente como na Etapa 1 (uma seção "Hoje") — dividir em
-            // "Avulsas" sozinho seria ruído.
-            var hasRoutine = todayItems.some(function (item) {
+            // Só com avulsas a tela continua exatamente como na Etapa 1
+            // (uma seção "Hoje") — dividir em "Avulsas" sozinho seria
+            // ruído. Basta UMA origem diferente (rotina ou chamado) para
+            // valer a pena agrupar.
+            var hasOtherSource = todayItems.some(function (item) {
                 return item.group && item.group !== 'avulsa';
             });
 
-            if (!hasRoutine) {
+            if (!hasOtherSource) {
                 list.appendChild(section('Hoje', todayItems, false));
             } else {
                 GROUPS.forEach(function (group) {
@@ -206,20 +208,34 @@
     }
 
     function card(item, isOverdue) {
+        var isNative = !!item.is_native;
+
         var c = el('div', 'taskplus-card'
+            + (isNative ? ' taskplus-card--native' : '')
             + (item.is_done ? ' taskplus-card--done' : '')
             + (item.is_late ? ' taskplus-card--late' : ''));
 
-        // Check de conclusão em 1 clique
-        var check = el('button', 'taskplus-check' + (item.is_done ? ' taskplus-check--on' : ''));
-        check.type = 'button';
-        check.title = item.is_done ? 'Desfazer conclusão' : 'Concluir';
-        check.setAttribute('aria-label', check.title);
-        check.appendChild(el('i', 'ti ' + (item.is_done ? 'ti-check' : '')));
-        check.addEventListener('click', function () {
-            post({ action: 'toggle', id: String(item.id), done: item.is_done ? '0' : '1' });
-        });
-        c.appendChild(check);
+        if (isNative) {
+            // Origem nativa é LEITURA (Etapa 3): não existe check, porque
+            // concluir gravaria em tabela do GLPI — decisão adiada. No
+            // lugar dele vai o ícone da origem, sem ação.
+            var mark = el('span', 'taskplus-check taskplus-check--native');
+            mark.title = 'Tarefa de chamado — concluir pelo chamado';
+            mark.setAttribute('aria-label', mark.title);
+            mark.appendChild(el('i', 'ti ti-headset'));
+            c.appendChild(mark);
+        } else {
+            // Check de conclusão em 1 clique
+            var check = el('button', 'taskplus-check' + (item.is_done ? ' taskplus-check--on' : ''));
+            check.type = 'button';
+            check.title = item.is_done ? 'Desfazer conclusão' : 'Concluir';
+            check.setAttribute('aria-label', check.title);
+            check.appendChild(el('i', 'ti ' + (item.is_done ? 'ti-check' : '')));
+            check.addEventListener('click', function () {
+                post({ action: 'toggle', id: String(item.id), done: item.is_done ? '0' : '1' });
+            });
+            c.appendChild(check);
+        }
 
         // Corpo: nome, descrição, badges
         var body = el('div', 'taskplus-card__body');
@@ -245,6 +261,13 @@
         if (item.is_late && !item.time_limit && !isOverdue) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--late', 'atrasada'));
         }
+        if (isNative && item.ticket_label) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--ticket',
+                'Chamado ' + item.ticket_label));
+        }
+        if (isNative && item.planned_label) {
+            badges.appendChild(el('span', 'taskplus-badge', item.planned_label));
+        }
         if (item.category) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--category', item.category));
         }
@@ -256,7 +279,23 @@
         }
         c.appendChild(body);
 
-        // Ações: editar/excluir só para avulsas (rotina chega na Etapa 2)
+        // Nativa: única ação é abrir o item no GLPI (leitura + link).
+        if (isNative) {
+            if (item.url) {
+                var open = el('a', 'taskplus-iconbtn');
+                open.href = item.url;
+                open.title = 'Abrir o chamado';
+                open.setAttribute('aria-label', open.title);
+                open.appendChild(el('i', 'ti ti-external-link'));
+
+                var nativeActions = el('div', 'taskplus-card__actions');
+                nativeActions.appendChild(open);
+                c.appendChild(nativeActions);
+            }
+            return c;
+        }
+
+        // Ações: editar/excluir só para avulsas (ocorrência de rotina não)
         if (!item.is_routine) {
             var actions = el('div', 'taskplus-card__actions');
 

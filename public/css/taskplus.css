@@ -199,3 +199,14 @@
     font-size: 0.85rem; color: #45525e;
 }
 .taskplus-monthly-mode label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+/* ===================== Etapa 3a: origens nativas ===================== */
+
+/* Tarefa vinda do GLPI (chamado/projeto): leitura + link, sem check */
+.taskplus-card--native { border-left: 3px solid #6741d9; }
+.taskplus-check--native {
+    border-color: #d6cff5; color: #6741d9; background: #f6f3fe;
+    cursor: default; font-size: 0.9rem;
+}
+.taskplus-badge--ticket { background: #f1eefb; color: #6741d9; font-weight: 600; }
+.taskplus-card--native .taskplus-iconbtn { text-decoration: none; }
