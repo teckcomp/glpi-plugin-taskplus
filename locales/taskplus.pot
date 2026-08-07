@@ -396,3 +396,65 @@ msgstr ""
 
 msgid "Tarefa de hoje atualizada (a rotina nao mudou)"
 msgstr ""
+
+#: Etapa 4c — tela de fases (src/Phase.php, ajax/phase.php,
+#: templates/config.html.twig, front/config.form.php)
+msgid "Task+ — Configurações"
+msgstr ""
+
+msgid "Preferências"
+msgstr ""
+
+msgid "Fases do quadro"
+msgstr ""
+
+msgid "Nova fase"
+msgstr ""
+
+msgid "Cor"
+msgstr ""
+
+msgid "As fases são as colunas do Quadro (kanban) e valem para todos os usuários. A ordem abaixo é a ordem das colunas. As quatro fases de sistema podem mudar de nome e cor, mas não saem do lugar nem podem ser excluídas; as suas fases ficam sempre entre \"Para hoje\" e \"Pendentes\". A fase padrão é onde toda tarefa nasce."
+msgstr ""
+
+msgid "Fase de sistema: nome e cor podem mudar; posição e papel são fixos."
+msgstr ""
+
+msgid "Fase criada"
+msgstr ""
+
+msgid "Fase atualizada"
+msgstr ""
+
+msgid "Fase excluída"
+msgstr ""
+
+msgid "Fase não encontrada"
+msgstr ""
+
+msgid "Fases de sistema não podem ser excluídas"
+msgstr ""
+
+msgid "A fase padrão não pode ser excluída"
+msgstr ""
+
+msgid "Fases de sistema não mudam de posição"
+msgstr ""
+
+msgid "Direção inválida"
+msgstr ""
+
+msgid "Ordem atualizada"
+msgstr ""
+
+msgid "Informe o nome da fase"
+msgstr ""
+
+msgid "Cor inválida"
+msgstr ""
+
+msgid "Já existe uma fase com esse nome"
+msgstr ""
+
+msgid "Sem permissão"
+msgstr ""

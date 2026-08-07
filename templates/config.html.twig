@@ -1,0 +1,110 @@
+{# Task+ — tela "Configurações" (Etapa 4c).
+
+   Até o 4b esta tela era uma tabela solta (Config::showForm). Agora ela
+   entra no layout padrão do hub (sidebar + área principal) com dois
+   blocos: "Preferências" (o formulário POST de sempre) e "Fases do
+   quadro" (CRUD via ajax/phase.php, renderizado pelo public/js/config.js).
+
+   Twig do GLPI é strict: TODA variável usada aqui é passada pelo
+   front/config.form.php. #}
+
+<link rel="stylesheet" href="{{ plugin_web_dir }}/css/taskplus.css">
+
+<div class="taskplus-app" id="taskplus-config"
+     data-csrf="{{ csrf_token }}"
+     data-ajax-url="{{ plugin_web_dir }}/ajax/phase.php">
+
+    {% include '@taskplus/_sidebar.html.twig' with {'active': 'config'} %}
+
+    <div class="taskplus-main">
+        <div class="taskplus-config-stack">
+
+            {# ================= Bloco 1: preferências gerais ================= #}
+            <div class="taskplus-block">
+                <div class="taskplus-block__head">
+                    <h3 class="taskplus-block__title">{{ __('Preferências', 'taskplus') }}</h3>
+                </div>
+
+                {# POST clássico: o core do GLPI 11 valida o token sozinho
+                   (CSRF_COMPLIANT) — o hidden abaixo faz o papel do
+                   Html::closeForm da versão antiga da tela. #}
+                <form method="post" action="{{ plugin_web_dir }}/front/config.form.php"
+                      class="taskplus-config-form">
+                    <input type="hidden" name="_glpi_csrf_token" value="{{ form_csrf }}">
+
+                    <label class="taskplus-field">
+                        <span>{{ __('Enviar e-mails (além do sino)', 'taskplus') }}</span>
+                        <select name="email_enabled">
+                            <option value="1" {{ email_enabled ? 'selected' : '' }}>{{ __('Yes') }}</option>
+                            <option value="0" {{ not email_enabled ? 'selected' : '' }}>{{ __('No') }}</option>
+                        </select>
+                    </label>
+
+                    <label class="taskplus-field">
+                        <span>{{ __('Apagar tabelas, dados e direitos ao desinstalar', 'taskplus') }}</span>
+                        <select name="purge_on_uninstall">
+                            <option value="0" {{ not purge_on_uninstall ? 'selected' : '' }}>{{ __('No') }}</option>
+                            <option value="1" {{ purge_on_uninstall ? 'selected' : '' }}>{{ __('Yes') }}</option>
+                        </select>
+                    </label>
+
+                    <button type="submit" name="update" value="1" class="btn btn-primary">
+                        {{ __('Salvar', 'taskplus') }}
+                    </button>
+                </form>
+            </div>
+
+            {# ================= Bloco 2: fases do quadro ================= #}
+            <div class="taskplus-block">
+                <div class="taskplus-block__head">
+                    <h3 class="taskplus-block__title">{{ __('Fases do quadro', 'taskplus') }}</h3>
+                    <div class="taskplus-block__tools">
+                        <button type="button" class="btn btn-primary btn-sm" id="tpc-btn-new">
+                            <i class="ti ti-plus"></i>&nbsp;{{ __('Nova fase', 'taskplus') }}
+                        </button>
+                    </div>
+                </div>
+
+                <p class="taskplus-modal__hint">
+                    {{ __('As fases são as colunas do Quadro (kanban) e valem para todos os usuários. A ordem abaixo é a ordem das colunas. As quatro fases de sistema podem mudar de nome e cor, mas não saem do lugar nem podem ser excluídas; as suas fases ficam sempre entre "Para hoje" e "Pendentes". A fase padrão é onde toda tarefa nasce.', 'taskplus') }}
+                </p>
+
+                {# Lista de fases renderizada pelo JS #}
+                <div id="tpc-phase-list"></div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+{# ================= MODAL de nova/edição de fase ================= #}
+<div class="taskplus-modal" id="tpc-modal" hidden>
+    <div class="taskplus-modal__box">
+        <h3 id="tpc-modal-title">{{ __('Nova fase', 'taskplus') }}</h3>
+
+        <p class="taskplus-modal__hint" id="tpc-modal-system-hint" hidden>
+            {{ __('Fase de sistema: nome e cor podem mudar; posição e papel são fixos.', 'taskplus') }}
+        </p>
+
+        <label class="taskplus-field">
+            <span>{{ __('Nome', 'taskplus') }} *</span>
+            <input type="text" id="tpc-f-name" maxlength="255" autocomplete="off">
+        </label>
+
+        <label class="taskplus-field">
+            <span>{{ __('Cor', 'taskplus') }}</span>
+            <input type="color" id="tpc-f-color" value="#5a6b7b">
+        </label>
+
+        <div class="taskplus-modal__actions">
+            <button type="button" class="btn btn-ghost-secondary" id="tpc-btn-cancel">{{ __('Cancelar', 'taskplus') }}</button>
+            <button type="button" class="btn btn-primary" id="tpc-btn-save">{{ __('Salvar', 'taskplus') }}</button>
+        </div>
+    </div>
+</div>
+
+{# Estado inicial da tela. O front gera este JSON com JSON_HEX_TAG & cia,
+   então um "</script>" no nome de uma fase NÃO quebra a página — por
+   isso (e só por isso) o |raw é seguro aqui. #}
+<script type="application/json" id="taskplus-config-data">{{ payload_json|raw }}</script>
+<script src="{{ plugin_web_dir }}/js/config.js?v={{ plugin_version }}"></script>

@@ -292,3 +292,62 @@
 .taskplus-modal__hint {
     margin: 0 0 12px; font-size: 0.8rem; color: #6b7a89; line-height: 1.4;
 }
+
+/* ===================== Etapa 4c: títulos de grupo + fases ===================== */
+
+/* Títulos de grupo (pilhas) com mais presença — estavam apagados demais
+   contra o fundo branco (pedido do 4c). Cor mais escura, leve aumento e
+   linha separadora marcando o início de cada pilha. A variante --late
+   continua vermelha, só acompanha o reforço. */
+.taskplus-section__title {
+    color: #344054;
+    font-size: 0.84rem;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #e4e9ee;
+}
+.taskplus-section__title--late {
+    color: #d9480f;
+    border-bottom-color: #f8d8c8;
+}
+.taskplus-section__count { background: #e7ecf1; color: #45525e; }
+.taskplus-section__title--late .taskplus-section__count { background: #fdebe3; color: #d9480f; }
+
+/* Tela Configurações no layout do hub */
+.taskplus-config-stack {
+    display: flex; flex-direction: column; gap: 14px; max-width: 760px;
+}
+.taskplus-config-form .taskplus-field { max-width: 420px; }
+
+/* Selects com o mesmo visual dos inputs (vale também para os modais) */
+.taskplus-field select {
+    width: 100%; box-sizing: border-box;
+    border: 1px solid #c6d0d9; border-radius: 6px; padding: 6px 8px;
+    font-size: 0.9rem; color: #2c3844; background: #fff;
+}
+.taskplus-field select:focus { outline: none; border-color: #2a76a8; }
+.taskplus-field input[type=color] {
+    padding: 2px 3px; height: 34px; max-width: 90px; cursor: pointer;
+}
+
+/* Linhas da lista de fases */
+.taskplus-phase-row {
+    display: flex; align-items: center; gap: 10px;
+    background: #fff; border: 1px solid #dde5ec; border-radius: 8px;
+    padding: 8px 12px; margin-bottom: 8px;
+}
+.taskplus-phase-row--system { background: #fafbfc; }
+.taskplus-phase-row__dot {
+    flex: 0 0 auto; width: 14px; height: 14px; border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+}
+.taskplus-phase-row__body {
+    flex: 1 1 auto; min-width: 0;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.taskplus-phase-row__name { font-weight: 600; color: #2c3844; }
+.taskplus-badge--system { background: #eef2f6; color: #5a7684; }
+.taskplus-badge--default { background: #e3f0fa; color: #2a76a8; font-weight: 600; }
+
+/* Setas de reordenação nas pontas ficam visivelmente inertes */
+.taskplus-iconbtn:disabled { opacity: 0.35; cursor: default; }
+.taskplus-iconbtn:disabled:hover { background: none; color: #8a97a5; }
