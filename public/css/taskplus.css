@@ -280,3 +280,15 @@
 .taskplus-empty--sm .taskplus-empty__icon { font-size: 1.6rem; }
 .taskplus-empty--sm h3 { font-size: 0.9rem; }
 .taskplus-empty--sm p { font-size: 0.8rem; }
+
+/* ===================== Etapa 4b: pendência e pular ===================== */
+
+.taskplus-badge--pending { background: #fdf3dd; color: #8a6414; font-weight: 600; }
+.taskplus-card--pending { border-left: 3px solid #d9a520; }
+
+.taskplus-modal__subject {
+    margin: -4px 0 10px; font-weight: 600; color: #2c3e50; font-size: 0.9rem;
+}
+.taskplus-modal__hint {
+    margin: 0 0 12px; font-size: 0.8rem; color: #6b7a89; line-height: 1.4;
+}

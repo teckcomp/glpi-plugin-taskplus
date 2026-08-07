@@ -22,6 +22,8 @@
         csrf: '',
         showDone: false,
         source: 'all',
+        pendingItem: null,
+        skipItem: null,
         editingId: null,
         busy: false,
         data: { date: '', kpis: { today: 0, done: 0, late: 0 }, today: [], overdue: [] }
@@ -183,19 +185,29 @@
 
         var todayItems = state.data.today.filter(function (item) {
             return OWN_GROUPS.indexOf(groupOf(item)) !== -1
+                && !item.is_pending
                 && (state.showDone || !item.is_done);
         });
         var overdueItems = state.data.overdue.filter(function (item) {
-            return OWN_GROUPS.indexOf(groupOf(item)) !== -1;
+            return OWN_GROUPS.indexOf(groupOf(item)) !== -1 && !item.is_pending;
         });
+        // Pendentes de qualquer origem, do dia e das atrasadas
+        var pendingItems = state.data.today.concat(state.data.overdue)
+            .filter(function (item) { return !!item.is_pending; });
 
-        if (overdueItems.length === 0 && todayItems.length === 0) {
+        if (overdueItems.length === 0 && todayItems.length === 0 && pendingItems.length === 0) {
             list.appendChild(emptyOwn());
             return;
         }
 
         if (overdueItems.length > 0) {
             list.appendChild(section('Atrasadas', overdueItems, true));
+        }
+
+        // Pendentes reúne TODAS as origens (inclusive chamado e projeto):
+        // é um estado, não uma origem — mesma lógica de "Atrasadas".
+        if (pendingItems.length > 0) {
+            list.appendChild(section('Pendentes', pendingItems, false));
         }
 
         if (todayItems.length > 0) {
@@ -229,7 +241,9 @@
         list.textContent = '';
 
         var items = state.data.today.filter(function (item) {
-            return NATIVE_GROUPS.indexOf(groupOf(item)) !== -1 && matchesSource(item);
+            return NATIVE_GROUPS.indexOf(groupOf(item)) !== -1
+                && !item.is_pending // pendente aparece na seção Pendentes
+                && matchesSource(item);
         });
 
         if (items.length === 0) {
@@ -298,11 +312,22 @@
         return sec;
     }
 
+    function iconBtn(icon, title, onClick) {
+        var b = el('button', 'taskplus-iconbtn');
+        b.type = 'button';
+        b.title = title;
+        b.setAttribute('aria-label', title);
+        b.appendChild(el('i', 'ti ' + icon));
+        b.addEventListener('click', onClick);
+        return b;
+    }
+
     function card(item, isOverdue) {
         var isNative = !!item.is_native;
 
         var c = el('div', 'taskplus-card'
             + (isNative ? ' taskplus-card--native' : '')
+            + (item.is_pending ? ' taskplus-card--pending' : '')
             + (item.is_done ? ' taskplus-card--done' : '')
             + (item.is_late ? ' taskplus-card--late' : ''));
 
@@ -372,6 +397,16 @@
         if (item.category) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--category', item.category));
         }
+        if (item.is_pending) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--pending',
+                item.pending_label || 'pendente'));
+            if (item.pending_reason) {
+                badges.appendChild(el('span', 'taskplus-badge', item.pending_reason));
+            }
+        }
+        if (item.is_edited) {
+            badges.appendChild(el('span', 'taskplus-badge', 'alterada só hoje'));
+        }
         if (item.is_done && item.done_time) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--done', 'concluída às ' + item.done_time));
         }
@@ -380,8 +415,26 @@
         }
         c.appendChild(body);
 
-        // Nativa: única ação é abrir o item no GLPI (leitura + link).
+        var actions = el('div', 'taskplus-card__actions');
+
+        // Pendência vale para QUALQUER origem (a marcação mora em tabela
+        // do plugin, nada é gravado no GLPI).
+        if (item.is_pending) {
+            actions.appendChild(iconBtn('ti-clock-off', 'Encerrar pendência', function () {
+                post({
+                    action: 'unpending',
+                    id: String(item.id),
+                    itemtype: item.pending_type || 'Occurrence'
+                });
+            }));
+        } else if (!item.is_done) {
+            actions.appendChild(iconBtn('ti-clock-pause', 'Marcar como pendente', function () {
+                openPendingModal(item);
+            }));
+        }
+
         if (isNative) {
+            // Origem nativa: fora a pendência, a única ação é abrir o item
             if (item.url) {
                 var open = el('a', 'taskplus-iconbtn');
                 open.href = item.url;
@@ -390,40 +443,38 @@
                     : 'Abrir o chamado';
                 open.setAttribute('aria-label', open.title);
                 open.appendChild(el('i', 'ti ti-external-link'));
-
-                var nativeActions = el('div', 'taskplus-card__actions');
-                nativeActions.appendChild(open);
-                c.appendChild(nativeActions);
+                actions.appendChild(open);
             }
+            c.appendChild(actions);
             return c;
         }
 
-        // Ações: editar/excluir só para avulsas (ocorrência de rotina não)
+        // Editar vale para avulsa E para ocorrência de rotina (Etapa 4b):
+        // no segundo caso muda SÓ o dia, a rotina fica intacta.
+        actions.appendChild(iconBtn('ti-pencil', item.is_routine ? 'Editar só a tarefa de hoje' : 'Editar', function () {
+            openModal(item);
+        }));
+
+        // Pular hoje: não se aplicou neste dia. Não vale para concluída.
+        if (!item.is_done) {
+            actions.appendChild(iconBtn('ti-player-skip-forward', 'Pular hoje (não se aplica)', function () {
+                openSkipModal(item);
+            }));
+        }
+
+        // Excluir só avulsa: apagar o dia de uma rotina não faz sentido
+        // (para isso existe o pular).
         if (!item.is_routine) {
-            var actions = el('div', 'taskplus-card__actions');
-
-            var edit = el('button', 'taskplus-iconbtn');
-            edit.type = 'button';
-            edit.title = 'Editar';
-            edit.appendChild(el('i', 'ti ti-pencil'));
-            edit.addEventListener('click', function () {
-                openModal(item);
-            });
-            actions.appendChild(edit);
-
-            var del = el('button', 'taskplus-iconbtn taskplus-iconbtn--danger');
-            del.type = 'button';
-            del.title = 'Excluir';
-            del.appendChild(el('i', 'ti ti-trash'));
-            del.addEventListener('click', function () {
+            var del = iconBtn('ti-trash', 'Excluir', function () {
                 if (window.confirm('Excluir a tarefa "' + item.name + '"?')) {
                     post({ action: 'delete', id: String(item.id) });
                 }
             });
+            del.className += ' taskplus-iconbtn--danger';
             actions.appendChild(del);
-
-            c.appendChild(actions);
         }
+
+        c.appendChild(actions);
 
         return c;
     }
@@ -468,6 +519,81 @@
             fields.id = String(state.editingId);
         }
         post(fields, closeModal);
+    }
+
+    // ------------------------------------------------------------------
+    // Modais de pendência e de "pular hoje" (Etapa 4b)
+    // ------------------------------------------------------------------
+
+    function openPendingModal(item) {
+        state.pendingItem = item;
+        $('tp-p-title').textContent = item.name || '(sem título)';
+        $('tp-p-reason').value = item.pending_reason || '';
+        // Sugestão: amanhã. A data de hoje seria uma pendência que nasce
+        // vencida, e o servidor recusaria data no passado.
+        $('tp-p-until').value = item.pending_until || tomorrow();
+        $('tp-pending-modal').hidden = false;
+        $('tp-p-reason').focus();
+    }
+
+    function closePendingModal() {
+        $('tp-pending-modal').hidden = true;
+        state.pendingItem = null;
+    }
+
+    function savePending() {
+        var item = state.pendingItem;
+        if (!item) {
+            return;
+        }
+        var reason = $('tp-p-reason').value.trim();
+        if (reason === '') {
+            toast('Informe o motivo da pendência', true);
+            $('tp-p-reason').focus();
+            return;
+        }
+        post({
+            action: 'pending',
+            id: String(item.id),
+            itemtype: item.pending_type || 'Occurrence',
+            reason: reason,
+            pending_until: $('tp-p-until').value
+        }, closePendingModal);
+    }
+
+    function openSkipModal(item) {
+        state.skipItem = item;
+        $('tp-s-title').textContent = item.name || '(sem título)';
+        $('tp-s-reason').value = '';
+        $('tp-skip-modal').hidden = false;
+        $('tp-s-reason').focus();
+    }
+
+    function closeSkipModal() {
+        $('tp-skip-modal').hidden = true;
+        state.skipItem = null;
+    }
+
+    function saveSkip() {
+        var item = state.skipItem;
+        if (!item) {
+            return;
+        }
+        var reason = $('tp-s-reason').value.trim();
+        if (reason === '') {
+            toast('Informe o motivo', true);
+            $('tp-s-reason').focus();
+            return;
+        }
+        post({ action: 'skip', id: String(item.id), reason: reason }, closeSkipModal);
+    }
+
+    function tomorrow() {
+        var d = new Date();
+        d.setDate(d.getDate() + 1);
+        return d.getFullYear() + '-'
+            + String(d.getMonth() + 1).padStart(2, '0') + '-'
+            + String(d.getDate()).padStart(2, '0');
     }
 
     // ------------------------------------------------------------------
@@ -516,14 +642,37 @@
                 renderNative(); // o filtro não toca no bloco de tarefas próprias
             });
         }
+        $('tp-p-cancel').addEventListener('click', closePendingModal);
+        $('tp-p-save').addEventListener('click', savePending);
+        $('tp-s-cancel').addEventListener('click', closeSkipModal);
+        $('tp-s-save').addEventListener('click', saveSkip);
+        $('tp-pending-modal').addEventListener('click', function (ev) {
+            if (ev.target === $('tp-pending-modal')) {
+                closePendingModal();
+            }
+        });
+        $('tp-skip-modal').addEventListener('click', function (ev) {
+            if (ev.target === $('tp-skip-modal')) {
+                closeSkipModal();
+            }
+        });
         $('tp-modal').addEventListener('click', function (ev) {
             if (ev.target === $('tp-modal')) {
                 closeModal(); // clique no fundo fecha
             }
         });
         document.addEventListener('keydown', function (ev) {
-            if (ev.key === 'Escape' && !$('tp-modal').hidden) {
+            if (ev.key !== 'Escape') {
+                return;
+            }
+            if (!$('tp-modal').hidden) {
                 closeModal();
+            }
+            if (!$('tp-pending-modal').hidden) {
+                closePendingModal();
+            }
+            if (!$('tp-skip-modal').hidden) {
+                closeSkipModal();
             }
         });
 

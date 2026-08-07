@@ -28,6 +28,8 @@ class Install
     public const TABLES = [
         'glpi_plugin_taskplus_routines',
         'glpi_plugin_taskplus_occurrences',
+        'glpi_plugin_taskplus_phases',
+        'glpi_plugin_taskplus_pendings',
     ];
 
     /**
@@ -97,10 +99,52 @@ class Install
             'done_date'        => 'TIMESTAMP NULL DEFAULT NULL',
             'users_id_done'    => 'INT %SIGN% NOT NULL DEFAULT 0',
             'is_skipped'       => 'TINYINT NOT NULL DEFAULT 0',
+            'skip_reason'      => 'TEXT',
+            'skip_date'        => 'TIMESTAMP NULL DEFAULT NULL',
+            'users_id_skip'    => 'INT %SIGN% NOT NULL DEFAULT 0',
+            'is_edited'        => 'TINYINT NOT NULL DEFAULT 0',
+            'plugin_taskplus_phases_id' => 'INT %SIGN% NULL DEFAULT NULL',
             'is_deleted'       => 'TINYINT NOT NULL DEFAULT 0',
             'date_creation'    => 'TIMESTAMP NULL DEFAULT NULL',
             'date_mod'         => 'TIMESTAMP NULL DEFAULT NULL',
         ],
+        'glpi_plugin_taskplus_phases' => [
+            'name'          => "VARCHAR(255) NOT NULL DEFAULT ''",
+            'color'         => "VARCHAR(20) NOT NULL DEFAULT '#5a6b7b'",
+            'position'      => 'INT NOT NULL DEFAULT 0',
+            'is_default'    => 'TINYINT NOT NULL DEFAULT 0',
+            'is_system'     => 'TINYINT NOT NULL DEFAULT 0',
+            'system_key'    => "VARCHAR(20) NOT NULL DEFAULT ''",
+            'is_deleted'    => 'TINYINT NOT NULL DEFAULT 0',
+            'date_creation' => 'TIMESTAMP NULL DEFAULT NULL',
+            'date_mod'      => 'TIMESTAMP NULL DEFAULT NULL',
+        ],
+        'glpi_plugin_taskplus_pendings' => [
+            'itemtype'      => "VARCHAR(100) NOT NULL DEFAULT ''",
+            'items_id'      => 'INT %SIGN% NOT NULL DEFAULT 0',
+            'users_id'      => 'INT %SIGN% NOT NULL DEFAULT 0',
+            'reason'        => 'TEXT',
+            'pending_until' => 'DATE NULL DEFAULT NULL',
+            'is_active'     => 'TINYINT NOT NULL DEFAULT 1',
+            'date_creation' => 'TIMESTAMP NULL DEFAULT NULL',
+            'date_mod'      => 'TIMESTAMP NULL DEFAULT NULL',
+        ],
+    ];
+
+    /**
+     * Fases que o plugin cria na instalação (Etapa 4b).
+     *
+     * As de sistema (`is_system`) espelham estados CALCULADOS e não podem
+     * ser excluídas nem renomeadas para outra coisa: "atrasada" e
+     * "concluída" são consequência de data e de conclusão, não escolha.
+     * A padrão (`is_default`) é onde toda tarefa nasce — sem ela, tarefa
+     * criada fora do quadro ficaria sem coluna.
+     */
+    private const DEFAULT_PHASES = [
+        ['name' => 'Atrasadas',  'color' => '#c0392b', 'position' => 10, 'is_default' => 0, 'is_system' => 1, 'system_key' => 'late'],
+        ['name' => 'Para hoje',  'color' => '#2a76a8', 'position' => 20, 'is_default' => 1, 'is_system' => 1, 'system_key' => 'today'],
+        ['name' => 'Pendentes',  'color' => '#b8860b', 'position' => 30, 'is_default' => 0, 'is_system' => 1, 'system_key' => 'pending'],
+        ['name' => 'Concluídas', 'color' => '#2f7d46', 'position' => 90, 'is_default' => 0, 'is_system' => 1, 'system_key' => 'done'],
     ];
 
     public static function install(): bool
@@ -198,10 +242,72 @@ class Install
         }
 
         // ------------------------------------------------------------------
+        // 3) Fases do quadro (Etapa 4b).
+        //
+        //    Colunas do kanban. As 4 de sistema nascem aqui; o usuário
+        //    acrescenta as suas ("Em andamento", "Aguardando cliente") na
+        //    tela de Configurações (Etapa 4c). `position` ordena as
+        //    colunas; `is_default` marca onde a tarefa nasce.
+        // ------------------------------------------------------------------
+        if (!$DB->tableExists('glpi_plugin_taskplus_phases')) {
+            $DB->doQuery("
+                CREATE TABLE `glpi_plugin_taskplus_phases` (
+                    `id`            INT {$sign} NOT NULL AUTO_INCREMENT,
+                    `name`          VARCHAR(255) NOT NULL DEFAULT '',
+                    `color`         VARCHAR(20) NOT NULL DEFAULT '#5a6b7b',
+                    `position`      INT NOT NULL DEFAULT 0,
+                    `is_default`    TINYINT NOT NULL DEFAULT 0 COMMENT 'onde a tarefa nasce',
+                    `is_system`     TINYINT NOT NULL DEFAULT 0 COMMENT 'fase calculada, nao editavel',
+                    `system_key`    VARCHAR(20) NOT NULL DEFAULT '' COMMENT 'late|today|pending|done',
+                    `is_deleted`    TINYINT NOT NULL DEFAULT 0,
+                    `date_creation` TIMESTAMP NULL DEFAULT NULL,
+                    `date_mod`      TIMESTAMP NULL DEFAULT NULL,
+                    PRIMARY KEY (`id`),
+                    KEY `ordering` (`position`, `id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collation}
+            ");
+        }
+
+        // ------------------------------------------------------------------
+        // 4) Pendências (Etapa 4b).
+        //
+        //    Tabela SEPARADA, e não colunas na ocorrência, porque a
+        //    pendência também vale para tarefa de chamado e de projeto —
+        //    linhas do GLPI, onde o plugin não escreve (decisão nº 2). Por
+        //    isso itemtype/items_id em vez de uma FK.
+        //
+        //    A pendência é POR USUÁRIO: marcar um chamado como pendente
+        //    não muda nada para os outros técnicos nem no próprio chamado.
+        // ------------------------------------------------------------------
+        if (!$DB->tableExists('glpi_plugin_taskplus_pendings')) {
+            $DB->doQuery("
+                CREATE TABLE `glpi_plugin_taskplus_pendings` (
+                    `id`            INT {$sign} NOT NULL AUTO_INCREMENT,
+                    `itemtype`      VARCHAR(100) NOT NULL DEFAULT '' COMMENT 'Occurrence|TicketTask|ProjectTask',
+                    `items_id`      INT {$sign} NOT NULL DEFAULT 0,
+                    `users_id`      INT {$sign} NOT NULL DEFAULT 0 COMMENT 'de quem e a pendencia',
+                    `reason`        TEXT COMMENT 'motivo informado',
+                    `pending_until` DATE NULL DEFAULT NULL COMMENT 'volta ao fluxo nesta data',
+                    `is_active`     TINYINT NOT NULL DEFAULT 1,
+                    `date_creation` TIMESTAMP NULL DEFAULT NULL,
+                    `date_mod`      TIMESTAMP NULL DEFAULT NULL,
+                    PRIMARY KEY (`id`),
+                    KEY `item` (`itemtype`, `items_id`, `users_id`),
+                    KEY `user_active` (`users_id`, `is_active`)
+                ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collation}
+            ");
+        }
+
+        // ------------------------------------------------------------------
         // Reconciliação de schema: garante as colunas que passarem a
         // existir DEPOIS da criação da tabela (bases de versões antigas).
         // ------------------------------------------------------------------
         self::ensureSchema($migration);
+
+        // Fases de sistema: idempotente por `system_key`, então rodar
+        // plugin:install --force não duplica nem sobrescreve o que o
+        // usuário renomeou.
+        self::ensurePhases();
 
         // ------------------------------------------------------------------
         // Direitos.
@@ -281,6 +387,41 @@ class Install
                     $migration->addField($table, $field, $sqlType);
                 }
             }
+        }
+    }
+
+    /**
+     * Cria as fases de sistema que ainda não existem, casando por
+     * `system_key`. Não mexe nas que já estão lá (nome e cor podem ter
+     * sido ajustados pelo usuário na Etapa 4c).
+     */
+    private static function ensurePhases(): void
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        if (!$DB->tableExists('glpi_plugin_taskplus_phases')) {
+            return;
+        }
+
+        $existing = [];
+        foreach ($DB->request(['FROM' => 'glpi_plugin_taskplus_phases']) as $row) {
+            $key = (string) ($row['system_key'] ?? '');
+            if ($key !== '') {
+                $existing[$key] = true;
+            }
+        }
+
+        $now = date('Y-m-d H:i:s');
+        foreach (self::DEFAULT_PHASES as $phase) {
+            if (isset($existing[$phase['system_key']])) {
+                continue;
+            }
+            $DB->insert('glpi_plugin_taskplus_phases', $phase + [
+                'is_deleted'    => 0,
+                'date_creation' => $now,
+                'date_mod'      => $now,
+            ]);
         }
     }
 

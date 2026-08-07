@@ -338,3 +338,61 @@ msgstr ""
 
 msgid "Pendentes"
 msgstr ""
+
+#: Etapa 4b — pendência e pular
+msgid "Marcar como pendente"
+msgstr ""
+
+msgid "Motivo"
+msgstr ""
+
+msgid "Ex.: aguardando peça do fornecedor"
+msgstr ""
+
+msgid "Volta ao fluxo em"
+msgstr ""
+
+msgid "Pular hoje"
+msgstr ""
+
+msgid "A tarefa sai do dia sem contar como concluída nem como atrasada. A rotina segue normal amanhã."
+msgstr ""
+
+msgid "Ex.: servidor em manutenção, não houve backup"
+msgstr ""
+
+msgid "Informe o motivo da pendência"
+msgstr ""
+
+msgid "Data de retorno inválida"
+msgstr ""
+
+msgid "A data de retorno não pode ser no passado"
+msgstr ""
+
+msgid "Tarefa marcada como pendente"
+msgstr ""
+
+msgid "Pendência encerrada"
+msgstr ""
+
+msgid "Pendência não encontrada"
+msgstr ""
+
+msgid "Item inválido para pendência"
+msgstr ""
+
+msgid "Tarefa pulada hoje"
+msgstr ""
+
+msgid "Tarefa voltou para o dia"
+msgstr ""
+
+msgid "Tarefa concluída não pode ser pulada"
+msgstr ""
+
+msgid "Informe o motivo"
+msgstr ""
+
+msgid "Tarefa de hoje atualizada (a rotina nao mudou)"
+msgstr ""

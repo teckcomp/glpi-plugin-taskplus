@@ -55,6 +55,8 @@ class Occurrence
             'WHERE' => [
                 self::TABLE . '.users_id'   => $usersId,
                 self::TABLE . '.is_deleted' => 0,
+                // Pulada sai da tela do dia (fica só no Histórico)
+                self::TABLE . '.is_skipped' => 0,
                 self::TABLE . '.date'       => $today,
             ],
         ]) as $row) {
@@ -67,6 +69,7 @@ class Occurrence
                 self::TABLE . '.users_id'   => $usersId,
                 self::TABLE . '.is_deleted' => 0,
                 self::TABLE . '.is_done'    => 0,
+                self::TABLE . '.is_skipped' => 0,
                 self::TABLE . '.date'       => ['<', $today],
             ],
         ]) as $row) {
@@ -78,30 +81,6 @@ class Occurrence
         usort($todayRows, [self::class, 'compareToday']);
         usort($overdueRows, [self::class, 'compareOverdue']);
 
-        $done = 0;
-        $lateToday = 0;
-        foreach ($todayRows as $item) {
-            if ($item['is_done']) {
-                $done++;
-            } elseif ($item['is_late']) {
-                $lateToday++;
-            }
-        }
-
-        // KPIs contam APENAS as tarefas próprias do Task+ (avulsas e
-        // rotinas), calculados ANTES de anexar as origens nativas: elas
-        // são leitura, não dá para concluí-las aqui, então entrariam
-        // eternamente em "Para hoje" sem nunca migrar para "Concluídas" e
-        // estragariam a taxa de conclusão do Painel (Etapa 5). A contagem
-        // das nativas aparece no cabeçalho da própria seção.
-        $kpis = [
-            'late'    => count($overdueRows) + $lateToday,
-            'today'   => count($todayRows),
-            // Marcação de pendência chega na Etapa 4b; a chave já existe
-            // para o JS não precisar de defensiva depois.
-            'pending' => 0,
-            'done'    => $done,
-        ];
 
         // Origens nativas (Etapa 3): leitura + link, no fim da lista.
         // Falha de leitura não pode derrubar a tela — o usuário ainda
@@ -119,12 +98,113 @@ class Occurrence
             // origem indisponível: segue sem ela
         }
 
+        // Pendências (Etapa 4b): marcadas por usuário, valem para tarefa
+        // própria e para item nativo. Expiram sozinhas — activeMap já
+        // descarta as que passaram da data de retorno.
+        $pendings = [];
+        try {
+            $pendings = Pending::activeMap($usersId, $today);
+        } catch (\Throwable $e) {
+            $pendings = [];
+        }
+
+        $todayRows   = self::applyPendings($todayRows, $pendings, Pending::TYPE_OCCURRENCE);
+        $overdueRows = self::applyPendings($overdueRows, $pendings, Pending::TYPE_OCCURRENCE);
+        $native      = self::applyPendings($native, $pendings, null);
+
+        // KPIs contam APENAS as tarefas próprias (as nativas são leitura e
+        // nunca migrariam para "Concluídas"), com uma exceção: pendência
+        // vale para qualquer origem, então o KPI de pendentes soma todas.
+        //
+        // Tarefa pendente SAI de "Para hoje" e de "Atrasadas": é uma
+        // espera declarada, com data de volta — senão o número do dia
+        // nunca fecharia.
+        $pendingCount = 0;
+        $todayCount   = 0;
+        $done         = 0;
+        $lateToday    = 0;
+
+        foreach ($todayRows as $item) {
+            if (!empty($item['is_pending'])) {
+                $pendingCount++;
+                continue;
+            }
+            $todayCount++;
+            if ($item['is_done']) {
+                $done++;
+            } elseif ($item['is_late']) {
+                $lateToday++;
+            }
+        }
+
+        $overdueCount = 0;
+        foreach ($overdueRows as $item) {
+            if (!empty($item['is_pending'])) {
+                $pendingCount++;
+                continue;
+            }
+            $overdueCount++;
+        }
+
+        foreach ($native as $item) {
+            if (!empty($item['is_pending'])) {
+                $pendingCount++;
+            }
+        }
+
+        $kpis = [
+            'late'    => $overdueCount + $lateToday,
+            'today'   => $todayCount,
+            'pending' => $pendingCount,
+            'done'    => $done,
+        ];
+
         return [
             'date'    => $today,
             'kpis'    => $kpis,
             'today'   => array_merge($todayRows, $native),
             'overdue' => $overdueRows,
         ];
+    }
+
+    /**
+     * Marca em cada item se ele tem pendência ativa deste usuário.
+     * `$forceType` fixa o itemtype (tarefas próprias); com null, usa o
+     * `source` do item nativo (TicketTask / ProjectTask).
+     */
+    private static function applyPendings(array $items, array $pendings, ?string $forceType): array
+    {
+        $sourceMap = [
+            'ticket'  => Pending::TYPE_TICKET_TASK,
+            'project' => Pending::TYPE_PROJECT_TASK,
+        ];
+
+        foreach ($items as &$item) {
+            $type = $forceType ?? ($sourceMap[$item['source'] ?? ''] ?? null);
+
+            $item['pending_type']   = $type;
+            $item['is_pending']     = false;
+            $item['pending_reason'] = '';
+            $item['pending_label']  = '';
+            $item['pending_until']  = '';
+
+            if ($type === null) {
+                continue;
+            }
+
+            $key = $type . ':' . (int) ($item['id'] ?? 0);
+            if (isset($pendings[$key])) {
+                $item['is_pending']     = true;
+                $item['pending_reason'] = $pendings[$key]['reason'];
+                $item['pending_label']  = $pendings[$key]['label'];
+                $item['pending_until']  = $pendings[$key]['until'];
+                // Pendente não é atrasada: a espera foi combinada
+                $item['is_late'] = false;
+            }
+        }
+        unset($item);
+
+        return $items;
     }
 
     /**
@@ -150,6 +230,7 @@ class Occurrence
                 self::TABLE . '.time_limit',
                 self::TABLE . '.is_done',
                 self::TABLE . '.done_date',
+                self::TABLE . '.is_edited',
                 Routine::TABLE . '.name AS routine_name',
                 Routine::TABLE . '.frequency AS routine_frequency',
             ],
@@ -199,6 +280,7 @@ class Occurrence
             'is_routine'  => $isRoutine,
             // Origem própria do Task+ (as nativas vêm de Native.php)
             'is_native'   => false,
+            'is_edited'   => ((int) ($row['is_edited'] ?? 0)) === 1,
             'group'       => $group,
             'routine_name' => (string) ($row['routine_name'] ?? ''),
             'name'        => (string) ($row['name'] ?? ''),
@@ -265,6 +347,14 @@ class Occurrence
                 return self::delete($input, $usersId);
             case 'toggle':
                 return self::toggle($input, $usersId);
+            case 'skip':
+                return self::skip($input, $usersId);
+            case 'unskip':
+                return self::unskip($input, $usersId);
+            case 'pending':
+                return self::setPending($input, $usersId);
+            case 'unpending':
+                return self::clearPending($input, $usersId);
             case 'list':
                 // Só quer o payload atualizado (o endpoint já o inclui)
                 return ['success' => true, 'message' => ''];
@@ -309,13 +399,19 @@ class Occurrence
         if ($row === null) {
             return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
         }
-        if (($row['plugin_taskplus_routines_id'] ?? null) !== null) {
-            return ['success' => false, 'message' => __('Ocorrência de rotina não pode ser editada aqui', 'taskplus')];
-        }
-
         $fields = self::cleanFields($input);
         if (is_string($fields)) {
             return ['success' => false, 'message' => $fields];
+        }
+
+        $isRoutine = ($row['plugin_taskplus_routines_id'] ?? null) !== null;
+        if ($isRoutine) {
+            // Editar ocorrência de rotina altera SÓ o dia: a rotina segue
+            // intacta e amanhã o cron gera uma nova, limpa. Mudar a DATA
+            // fica de fora — ela é metade da UNIQUE `routine_day`, e mover
+            // o dia colidiria com a ocorrência que já existe lá.
+            unset($fields['date']);
+            $fields['is_edited'] = 1;
         }
 
         $DB->update(
@@ -324,7 +420,98 @@ class Occurrence
             [self::TABLE . '.id' => (int) $row['id']]
         );
 
-        return ['success' => true, 'message' => __('Tarefa atualizada', 'taskplus')];
+        return [
+            'success' => true,
+            'message' => $isRoutine
+                ? __('Tarefa de hoje atualizada (a rotina nao mudou)', 'taskplus')
+                : __('Tarefa atualizada', 'taskplus'),
+        ];
+    }
+
+    /**
+     * "Pular hoje": a tarefa não se aplicava neste dia (servidor em
+     * manutenção, cliente ausente, feriado interno). Sai da lista sem
+     * contar como concluída nem como atrasada, e o motivo fica gravado
+     * para o Histórico. A rotina segue normal e gera amanhã.
+     */
+    private static function skip(array $input, int $usersId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $row = self::ownRow((int) ($input['id'] ?? 0), $usersId);
+        if ($row === null) {
+            return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
+        }
+        if (((int) ($row['is_done'] ?? 0)) === 1) {
+            return ['success' => false, 'message' => __('Tarefa concluída não pode ser pulada', 'taskplus')];
+        }
+
+        $reason = trim((string) ($input['reason'] ?? ''));
+        if ($reason === '') {
+            return ['success' => false, 'message' => __('Informe o motivo', 'taskplus')];
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $DB->update(self::TABLE, [
+            'is_skipped'    => 1,
+            'skip_reason'   => $reason,
+            'skip_date'     => $now,
+            'users_id_skip' => $usersId,
+            'date_mod'      => $now,
+        ], [self::TABLE . '.id' => (int) $row['id']]);
+
+        return ['success' => true, 'message' => __('Tarefa pulada hoje', 'taskplus')];
+    }
+
+    /** Desfaz o "pular" (clicou no card errado, ou o dia mudou). */
+    private static function unskip(array $input, int $usersId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $row = self::ownRow((int) ($input['id'] ?? 0), $usersId);
+        if ($row === null) {
+            return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
+        }
+
+        // skip_reason/skip_date ficam: a trilha do Histórico mostra que
+        // houve um pulo desfeito, não um dia sem nada.
+        $DB->update(
+            self::TABLE,
+            ['is_skipped' => 0, 'date_mod' => date('Y-m-d H:i:s')],
+            [self::TABLE . '.id' => (int) $row['id']]
+        );
+
+        return ['success' => true, 'message' => __('Tarefa voltou para o dia', 'taskplus')];
+    }
+
+    /**
+     * Marca pendência. Aceita tarefa própria E item nativo (chamado ou
+     * tarefa de projeto): a pendência mora em tabela do plugin, então
+     * nada é gravado no GLPI.
+     */
+    private static function setPending(array $input, int $usersId): array
+    {
+        $itemtype = (string) ($input['itemtype'] ?? Pending::TYPE_OCCURRENCE);
+        $itemsId  = (int) ($input['id'] ?? 0);
+
+        // Só a tarefa PRÓPRIA passa pela checagem de dono: item nativo já
+        // chega filtrado pela consulta do Native (users_id_tech / equipe).
+        if ($itemtype === Pending::TYPE_OCCURRENCE && self::ownRow($itemsId, $usersId) === null) {
+            return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
+        }
+
+        return Pending::set($itemtype, $itemsId, $usersId, $input);
+    }
+
+    private static function clearPending(array $input, int $usersId): array
+    {
+        return Pending::clear(
+            (string) ($input['itemtype'] ?? Pending::TYPE_OCCURRENCE),
+            (int) ($input['id'] ?? 0),
+            $usersId
+        );
     }
 
     private static function delete(array $input, int $usersId): array

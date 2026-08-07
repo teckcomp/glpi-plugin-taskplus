@@ -113,6 +113,47 @@
     </div>
 </div>
 
+{# ================= MODAL de pendência (Etapa 4b) ================= #}
+<div class="taskplus-modal" id="tp-pending-modal" hidden>
+    <div class="taskplus-modal__box">
+        <h3>{{ __('Marcar como pendente', 'taskplus') }}</h3>
+        <p class="taskplus-modal__subject" id="tp-p-title"></p>
+        <label class="taskplus-field">
+            <span>{{ __('Motivo', 'taskplus') }} *</span>
+            <textarea id="tp-p-reason" rows="2"
+                      placeholder="{{ __('Ex.: aguardando peça do fornecedor', 'taskplus') }}"></textarea>
+        </label>
+        <label class="taskplus-field">
+            <span>{{ __('Volta ao fluxo em', 'taskplus') }}</span>
+            <input type="date" id="tp-p-until">
+        </label>
+        <div class="taskplus-modal__actions">
+            <button type="button" class="btn btn-ghost-secondary" id="tp-p-cancel">{{ __('Cancelar', 'taskplus') }}</button>
+            <button type="button" class="btn btn-primary" id="tp-p-save">{{ __('Salvar', 'taskplus') }}</button>
+        </div>
+    </div>
+</div>
+
+{# ================= MODAL de "pular hoje" (Etapa 4b) ================= #}
+<div class="taskplus-modal" id="tp-skip-modal" hidden>
+    <div class="taskplus-modal__box">
+        <h3>{{ __('Pular hoje', 'taskplus') }}</h3>
+        <p class="taskplus-modal__subject" id="tp-s-title"></p>
+        <p class="taskplus-modal__hint">
+            {{ __('A tarefa sai do dia sem contar como concluída nem como atrasada. A rotina segue normal amanhã.', 'taskplus') }}
+        </p>
+        <label class="taskplus-field">
+            <span>{{ __('Motivo', 'taskplus') }} *</span>
+            <textarea id="tp-s-reason" rows="2"
+                      placeholder="{{ __('Ex.: servidor em manutenção, não houve backup', 'taskplus') }}"></textarea>
+        </label>
+        <div class="taskplus-modal__actions">
+            <button type="button" class="btn btn-ghost-secondary" id="tp-s-cancel">{{ __('Cancelar', 'taskplus') }}</button>
+            <button type="button" class="btn btn-primary" id="tp-s-save">{{ __('Pular hoje', 'taskplus') }}</button>
+        </div>
+    </div>
+</div>
+
 {# Estado inicial da tela. O front gera este JSON com JSON_HEX_TAG & cia,
    então um "</script>" em nome de tarefa NÃO quebra a página — por isso
    (e só por isso) o |raw é seguro aqui. #}
