@@ -125,6 +125,10 @@ class Install
             'users_id'      => 'INT %SIGN% NOT NULL DEFAULT 0',
             'reason'        => 'TEXT',
             'pending_until' => 'DATE NULL DEFAULT NULL',
+            // Ajuste 2 do 4b: hora passa a ser obrigatória no formulário;
+            // a coluna nasce com default para as pendências que já
+            // existiam antes deste ajuste (fim de expediente).
+            'pending_time'  => "TIME NOT NULL DEFAULT '18:00:00'",
             'is_active'     => 'TINYINT NOT NULL DEFAULT 1',
             'date_creation' => 'TIMESTAMP NULL DEFAULT NULL',
             'date_mod'      => 'TIMESTAMP NULL DEFAULT NULL',
@@ -288,6 +292,7 @@ class Install
                     `users_id`      INT {$sign} NOT NULL DEFAULT 0 COMMENT 'de quem e a pendencia',
                     `reason`        TEXT COMMENT 'motivo informado',
                     `pending_until` DATE NULL DEFAULT NULL COMMENT 'volta ao fluxo nesta data',
+                    `pending_time`  TIME NOT NULL DEFAULT '18:00:00' COMMENT 'volta ao fluxo nesta hora (obrigatoria desde o ajuste 2 do 4b)',
                     `is_active`     TINYINT NOT NULL DEFAULT 1,
                     `date_creation` TIMESTAMP NULL DEFAULT NULL,
                     `date_mod`      TIMESTAMP NULL DEFAULT NULL,

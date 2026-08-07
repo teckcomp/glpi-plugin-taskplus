@@ -178,36 +178,33 @@
         renderNative();
     }
 
-    /** Bloco 1 — tarefas do próprio Task+ (atrasadas, rotinas, avulsas). */
+    /**
+     * Bloco 1 — tarefas do próprio Task+ (atrasadas, rotinas, avulsas).
+     *
+     * Etapa 4b (ajuste 2): a pendente NÃO sai mais para uma seção central
+     * "Pendentes" — ela fica na seção onde já estava (Atrasadas / Hoje /
+     * grupo da rotina), só com o card marcado (`taskplus-card--pending`)
+     * e o badge de motivo/retorno. Ver `card()`.
+     */
     function renderOwn() {
         var list = $('tp-list-own');
         list.textContent = '';
 
         var todayItems = state.data.today.filter(function (item) {
             return OWN_GROUPS.indexOf(groupOf(item)) !== -1
-                && !item.is_pending
                 && (state.showDone || !item.is_done);
         });
         var overdueItems = state.data.overdue.filter(function (item) {
-            return OWN_GROUPS.indexOf(groupOf(item)) !== -1 && !item.is_pending;
+            return OWN_GROUPS.indexOf(groupOf(item)) !== -1;
         });
-        // Pendentes de qualquer origem, do dia e das atrasadas
-        var pendingItems = state.data.today.concat(state.data.overdue)
-            .filter(function (item) { return !!item.is_pending; });
 
-        if (overdueItems.length === 0 && todayItems.length === 0 && pendingItems.length === 0) {
+        if (overdueItems.length === 0 && todayItems.length === 0) {
             list.appendChild(emptyOwn());
             return;
         }
 
         if (overdueItems.length > 0) {
             list.appendChild(section('Atrasadas', overdueItems, true));
-        }
-
-        // Pendentes reúne TODAS as origens (inclusive chamado e projeto):
-        // é um estado, não uma origem — mesma lógica de "Atrasadas".
-        if (pendingItems.length > 0) {
-            list.appendChild(section('Pendentes', pendingItems, false));
         }
 
         if (todayItems.length > 0) {
@@ -235,14 +232,20 @@
         }
     }
 
-    /** Bloco 2 — origens nativas do GLPI (chamados e projetos). */
+    /**
+     * Bloco 2 — origens nativas do GLPI (chamados e projetos).
+     *
+     * Etapa 4b (ajuste 2): item pendente de origem nativa fica aqui mesmo,
+     * no grupo Chamados/Projetos, marcado como pendente — não muda de
+     * bloco. Antes ele "sumia" daqui e reaparecia dentro de "Minhas
+     * tarefas", o que confundia (parecia ter virado tarefa própria).
+     */
     function renderNative() {
         var list = $('tp-list-native');
         list.textContent = '';
 
         var items = state.data.today.filter(function (item) {
             return NATIVE_GROUPS.indexOf(groupOf(item)) !== -1
-                && !item.is_pending // pendente aparece na seção Pendentes
                 && matchesSource(item);
         });
 
@@ -532,6 +535,9 @@
         // Sugestão: amanhã. A data de hoje seria uma pendência que nasce
         // vencida, e o servidor recusaria data no passado.
         $('tp-p-until').value = item.pending_until || tomorrow();
+        // Hora é obrigatória a partir do ajuste 2 do 4b. Sugestão de fim
+        // de expediente quando não há valor anterior para repactuar.
+        $('tp-p-time').value = item.pending_time || '18:00';
         $('tp-pending-modal').hidden = false;
         $('tp-p-reason').focus();
     }
@@ -552,12 +558,19 @@
             $('tp-p-reason').focus();
             return;
         }
+        var time = $('tp-p-time').value.trim();
+        if (time === '') {
+            toast('Informe a hora de retorno', true);
+            $('tp-p-time').focus();
+            return;
+        }
         post({
             action: 'pending',
             id: String(item.id),
             itemtype: item.pending_type || 'Occurrence',
             reason: reason,
-            pending_until: $('tp-p-until').value
+            pending_until: $('tp-p-until').value,
+            pending_time: time
         }, closePendingModal);
     }
 

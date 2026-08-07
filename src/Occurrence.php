@@ -187,6 +187,7 @@ class Occurrence
             $item['pending_reason'] = '';
             $item['pending_label']  = '';
             $item['pending_until']  = '';
+            $item['pending_time']   = '';
 
             if ($type === null) {
                 continue;
@@ -198,6 +199,7 @@ class Occurrence
                 $item['pending_reason'] = $pendings[$key]['reason'];
                 $item['pending_label']  = $pendings[$key]['label'];
                 $item['pending_until']  = $pendings[$key]['until'];
+                $item['pending_time']   = $pendings[$key]['time'] ?? '';
                 // Pendente não é atrasada: a espera foi combinada
                 $item['is_late'] = false;
             }
