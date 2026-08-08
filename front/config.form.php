@@ -1,12 +1,13 @@
 <?php
 
 /**
- * Task+ — tela "Configurações" (reescrita na Etapa 4c).
+ * Task+ — tela "Configurações" (reescrita na Etapa 4c; escopo por setor
+ * na 4c-2).
  *
- * Até o 4b era uma tabela solta (Config::showForm). Agora segue o mesmo
- * padrão do front/today.php: sidebar do hub + área principal, com o
- * formulário de preferências (POST clássico) e o CRUD de fases do quadro
- * (payload embutido + public/js/config.js + ajax/phase.php).
+ * Mesmo padrão do front/today.php: sidebar do hub + área principal, com
+ * o formulário de preferências (POST clássico, SÓ ADMIN) e o CRUD de
+ * fases do quadro (payload embutido + public/js/config.js +
+ * ajax/phase.php — admin mexe em tudo, gestor de setor só nos seus).
  */
 
 use Glpi\Application\View\TemplateRenderer;
@@ -17,9 +18,22 @@ use GlpiPlugin\Taskplus\Url;
 
 include('../../../inc/includes.php');
 
-Session::checkRight('config', UPDATE);
+// Gate da 4c-2: admin (config UPDATE) OU gestor de setor (direito
+// plugin_taskplus_manage + is_manager em algum grupo). Mesma regra do
+// ajax/phase.php e da flag nav.config (Access::canConfigPhases).
+$usersId = (int) Session::getLoginUserID();
+$isAdmin = Access::isPhaseAdmin();
+$managed = Access::managedGroups($usersId, $isAdmin);
+
+if (!$isAdmin && (!Session::haveRight('plugin_taskplus_manage', READ) || $managed === [])) {
+    Html::displayRightError();
+}
 
 if (isset($_POST['update'])) {
+    // Preferências continuam EXCLUSIVAS do admin — o gestor entra na
+    // tela só pelas fases (o template nem renderiza o form para ele,
+    // mas o POST é validado de novo aqui: JS/HTML nunca é a proteção).
+    Session::checkRight('config', UPDATE);
     PluginConfig::set($_POST);
     Session::addMessageAfterRedirect(__('Configuração salva', 'taskplus'), true, INFO);
     Html::back();
@@ -42,12 +56,13 @@ TemplateRenderer::getInstance()->display(
         'plugin_web_dir'     => Url::base(),
         'plugin_version'     => PLUGIN_TASKPLUS_VERSION,
         'nav'                => Access::sidebar(),
+        'is_admin'           => (bool) $isAdmin,
         'form_csrf'          => Session::getNewCSRFToken(),
         'csrf_token'         => Session::getNewCSRFToken(),
         'email_enabled'      => (int) $config['email_enabled'],
         'purge_on_uninstall' => (int) $config['purge_on_uninstall'],
         'payload_json'       => json_encode(
-            Phase::payload(),
+            Phase::payload($isAdmin, $managed),
             JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
         ),
     ]

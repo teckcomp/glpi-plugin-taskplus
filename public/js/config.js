@@ -1,5 +1,15 @@
 /**
- * Task+ — tela "Configurações", seção Fases do quadro (Etapa 4c).
+ * Task+ — tela "Configurações", seção Fases do quadro (Etapa 4c,
+ * revista na 4c-2: fases POR SETOR).
+ *
+ * O que a 4c-2 muda aqui:
+ *  - payload ganha `managed_groups` (setores onde o usuário pode criar
+ *    fase) e `is_admin`; cada fase ganha `groups_id`, `group_name` e
+ *    `can_edit` (calculado no servidor — o JS só evita desenhar botão
+ *    inútil, a validação de verdade é por ação no endpoint);
+ *  - fase customizada leva a etiqueta do setor; as setas sobem/descem
+ *    só DENTRO do setor; o modal de criação tem seletor de setor e o
+ *    de edição mostra o setor fixo (imutável).
  *
  * Mesmo contrato do public/js/routines.js:
  *  - estado inicial embutido em <script type="application/json" id="taskplus-config-data">
@@ -47,7 +57,9 @@
     function safeData(raw) {
         var d = (raw && typeof raw === 'object') ? raw : {};
         return {
-            phases: Array.isArray(d.phases) ? d.phases : []
+            phases: Array.isArray(d.phases) ? d.phases : [],
+            managed_groups: Array.isArray(d.managed_groups) ? d.managed_groups : [],
+            is_admin: d.is_admin === true
         };
     }
 
@@ -129,6 +141,18 @@
         var list = $('tpc-phase-list');
         list.textContent = ''; // limpa
 
+        // 4c-2: sem setor administrável não há onde criar fase (admin em
+        // GLPI sem grupos cadastrados). O gestor sem grupo nem chega à
+        // tela — o gate é do servidor.
+        var btnNew = $('tpc-btn-new');
+        if (btnNew) {
+            var noSector = state.data.managed_groups.length === 0;
+            btnNew.disabled = noSector;
+            btnNew.title = noSector
+                ? 'Cadastre um grupo (setor) no GLPI para criar fases'
+                : '';
+        }
+
         var phases = state.data.phases;
         if (phases.length === 0) {
             var box = el('div', 'taskplus-empty taskplus-empty--sm');
@@ -139,17 +163,18 @@
             return;
         }
 
-        // Índices das customizadas na ordem da lista, para saber quem é a
-        // primeira e a última (setas desabilitadas nas pontas)
-        var customIds = phases.filter(function (p) { return !p.is_system; })
-            .map(function (p) { return p.id; });
-
         phases.forEach(function (item) {
-            list.appendChild(row(item, customIds));
+            list.appendChild(row(item, phases));
         });
     }
 
-    function row(item, customIds) {
+    function row(item, phases) {
+        // 4c-2: as setas andam só DENTRO do setor da fase — a lista de
+        // vizinhas para as pontas é a das customizadas do MESMO setor.
+        var sectorIds = phases.filter(function (p) {
+            return !p.is_system && p.groups_id === item.groups_id;
+        }).map(function (p) { return p.id; });
+
         var r = el('div', 'taskplus-phase-row' + (item.is_system ? ' taskplus-phase-row--system' : ''));
 
         var dot = el('span', 'taskplus-phase-row__dot');
@@ -160,6 +185,14 @@
         body.appendChild(el('span', 'taskplus-phase-row__name', item.name || '(sem nome)'));
         if (item.is_system) {
             body.appendChild(el('span', 'taskplus-badge taskplus-badge--system', 'sistema'));
+        } else {
+            // 4c-2: toda customizada leva a etiqueta do setor dono.
+            // group_name vazio = legada da 4c (sem setor), só o admin vê.
+            body.appendChild(el(
+                'span',
+                'taskplus-badge taskplus-badge--sector',
+                item.group_name || 'sem setor'
+            ));
         }
         if (item.is_default) {
             var def = el('span', 'taskplus-badge taskplus-badge--default', 'padrão');
@@ -170,8 +203,11 @@
 
         var actions = el('div', 'taskplus-card__actions');
 
-        if (!item.is_system) {
-            var idx = customIds.indexOf(item.id);
+        // can_edit vem calculado do servidor (gestor não mexe em fase de
+        // sistema nem em setor alheio). Sem botão aqui ≠ proteção: o
+        // endpoint revalida por ação.
+        if (item.can_edit && !item.is_system) {
+            var idx = sectorIds.indexOf(item.id);
 
             var up = el('button', 'taskplus-iconbtn');
             up.type = 'button';
@@ -186,7 +222,7 @@
             var down = el('button', 'taskplus-iconbtn');
             down.type = 'button';
             down.title = 'Descer';
-            down.disabled = (idx === customIds.length - 1);
+            down.disabled = (idx === sectorIds.length - 1);
             down.appendChild(el('i', 'ti ti-arrow-down'));
             down.addEventListener('click', function () {
                 post({ action: 'move', id: String(item.id), dir: 'down' });
@@ -194,16 +230,18 @@
             actions.appendChild(down);
         }
 
-        var edit = el('button', 'taskplus-iconbtn');
-        edit.type = 'button';
-        edit.title = 'Editar';
-        edit.appendChild(el('i', 'ti ti-pencil'));
-        edit.addEventListener('click', function () {
-            openModal(item);
-        });
-        actions.appendChild(edit);
+        if (item.can_edit) {
+            var edit = el('button', 'taskplus-iconbtn');
+            edit.type = 'button';
+            edit.title = 'Editar';
+            edit.appendChild(el('i', 'ti ti-pencil'));
+            edit.addEventListener('click', function () {
+                openModal(item);
+            });
+            actions.appendChild(edit);
+        }
 
-        if (!item.is_system) {
+        if (item.can_edit && !item.is_system) {
             var del = el('button', 'taskplus-iconbtn taskplus-iconbtn--danger');
             del.type = 'button';
             del.title = 'Excluir';
@@ -229,6 +267,34 @@
         state.editingId = item ? item.id : null;
         $('tpc-modal-title').textContent = item ? 'Editar fase' : 'Nova fase';
         $('tpc-modal-system-hint').hidden = !(item && item.is_system);
+
+        // 4c-2: setor só na criação (imutável depois). Criando, o select
+        // é populado com os setores administráveis do payload; editando
+        // customizada, entra o aviso fixo com o setor da fase.
+        var fieldGroup = $('tpc-field-group');
+        var groupFixed = $('tpc-modal-group-fixed');
+        var sel = $('tpc-f-group');
+
+        if (!item) {
+            sel.textContent = ''; // limpa as options
+            state.data.managed_groups.forEach(function (g) {
+                var opt = document.createElement('option');
+                opt.value = String(g.id);
+                opt.textContent = g.name;
+                sel.appendChild(opt);
+            });
+            fieldGroup.hidden = false;
+            groupFixed.hidden = true;
+        } else {
+            fieldGroup.hidden = true;
+            if (!item.is_system) {
+                groupFixed.textContent = 'Setor: ' + (item.group_name || 'sem setor')
+                    + ' — não pode ser alterado depois da criação.';
+                groupFixed.hidden = false;
+            } else {
+                groupFixed.hidden = true;
+            }
+        }
 
         $('tpc-f-name').value = item ? item.name : '';
         $('tpc-f-color').value = safeColor(item ? item.color : '#5a6b7b');
@@ -257,6 +323,14 @@
         };
         if (state.editingId) {
             fields.id = String(state.editingId);
+        } else {
+            // 4c-2: criação exige o setor dono (o servidor valida escopo)
+            var gid = $('tpc-f-group').value;
+            if (!gid) {
+                toast('Informe o setor da fase', true);
+                return;
+            }
+            fields.groups_id = gid;
         }
         post(fields, closeModal);
     }

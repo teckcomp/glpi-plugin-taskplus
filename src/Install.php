@@ -115,6 +115,10 @@ class Install
             'is_default'    => 'TINYINT NOT NULL DEFAULT 0',
             'is_system'     => 'TINYINT NOT NULL DEFAULT 0',
             'system_key'    => "VARCHAR(20) NOT NULL DEFAULT ''",
+            // 4c-2: dono da fase. 0 = sistema (e legadas da 4c, "sem
+            // setor"); >0 = grupo do GLPI. É a coluna que o T13 cobre:
+            // base existente ganha via ensureSchema (install --force).
+            'groups_id'     => 'INT %SIGN% NOT NULL DEFAULT 0',
             'is_deleted'    => 'TINYINT NOT NULL DEFAULT 0',
             'date_creation' => 'TIMESTAMP NULL DEFAULT NULL',
             'date_mod'      => 'TIMESTAMP NULL DEFAULT NULL',
@@ -263,6 +267,7 @@ class Install
                     `is_default`    TINYINT NOT NULL DEFAULT 0 COMMENT 'onde a tarefa nasce',
                     `is_system`     TINYINT NOT NULL DEFAULT 0 COMMENT 'fase calculada, nao editavel',
                     `system_key`    VARCHAR(20) NOT NULL DEFAULT '' COMMENT 'late|today|pending|done',
+                    `groups_id`     INT {$sign} NOT NULL DEFAULT 0 COMMENT '0 = sistema; >0 = setor (grupo) dono (4c-2)',
                     `is_deleted`    TINYINT NOT NULL DEFAULT 0,
                     `date_creation` TIMESTAMP NULL DEFAULT NULL,
                     `date_mod`      TIMESTAMP NULL DEFAULT NULL,

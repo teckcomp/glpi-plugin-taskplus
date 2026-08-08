@@ -347,6 +347,8 @@
 .taskplus-phase-row__name { font-weight: 600; color: #2c3844; }
 .taskplus-badge--system { background: #eef2f6; color: #5a7684; }
 .taskplus-badge--default { background: #e3f0fa; color: #2a76a8; font-weight: 600; }
+/* 4c-2: etiqueta do setor (grupo do GLPI) dono da fase customizada */
+.taskplus-badge--sector { background: #e8eef7; color: #3b5a86; font-weight: 600; }
 
 /* Setas de reordenação nas pontas ficam visivelmente inertes */
 .taskplus-iconbtn:disabled { opacity: 0.35; cursor: default; }

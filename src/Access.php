@@ -63,6 +63,10 @@ class Access
      *
      * Telas ainda não construídas aparecem desabilitadas no template; as
      * flags aqui só dizem se o perfil PODERIA vê-las.
+     *
+     * 4c-2: "Configurações" deixa de ser exclusiva do admin — o gestor
+     * de setor entra para administrar as fases dos seus grupos (o bloco
+     * Preferências continua só admin, gateado dentro da tela).
      */
     public static function sidebar(): array
     {
@@ -76,7 +80,79 @@ class Access
             'team'     => $manage,
             'panel'    => $task,
             'history'  => $task,
-            'config'   => (bool) Session::haveRight('config', UPDATE),
+            'config'   => self::canConfigPhases(),
         ];
+    }
+
+    // =====================================================================
+    // Escopo de fases por setor (Etapa 4c-2)
+    // =====================================================================
+
+    /**
+     * Admin das fases = direito NATIVO `config` UPDATE (o mesmo gate da
+     * tela de Configurações desde a 4c). Administra as fases de TODOS os
+     * setores e as 4 de sistema.
+     */
+    public static function isPhaseAdmin(): bool
+    {
+        return (bool) Session::haveRight('config', UPDATE);
+    }
+
+    /**
+     * Setores (grupos do GLPI) que $usersId pode ADMINISTRAR nas fases:
+     * mapa [groups_id => nome do grupo].
+     *
+     *  - admin: TODOS os grupos (é a lista do seletor de setor);
+     *  - gestor: grupos onde ele tem `is_manager` em glpi_groups_users.
+     *
+     * A tabela de grupos é pequena em qualquer instalação real: trazer
+     * tudo e resolver em PHP dispensa JOIN (e o erro 1052 junto).
+     */
+    public static function managedGroups(int $usersId, bool $isAdmin): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $allGroups = [];
+        foreach ($DB->request(['FROM' => 'glpi_groups']) as $row) {
+            $allGroups[(int) ($row['id'] ?? 0)] = (string) ($row['name'] ?? '');
+        }
+
+        if ($isAdmin) {
+            return $allGroups;
+        }
+
+        $managed = [];
+        foreach ($DB->request([
+            'FROM'  => 'glpi_groups_users',
+            'WHERE' => [
+                'glpi_groups_users.users_id'   => $usersId,
+                'glpi_groups_users.is_manager' => 1,
+            ],
+        ]) as $row) {
+            $gid = (int) ($row['groups_id'] ?? 0);
+            if (isset($allGroups[$gid])) {
+                $managed[$gid] = $allGroups[$gid];
+            }
+        }
+
+        return $managed;
+    }
+
+    /**
+     * Pode entrar na tela Configurações (seção de fases)?
+     * Admin sempre; gestor se tem o direito `plugin_taskplus_manage` E
+     * gerencia pelo menos um grupo. A validação POR AÇÃO fica no
+     * Phase::handle — isto aqui é só o gate da tela/sidebar.
+     */
+    public static function canConfigPhases(): bool
+    {
+        if (self::isPhaseAdmin()) {
+            return true;
+        }
+        if (!self::can('manage')) {
+            return false;
+        }
+        return self::managedGroups((int) Session::getLoginUserID(), false) !== [];
     }
 }

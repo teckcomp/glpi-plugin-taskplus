@@ -19,7 +19,11 @@
     <div class="taskplus-main">
         <div class="taskplus-config-stack">
 
-            {# ================= Bloco 1: preferências gerais ================= #}
+            {# ================= Bloco 1: preferências gerais =================
+               4c-2: SÓ ADMIN. O gestor de setor entra na tela apenas pelas
+               fases; o front revalida o POST com checkRight de qualquer
+               forma (esconder aqui nunca é a proteção). #}
+            {% if is_admin %}
             <div class="taskplus-block">
                 <div class="taskplus-block__head">
                     <h3 class="taskplus-block__title">{{ __('Preferências', 'taskplus') }}</h3>
@@ -53,6 +57,7 @@
                     </button>
                 </form>
             </div>
+            {% endif %}
 
             {# ================= Bloco 2: fases do quadro ================= #}
             <div class="taskplus-block">
@@ -66,7 +71,7 @@
                 </div>
 
                 <p class="taskplus-modal__hint">
-                    {{ __('As fases são as colunas do Quadro (kanban) e valem para todos os usuários. A ordem abaixo é a ordem das colunas. As quatro fases de sistema podem mudar de nome e cor, mas não saem do lugar nem podem ser excluídas; as suas fases ficam sempre entre "Para hoje" e "Pendentes". A fase padrão é onde toda tarefa nasce.', 'taskplus') }}
+                    {{ __('As fases são as colunas do Quadro (kanban). As quatro fases de sistema são globais e valem para todos; cada fase customizada pertence a um setor (grupo do GLPI) e aparece no quadro de quem é membro dele, com a etiqueta do setor. As suas fases ficam sempre entre "Para hoje" e "Pendentes", agrupadas por setor; as setas reordenam dentro do próprio setor. O setor de uma fase não pode ser alterado depois de criada. A fase padrão é onde toda tarefa nasce.', 'taskplus') }}
                 </p>
 
                 {# Lista de fases renderizada pelo JS #}
@@ -90,6 +95,16 @@
             <span>{{ __('Nome', 'taskplus') }} *</span>
             <input type="text" id="tpc-f-name" maxlength="255" autocomplete="off">
         </label>
+
+        {# 4c-2: setor só na CRIAÇÃO (depois é imutável). As opções vêm
+           dos setores administráveis do payload (managed_groups),
+           populadas pelo config.js. Na edição o select some e entra o
+           aviso fixo com o setor da fase. #}
+        <label class="taskplus-field" id="tpc-field-group">
+            <span>{{ __('Setor', 'taskplus') }} *</span>
+            <select id="tpc-f-group"></select>
+        </label>
+        <p class="taskplus-modal__hint" id="tpc-modal-group-fixed" hidden></p>
 
         <label class="taskplus-field">
             <span>{{ __('Cor', 'taskplus') }}</span>
