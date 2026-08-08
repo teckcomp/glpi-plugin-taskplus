@@ -78,7 +78,11 @@ class Access
             'board'    => $task,
             'routines' => $task,
             'week'     => $task,
-            'team'     => $manage,
+            // 5a: mesma régua de Configurações — admin sempre; gestor
+            // se tem o direito E administra pelo menos um setor. O
+            // $manage sozinho não basta: direito marcado sem is_manager
+            // em grupo algum daria uma tela vazia.
+            'team'     => self::canTeam(),
             'panel'    => $task,
             'history'  => $task,
             'config'   => self::canConfigPhases(),
@@ -186,5 +190,22 @@ class Access
             return false;
         }
         return self::managedGroups((int) Session::getLoginUserID(), false) !== [];
+    }
+
+    // =====================================================================
+    // Tela Equipe (Etapa 5a)
+    // =====================================================================
+
+    /**
+     * Pode entrar na tela Equipe?
+     * Admin (direito nativo `config` UPDATE) sempre — vê todos os
+     * setores; gestor se tem `plugin_taskplus_manage` E administra pelo
+     * menos um grupo (`is_manager`). MESMA régua do gate de fases
+     * (canConfigPhases): as duas telas são "coisa de quem administra
+     * setor", e réguas divergentes confundiriam o suporte.
+     */
+    public static function canTeam(): bool
+    {
+        return self::canConfigPhases();
     }
 }

@@ -420,3 +420,36 @@
 /* 4d-2: card nativo no quadro (leitura, clique abre no GLPI) */
 .taskplus-bcard--native { background: #fbfcfd; border-style: dashed; }
 .taskplus-bcard--native .taskplus-bcard__name { color: #45525e; }
+
+/* ==================================================================
+   Etapa 5a — tela Equipe (placar por técnico + lista ao expandir)
+   ================================================================== */
+.taskplus-team { display: flex; flex-direction: column; gap: 8px; }
+.taskplus-team__tech {
+    background: #fff; border: 1px solid #dfe5eb; border-radius: 8px;
+    overflow: hidden;
+}
+.taskplus-team__head {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 10px 14px; cursor: pointer; user-select: none;
+}
+.taskplus-team__head:hover { background: #f7f9fb; }
+.taskplus-team__head:focus-visible { outline: 2px solid #2a76a8; outline-offset: -2px; }
+.taskplus-team__chevron { color: #8a97a5; font-size: 1rem; }
+.taskplus-team__name { font-weight: 600; color: #2c3947; }
+.taskplus-team__pills { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.taskplus-team__pill--zero { opacity: 0.4; }
+.taskplus-team__body { border-top: 1px solid #eef1f4; padding: 6px 14px 10px 34px; }
+.taskplus-team__body .taskplus-empty { padding: 8px 0; }
+.taskplus-team__item {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 6px 0; border-bottom: 1px dashed #eef1f4; font-size: 0.85rem;
+}
+.taskplus-team__item:last-child { border-bottom: none; }
+.taskplus-team__title { color: #2c3947; }
+.taskplus-team__link { color: #2a76a8; text-decoration: none; }
+.taskplus-team__link:hover { text-decoration: underline; }
+.taskplus-team__detail { margin-left: auto; color: #8a97a5; font-size: 0.78rem; }
+
+/* 5a pacote 3: filtro de setor da tela Equipe */
+.taskplus-team__filter { margin-bottom: 10px; }

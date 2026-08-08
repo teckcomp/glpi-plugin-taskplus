@@ -35,6 +35,14 @@ function plugin_init_taskplus(): void
         return;
     }
 
+    // Aba "Task+" na tela de Perfil (complemento da Etapa 5a): é onde os
+    // dois direitos do plugin são marcados — sem ela eles existem em
+    // glpi_profilerights mas não aparecem em lugar nenhum da interface.
+    Plugin::registerClass(
+        GlpiPlugin\Taskplus\Profile::class,
+        ['addtabon' => 'Profile']
+    );
+
     // Item de menu: Ferramentas > Task+ (tela Hoje)
     if (Session::haveRight('plugin_taskplus_task', READ)) {
         $PLUGIN_HOOKS['menu_toadd']['taskplus'] = [

@@ -1,0 +1,30 @@
+{# Task+ — tela "Equipe" (Etapa 5a: leitura para o gestor).
+   Placar por técnico + lista do dia ao expandir (variante C da abertura
+   da Etapa 5). Tudo renderizado pelo JS a partir do payload embutido. #}
+
+<link rel="stylesheet" href="{{ plugin_web_dir }}/css/taskplus.css">
+
+<div class="taskplus-app" id="taskplus-team"
+     data-user-id="{{ current_user_id }}">
+
+    {# ================= COLUNA ESQUERDA: título + sidebar ================= #}
+    {% include '@taskplus/_sidebar.html.twig' with {'active': 'team'} %}
+
+    {# ================= ÁREA PRINCIPAL ================= #}
+    <div class="taskplus-main">
+
+        <div class="taskplus-board-hint">
+            <i class="ti ti-users"></i>
+            <span>{{ __('O dia de cada técnico dos setores que você administra — os mesmos números que ele vê na tela Hoje. Clique no técnico para abrir as tarefas.', 'taskplus') }}</span>
+        </div>
+
+        {# Placar + listas, renderizados pelo JS a partir do payload #}
+        <div class="taskplus-team" id="tp-team"></div>
+    </div>
+</div>
+
+{# Estado inicial da tela. O front gera este JSON com JSON_HEX_TAG & cia,
+   então um "</script>" em nome de tarefa NÃO quebra a página — por isso
+   (e só por isso) o |raw é seguro aqui. #}
+<script type="application/json" id="taskplus-team-data">{{ payload_json|raw }}</script>
+<script src="{{ plugin_web_dir }}/js/team.js?v={{ plugin_version }}"></script>
