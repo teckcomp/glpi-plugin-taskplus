@@ -101,14 +101,24 @@ class Team
      * devolve ['success' => bool, 'message' => string] e o endpoint
      * completa com o token CSRF novo e o payload atualizado da Equipe.
      *
-     * 5b-1 só tem `toggle` (concluir/desfazer); editar e pendência são
-     * o 5b-2. `list` existe para o JS pedir só o re-render.
+     * 5b-1: `toggle` (concluir/desfazer). 5b-2: `update` (editar),
+     * `pending` (marcar) e `unpending` (liberar). `list` existe para o
+     * JS pedir só o re-render. Toda ação passa por managedTech() —
+     * escopo revalidado a cada POST (T18) — e delega a escrita à
+     * Occurrence, que reverifica posse na hora. Item nativo nunca tem
+     * caminho até aqui (decisão nº 12).
      */
     public static function handle(string $action, array $input, int $usersId): array
     {
         switch ($action) {
             case 'toggle':
                 return self::toggleTech($input, $usersId);
+            case 'update':
+                return self::updateTech($input, $usersId);
+            case 'pending':
+                return self::pendingTech($input, $usersId);
+            case 'unpending':
+                return self::unpendingTech($input, $usersId);
             case 'list':
                 return ['success' => true, 'message' => ''];
             default:
@@ -117,47 +127,123 @@ class Team
     }
 
     /**
-     * Concluir/desfazer tarefa PRÓPRIA do Task+ de um técnico da equipe.
-     *
-     * Validação POR AÇÃO, reexecutada a cada POST (T18 — nada herdado
-     * do carregamento da tela):
+     * Validação de ESCOPO comum a todas as ações do gestor (reexecutada
+     * a cada POST — T18, nada herdado do carregamento da tela):
      *  1. o gestor ainda administra pelo menos um setor;
      *  2. o técnico é MEMBRO (ativo, não excluído) de setor gerido —
      *     a MESMA régua members() que monta a tela, para a ação nunca
-     *     alcançar quem a tela não mostra;
-     *  3. a ocorrência pertence ao técnico e não está excluída —
-     *     validado dentro de Occurrence::toggleFor, que só enxerga a
-     *     tabela de ocorrências: item NATIVO não tem caminho até aqui
-     *     (decisão nº 12).
+     *     alcançar quem a tela não mostra.
      *
-     * Auditoria: users_id_done = GESTOR (autor), users_id = técnico
-     * (dono) — o payload exibe "pelo gestor <nome>" quando diferem.
+     * Devolve ['tech_id' => int, 'label' => string] ou a MENSAGEM de
+     * erro (string) — mesmo padrão do cleanFields da Occurrence.
      */
-    private static function toggleTech(array $input, int $usersId): array
+    private static function managedTech(array $input, int $usersId): array|string
     {
         $isAdmin = Access::isPhaseAdmin();
         $groups  = Access::managedGroups($usersId, $isAdmin);
         if ($groups === []) {
-            return ['success' => false, 'message' => __('Você não administra nenhum setor', 'taskplus')];
+            return __('Você não administra nenhum setor', 'taskplus');
         }
 
         $techId = (int) ($input['tech_id'] ?? 0);
         if ($techId <= 0) {
-            return ['success' => false, 'message' => __('Técnico inválido', 'taskplus')];
+            return __('Técnico inválido', 'taskplus');
         }
 
         $members = self::members(array_keys($groups), $groups);
         if (!isset($members[$techId])) {
-            return ['success' => false, 'message' => __('Técnico fora dos setores que você administra', 'taskplus')];
+            return __('Técnico fora dos setores que você administra', 'taskplus');
+        }
+
+        return ['tech_id' => $techId, 'label' => $members[$techId]['label']];
+    }
+
+    /**
+     * Concluir/desfazer tarefa PRÓPRIA do Task+ de um técnico da equipe.
+     * Posse/estado validados dentro de Occurrence::toggleFor, que só
+     * enxerga a tabela de ocorrências. Auditoria: users_id_done =
+     * GESTOR (autor), users_id = técnico (dono) — o payload exibe
+     * "pelo gestor <nome>" quando diferem.
+     */
+    private static function toggleTech(array $input, int $usersId): array
+    {
+        $tech = self::managedTech($input, $usersId);
+        if (is_string($tech)) {
+            return ['success' => false, 'message' => $tech];
         }
 
         $done = ((int) ($input['done'] ?? 0)) === 1;
 
-        $result = Occurrence::toggleFor((int) ($input['id'] ?? 0), $techId, $usersId, $done);
+        $result = Occurrence::toggleFor((int) ($input['id'] ?? 0), $tech['tech_id'], $usersId, $done);
         if ($result['success']) {
             $result['message'] = $done
-                ? sprintf(__('Tarefa de %s concluída', 'taskplus'), $members[$techId]['label'])
-                : sprintf(__('Conclusão de %s desfeita', 'taskplus'), $members[$techId]['label']);
+                ? sprintf(__('Tarefa de %s concluída', 'taskplus'), $tech['label'])
+                : sprintf(__('Conclusão de %s desfeita', 'taskplus'), $tech['label']);
+        }
+        return $result;
+    }
+
+    /**
+     * Editar tarefa própria do Task+ do técnico (5b-2). As regras são
+     * as MESMAS da tela Hoje dele (Occurrence::updateFor): ocorrência
+     * de rotina edita só o dia e a DATA fica de fora.
+     */
+    private static function updateTech(array $input, int $usersId): array
+    {
+        $tech = self::managedTech($input, $usersId);
+        if (is_string($tech)) {
+            return ['success' => false, 'message' => $tech];
+        }
+
+        $result = Occurrence::updateFor($input, $tech['tech_id']);
+        if ($result['success']) {
+            $result['message'] = sprintf(__('Tarefa de %s atualizada', 'taskplus'), $tech['label']);
+        }
+        return $result;
+    }
+
+    /**
+     * Marcar pendência na tarefa própria do técnico (5b-2). A pendência
+     * é DO TÉCNICO (aparece e expira na tela Hoje dele); o gestor entra
+     * como AUTOR (users_id_creator) — trilha + badge "pelo gestor".
+     * Motivo/data/hora obrigatórios como sempre (regra da 4b, validada
+     * em Pending::set). O JS da Equipe nunca envia itemtype: aqui é
+     * SEMPRE ocorrência própria (decisão nº 12).
+     */
+    private static function pendingTech(array $input, int $usersId): array
+    {
+        $tech = self::managedTech($input, $usersId);
+        if (is_string($tech)) {
+            return ['success' => false, 'message' => $tech];
+        }
+
+        // Trava explícita: mesmo que um POST forjado mande itemtype de
+        // nativa, a Equipe só marca pendência em ocorrência própria.
+        unset($input['itemtype']);
+
+        $result = Occurrence::setPendingFor($input, $tech['tech_id'], $usersId);
+        if ($result['success']) {
+            $result['message'] = sprintf(__('Tarefa de %s marcada como pendente', 'taskplus'), $tech['label']);
+        }
+        return $result;
+    }
+
+    /**
+     * Liberar (encerrar) a pendência da tarefa própria do técnico —
+     * ela volta ao fluxo normal do dia dele.
+     */
+    private static function unpendingTech(array $input, int $usersId): array
+    {
+        $tech = self::managedTech($input, $usersId);
+        if (is_string($tech)) {
+            return ['success' => false, 'message' => $tech];
+        }
+
+        unset($input['itemtype']);
+
+        $result = Occurrence::clearPendingFor($input, $tech['tech_id']);
+        if ($result['success']) {
+            $result['message'] = sprintf(__('Pendência de %s encerrada', 'taskplus'), $tech['label']);
         }
         return $result;
     }
@@ -259,28 +345,51 @@ class Team
         $weights = ['late' => 0, 'today' => 1, 'pending' => 2, 'done' => 3];
 
         $isNative = !empty($item['is_native']);
+        $ownId    = $isNative ? 0 : (int) ($item['id'] ?? 0);
+        $isOwn    = !$isNative && $ownId > 0;
 
         return [
-            // Id da OCORRÊNCIA (5b-1): é o que o botão de ação envia ao
-            // endpoint. Zero nas nativas — elas nem ganham botão.
-            'id'        => $isNative ? 0 : (int) ($item['id'] ?? 0),
-            'name'      => (string) ($item['name'] ?? ''),
-            'status'    => $status,
-            'weight'    => $weights[$status],
-            'detail'    => $detail,
-            // Concluir/desfazer só em tarefa PRÓPRIA do Task+ (decisão
-            // nº 12) e fora de pendência — pendência é assunto do 5b-2
-            // (a precedência pendente > concluída esconderia o efeito).
-            'can_act'   => !$isNative
-                && (int) ($item['id'] ?? 0) > 0
-                && $status !== 'pending',
-            'is_done'   => $status === 'done',
-            // Auditoria 5b-1: nome de quem concluiu, QUANDO não foi o
-            // próprio técnico (vazio no caso normal) — vira badge no JS
-            'done_by'   => (!empty($item['done_by_other']))
+            // Id da OCORRÊNCIA (5b-1): é o que os botões de ação enviam
+            // ao endpoint. Zero nas nativas — elas nem ganham botão.
+            'id'          => $ownId,
+            'name'        => (string) ($item['name'] ?? ''),
+            'status'      => $status,
+            'weight'      => $weights[$status],
+            'detail'      => $detail,
+            // Ações do gestor, DECIDIDAS NO SERVIDOR (o JS só obedece).
+            // Todas exigem tarefa PRÓPRIA do Task+ (decisão nº 12):
+            //  - can_act (5b-1): concluir/desfazer — fora de pendência
+            //    (a precedência pendente > concluída esconderia o efeito);
+            //  - can_edit (5b-2): editar — só não-concluída e fora de
+            //    pendência (mesma leitura da tela Hoje);
+            //  - can_pend (5b-2): marcar pendência — só o que ainda está
+            //    em aberto (atrasada ou do dia);
+            //  - can_unpend (5b-2): liberar — só o que está pendente.
+            'can_act'     => $isOwn && $status !== 'pending',
+            'can_edit'    => $isOwn && ($status === 'late' || $status === 'today'),
+            'can_pend'    => $isOwn && ($status === 'late' || $status === 'today'),
+            'can_unpend'  => $isOwn && $status === 'pending',
+            'is_done'     => $status === 'done',
+            // Campos do modal de edição (5b-2) — vazios nas nativas
+            'description' => $isOwn ? (string) ($item['description'] ?? '') : '',
+            'category'    => $isOwn ? (string) ($item['category'] ?? '') : '',
+            'date'        => $isOwn ? (string) ($item['date'] ?? '') : '',
+            'time_limit'  => $isOwn ? (string) ($item['time_limit'] ?? '') : '',
+            'is_routine'  => $isOwn && !empty($item['is_routine']),
+            // Repactuação de pendência parte dos valores atuais
+            'pending_reason' => $isOwn ? (string) ($item['pending_reason'] ?? '') : '',
+            'pending_until'  => $isOwn ? (string) ($item['pending_until'] ?? '') : '',
+            'pending_time'   => $isOwn ? (string) ($item['pending_time'] ?? '') : '',
+            // Auditoria: nome de quem concluiu (5b-1) / marcou a
+            // pendência (5b-2), QUANDO não foi o próprio técnico —
+            // vazio no caso normal; vira badge no JS
+            'done_by'     => (!empty($item['done_by_other']))
                 ? (string) ($item['done_by_label'] ?? '')
                 : '',
-            'is_native' => $isNative,
+            'pending_by'  => (!empty($item['pending_by_other']))
+                ? (string) ($item['pending_by_label'] ?? '')
+                : '',
+            'is_native'   => $isNative,
             // 'ticket' | 'project' | '' (própria)
             'source'    => (string) ($item['source'] ?? ''),
             // Link do item nativo (abre no GLPI); vazio nas próprias

@@ -406,6 +406,12 @@
             if (item.pending_reason) {
                 badges.appendChild(el('span', 'taskplus-badge', item.pending_reason));
             }
+            // 5b-2: a pendência foi marcada pelo GESTOR na tela Equipe —
+            // o técnico vê quem foi (chaves novas; payload antigo = falsy)
+            if (item.pending_by_other && item.pending_by_label) {
+                badges.appendChild(el('span', 'taskplus-badge taskplus-badge--manager',
+                    'pelo gestor ' + item.pending_by_label));
+            }
         }
         if (item.is_edited) {
             badges.appendChild(el('span', 'taskplus-badge', 'alterada só hoje'));

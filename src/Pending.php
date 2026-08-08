@@ -74,11 +74,13 @@ class Pending
 
             $key = (string) $row['itemtype'] . ':' . (int) $row['items_id'];
             $map[$key] = [
-                'id'     => (int) $row['id'],
-                'reason' => (string) ($row['reason'] ?? ''),
-                'until'  => $until,
-                'time'   => $time,
-                'label'  => self::label($until, $time),
+                'id'      => (int) $row['id'],
+                'reason'  => (string) ($row['reason'] ?? ''),
+                'until'   => $until,
+                'time'    => $time,
+                'label'   => self::label($until, $time),
+                // 5b-2: quem marcou. 0 = linha anterior à coluna (o dono).
+                'creator' => (int) ($row['users_id_creator'] ?? 0),
             ];
         }
 
@@ -109,12 +111,19 @@ class Pending
 
     /**
      * Marca (ou atualiza) a pendência do item para este usuário.
+     * `$creatorId` (5b-2) = QUEM marcou; 0 assume o próprio dono. O
+     * gestor marcando pela Equipe passa o id dele — a pendência continua
+     * sendo DO TÉCNICO ($usersId), a autoria é só trilha/exibição.
      * Devolve ['success' => bool, 'message' => string].
      */
-    public static function set(string $itemtype, int $itemsId, int $usersId, array $input): array
+    public static function set(string $itemtype, int $itemsId, int $usersId, array $input, int $creatorId = 0): array
     {
         /** @var \DBmysql $DB */
         global $DB;
+
+        if ($creatorId <= 0) {
+            $creatorId = $usersId;
+        }
 
         if (!in_array($itemtype, self::TYPES, true) || $itemsId <= 0) {
             return ['success' => false, 'message' => __('Item inválido para pendência', 'taskplus')];
@@ -149,24 +158,27 @@ class Pending
         if ($existing !== null) {
             // Repactuar a pendência reaproveita a linha: o Histórico
             // mostra uma pendência com nova data, não duas soltas.
+            // A autoria acompanha a repactuação (quem repactuou por último).
             $DB->update(self::TABLE, [
-                'reason'        => $reason,
-                'pending_until' => $until,
-                'pending_time'  => $time,
-                'is_active'     => 1,
-                'date_mod'      => $now,
+                'reason'           => $reason,
+                'pending_until'    => $until,
+                'pending_time'     => $time,
+                'users_id_creator' => $creatorId,
+                'is_active'        => 1,
+                'date_mod'         => $now,
             ], [self::TABLE . '.id' => (int) $existing['id']]);
         } else {
             $DB->insert(self::TABLE, [
-                'itemtype'      => $itemtype,
-                'items_id'      => $itemsId,
-                'users_id'      => $usersId,
-                'reason'        => $reason,
-                'pending_until' => $until,
-                'pending_time'  => $time,
-                'is_active'     => 1,
-                'date_creation' => $now,
-                'date_mod'      => $now,
+                'itemtype'         => $itemtype,
+                'items_id'         => $itemsId,
+                'users_id'         => $usersId,
+                'users_id_creator' => $creatorId,
+                'reason'           => $reason,
+                'pending_until'    => $until,
+                'pending_time'     => $time,
+                'is_active'        => 1,
+                'date_creation'    => $now,
+                'date_mod'         => $now,
             ]);
         }
 

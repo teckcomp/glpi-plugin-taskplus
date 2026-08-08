@@ -28,6 +28,9 @@
         group: 'all',
         // Técnicos expandidos (por id): sobrevive ao re-render do filtro
         open: {},
+        // Modais do 5b-2: {item, tech} em edição / pendência
+        editCtx: null,
+        pendCtx: null,
         data: { date: '', groups: [], techs: [] }
     };
 
@@ -86,11 +89,25 @@
             name: (typeof i.name === 'string') ? i.name : '',
             status: (typeof i.status === 'string') ? i.status : 'today',
             detail: (typeof i.detail === 'string') ? i.detail : '',
-            // 5b-1: botão de concluir/desfazer só onde o servidor deixou
+            // Ações decididas pelo SERVIDOR (5b-1/5b-2) — o JS só obedece
             can_act: !!i.can_act,
+            can_edit: !!i.can_edit,
+            can_pend: !!i.can_pend,
+            can_unpend: !!i.can_unpend,
             is_done: !!i.is_done,
-            // Nome de quem concluiu, quando NÃO foi o próprio técnico
+            // Campos do modal de edição
+            description: (typeof i.description === 'string') ? i.description : '',
+            category: (typeof i.category === 'string') ? i.category : '',
+            date: (typeof i.date === 'string') ? i.date : '',
+            time_limit: (typeof i.time_limit === 'string') ? i.time_limit : '',
+            is_routine: !!i.is_routine,
+            pending_reason: (typeof i.pending_reason === 'string') ? i.pending_reason : '',
+            pending_until: (typeof i.pending_until === 'string') ? i.pending_until : '',
+            pending_time: (typeof i.pending_time === 'string') ? i.pending_time : '',
+            // Nome de quem concluiu / marcou a pendência, quando NÃO foi
+            // o próprio técnico
             done_by: (typeof i.done_by === 'string') ? i.done_by : '',
+            pending_by: (typeof i.pending_by === 'string') ? i.pending_by : '',
             is_native: !!i.is_native,
             source: (typeof i.source === 'string') ? i.source : '',
             url: (typeof i.url === 'string') ? i.url : ''
@@ -111,7 +128,7 @@
         }, 4000);
     }
 
-    function post(fields) {
+    function post(fields, onSuccess) {
         if (state.busy) {
             return;
         }
@@ -143,6 +160,9 @@
                     toast(res.message, false);
                 }
                 render();
+                if (onSuccess) {
+                    onSuccess();
+                }
             })
             .catch(function () {
                 state.busy = false;
@@ -293,7 +313,7 @@
             body.appendChild(el('p', 'taskplus-empty', 'Nada para hoje.'));
         } else {
             tech.items.forEach(function (item) {
-                body.appendChild(renderItem(item, tech.id));
+                body.appendChild(renderItem(item, tech));
             });
         }
 
@@ -319,7 +339,7 @@
         return wrap;
     }
 
-    function renderItem(item, techId) {
+    function renderItem(item, tech) {
         var row = el('div', 'taskplus-team__item');
 
         row.appendChild(el('span',
@@ -344,38 +364,188 @@
             row.appendChild(el('span', 'taskplus-badge taskplus-badge--project', 'Projeto'));
         }
 
-        // Auditoria (5b-1): concluída por OUTRO usuário (gestor/admin)
+        // Auditoria: concluída (5b-1) ou colocada pendente (5b-2) por
+        // OUTRO usuário (gestor/admin)
         if (item.status === 'done' && item.done_by) {
             row.appendChild(el('span', 'taskplus-badge taskplus-badge--manager',
                 'pelo gestor ' + item.done_by));
+        }
+        if (item.status === 'pending' && item.pending_by) {
+            row.appendChild(el('span', 'taskplus-badge taskplus-badge--manager',
+                'pelo gestor ' + item.pending_by));
         }
 
         if (item.detail) {
             row.appendChild(el('span', 'taskplus-team__detail', item.detail));
         }
 
-        // Ação do gestor (5b-1): concluir/desfazer tarefa PRÓPRIA do
-        // Task+ do técnico. O servidor decide onde o botão existe
-        // (can_act: nunca em nativa, nunca em pendente) e revalida tudo
-        // no POST — o botão é só o atalho.
+        // Ações do gestor (5b-1/5b-2), habilitadas item a item pelo
+        // SERVIDOR (can_*: nunca em nativa; cada uma revalidada no POST).
+        var acts = el('span', 'taskplus-team__acts'
+            + (item.detail ? '' : ' taskplus-team__acts--solo'));
+
+        function actBtn(label, cls, onClick) {
+            var b = el('button', 'taskplus-team__act' + (cls ? ' ' + cls : ''), label);
+            b.type = 'button';
+            b.addEventListener('click', onClick);
+            acts.appendChild(b);
+        }
+
         if (item.can_act) {
-            var btn = el('button', 'taskplus-team__act'
-                + (item.is_done ? ' taskplus-team__act--undo' : '')
-                + (item.detail ? '' : ' taskplus-team__act--solo'),
-                item.is_done ? 'Desfazer' : 'Concluir');
-            btn.type = 'button';
-            btn.addEventListener('click', function () {
+            actBtn(item.is_done ? 'Desfazer' : 'Concluir',
+                item.is_done ? 'taskplus-team__act--undo' : '',
+                function () {
+                    post({
+                        action: 'toggle',
+                        id: item.id,
+                        tech_id: tech.id,
+                        done: item.is_done ? 0 : 1
+                    });
+                });
+        }
+        if (item.can_pend) {
+            actBtn('Pendência', 'taskplus-team__act--pend', function () {
+                openPendModal(item, tech);
+            });
+        }
+        if (item.can_unpend) {
+            actBtn('Liberar', 'taskplus-team__act--pend', function () {
                 post({
-                    action: 'toggle',
+                    action: 'unpending',
                     id: item.id,
-                    tech_id: techId,
-                    done: item.is_done ? 0 : 1
+                    tech_id: tech.id
                 });
             });
-            row.appendChild(btn);
+        }
+        if (item.can_edit) {
+            actBtn('Editar', 'taskplus-team__act--edit', function () {
+                openEditModal(item, tech);
+            });
+        }
+
+        if (acts.childNodes.length > 0) {
+            row.appendChild(acts);
         }
 
         return row;
+    }
+
+    // ------------------------------------------------------------------
+    // Modais do 5b-2 (edição e pendência) — mesmo padrão da tela Hoje
+    // ------------------------------------------------------------------
+
+    function tomorrow() {
+        var d = new Date();
+        d.setDate(d.getDate() + 1);
+        return d.getFullYear() + '-'
+            + String(d.getMonth() + 1).padStart(2, '0') + '-'
+            + String(d.getDate()).padStart(2, '0');
+    }
+
+    function openEditModal(item, tech) {
+        state.editCtx = { item: item, tech: tech };
+        $('tp-t-e-tech').textContent = item.name + ' — ' + tech.label;
+        $('tp-t-e-name').value = item.name || '';
+        $('tp-t-e-date').value = item.date || '';
+        // Ocorrência de rotina: a DATA não é editável (regra da 4b) —
+        // o servidor a descarta, o campo travado só deixa isso claro.
+        $('tp-t-e-date').disabled = !!item.is_routine;
+        $('tp-t-e-time').value = item.time_limit || '';
+        $('tp-t-e-category').value = item.category || '';
+        $('tp-t-e-description').value = item.description || '';
+        $('tp-t-edit-modal').hidden = false;
+        $('tp-t-e-name').focus();
+    }
+
+    function closeEditModal() {
+        $('tp-t-edit-modal').hidden = true;
+        state.editCtx = null;
+    }
+
+    function saveEditModal() {
+        var ctx = state.editCtx;
+        if (!ctx) {
+            return;
+        }
+        var name = $('tp-t-e-name').value.trim();
+        if (name === '') {
+            toast('Informe o título da tarefa', true);
+            $('tp-t-e-name').focus();
+            return;
+        }
+        post({
+            action: 'update',
+            id: String(ctx.item.id),
+            tech_id: String(ctx.tech.id),
+            name: name,
+            date: $('tp-t-e-date').value,
+            time_limit: $('tp-t-e-time').value,
+            category: $('tp-t-e-category').value.trim(),
+            description: $('tp-t-e-description').value.trim()
+        }, closeEditModal);
+    }
+
+    function openPendModal(item, tech) {
+        state.pendCtx = { item: item, tech: tech };
+        $('tp-t-p-title').textContent = item.name + ' — ' + tech.label;
+        $('tp-t-p-reason').value = item.pending_reason || '';
+        // Sugestão: amanhã (pendência para hoje nasceria vencida) e fim
+        // de expediente — mesmas sugestões da tela Hoje (4b).
+        $('tp-t-p-until').value = item.pending_until || tomorrow();
+        $('tp-t-p-time').value = item.pending_time || '18:00';
+        $('tp-t-pending-modal').hidden = false;
+        $('tp-t-p-reason').focus();
+    }
+
+    function closePendModal() {
+        $('tp-t-pending-modal').hidden = true;
+        state.pendCtx = null;
+    }
+
+    function savePendModal() {
+        var ctx = state.pendCtx;
+        if (!ctx) {
+            return;
+        }
+        var reason = $('tp-t-p-reason').value.trim();
+        if (reason === '') {
+            toast('Informe o motivo da pendência', true);
+            $('tp-t-p-reason').focus();
+            return;
+        }
+        var time = $('tp-t-p-time').value.trim();
+        if (time === '') {
+            toast('Informe a hora de retorno', true);
+            $('tp-t-p-time').focus();
+            return;
+        }
+        post({
+            action: 'pending',
+            id: String(ctx.item.id),
+            tech_id: String(ctx.tech.id),
+            reason: reason,
+            pending_until: $('tp-t-p-until').value,
+            pending_time: time
+        }, closePendModal);
+    }
+
+    /**
+     * Liga os botões dos modais UMA vez. Os elementos podem não existir
+     * (template antigo em cache) — cada listener é opcional.
+     */
+    function bindModals() {
+        var map = {
+            'tp-t-e-cancel': closeEditModal,
+            'tp-t-e-save': saveEditModal,
+            'tp-t-p-cancel': closePendModal,
+            'tp-t-p-save': savePendModal
+        };
+        Object.keys(map).forEach(function (id) {
+            var node = $(id);
+            if (node) {
+                node.addEventListener('click', map[id]);
+            }
+        });
     }
 
     // ------------------------------------------------------------------
@@ -401,6 +571,7 @@
             }
         }
         state.data = safeData(raw);
+        bindModals();
         render();
     }
 

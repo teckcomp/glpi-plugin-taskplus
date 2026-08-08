@@ -127,6 +127,9 @@ class Install
             'itemtype'      => "VARCHAR(100) NOT NULL DEFAULT ''",
             'items_id'      => 'INT %SIGN% NOT NULL DEFAULT 0',
             'users_id'      => 'INT %SIGN% NOT NULL DEFAULT 0',
+            // 5b-2: QUEM marcou a pendência — o gestor pode marcar pela
+            // tela Equipe. 0 = linha anterior à coluna (foi o próprio dono).
+            'users_id_creator' => 'INT %SIGN% NOT NULL DEFAULT 0',
             'reason'        => 'TEXT',
             'pending_until' => 'DATE NULL DEFAULT NULL',
             // Ajuste 2 do 4b: hora passa a ser obrigatória no formulário;
@@ -295,6 +298,7 @@ class Install
                     `itemtype`      VARCHAR(100) NOT NULL DEFAULT '' COMMENT 'Occurrence|TicketTask|ProjectTask',
                     `items_id`      INT {$sign} NOT NULL DEFAULT 0,
                     `users_id`      INT {$sign} NOT NULL DEFAULT 0 COMMENT 'de quem e a pendencia',
+                    `users_id_creator` INT {$sign} NOT NULL DEFAULT 0 COMMENT 'quem marcou (5b-2: pode ser o gestor); 0 = legado',
                     `reason`        TEXT COMMENT 'motivo informado',
                     `pending_until` DATE NULL DEFAULT NULL COMMENT 'volta ao fluxo nesta data',
                     `pending_time`  TIME NOT NULL DEFAULT '18:00:00' COMMENT 'volta ao fluxo nesta hora (obrigatoria desde o ajuste 2 do 4b)',

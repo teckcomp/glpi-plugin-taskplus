@@ -98,11 +98,6 @@ class Occurrence
             $todayRows[]         = $item;
         }
 
-        // Auditoria da 5b-1: resolve o NOME de quem concluiu quando não
-        // foi o próprio dono (gestor pela Equipe). Só a lista do dia —
-        // atrasada, por definição, ainda não foi concluída.
-        $todayRows = self::fillDoneBy($todayRows);
-
         // Ordenação em PHP, não no SQL: o controle fino ("NULL de
         // time_limit por último") é mais simples e testável aqui.
         usort($todayRows, [self::class, 'compareToday']);
@@ -135,9 +130,15 @@ class Occurrence
             $pendings = [];
         }
 
-        $todayRows   = self::applyPendings($todayRows, $pendings, Pending::TYPE_OCCURRENCE);
-        $overdueRows = self::applyPendings($overdueRows, $pendings, Pending::TYPE_OCCURRENCE);
-        $native      = self::applyPendings($native, $pendings, null);
+        $todayRows   = self::applyPendings($todayRows, $pendings, Pending::TYPE_OCCURRENCE, $usersId);
+        $overdueRows = self::applyPendings($overdueRows, $pendings, Pending::TYPE_OCCURRENCE, $usersId);
+        $native      = self::applyPendings($native, $pendings, null, $usersId);
+
+        // Auditoria (5b-1/5b-2): resolve o NOME de quem concluiu ou de
+        // quem marcou a pendência, quando não foi o próprio dono (ação
+        // do gestor pela Equipe). Uma consulta por lista, no máximo.
+        $todayRows   = self::fillActorLabels($todayRows);
+        $overdueRows = self::fillActorLabels($overdueRows);
 
         // KPIs contam APENAS as tarefas próprias (as nativas são leitura e
         // nunca migrariam para "Concluídas"), com uma exceção: pendência
@@ -204,13 +205,13 @@ class Occurrence
     }
 
     /**
-     * Preenche `done_by_label` nos itens concluídos por OUTRO usuário
-     * (5b-1): uma única consulta para todos os ids, mesmo formato de
-     * nome da tela Equipe (firstname+realname, fallback no login).
-     * Gestor excluído do GLPI depois de concluir deixa o label vazio —
-     * o front simplesmente não mostra o badge.
+     * Preenche `done_by_label` e `pending_by_label` nos itens cuja ação
+     * (conclusão 5b-1 / pendência 5b-2) foi de OUTRO usuário: uma única
+     * consulta para todos os ids, mesmo formato de nome da tela Equipe
+     * (firstname+realname, fallback no login). Autor excluído do GLPI
+     * deixa o label vazio — o front simplesmente não mostra o badge.
      */
-    private static function fillDoneBy(array $rows): array
+    private static function fillActorLabels(array $rows): array
     {
         /** @var \DBmysql $DB */
         global $DB;
@@ -219,6 +220,9 @@ class Occurrence
         foreach ($rows as $item) {
             if (!empty($item['done_by_other']) && (int) ($item['done_by_id'] ?? 0) > 0) {
                 $ids[(int) $item['done_by_id']] = true;
+            }
+            if (!empty($item['pending_by_other']) && (int) ($item['pending_by_id'] ?? 0) > 0) {
+                $ids[(int) $item['pending_by_id']] = true;
             }
         }
         if ($ids === []) {
@@ -243,6 +247,9 @@ class Occurrence
             if (!empty($item['done_by_other'])) {
                 $item['done_by_label'] = $labels[(int) ($item['done_by_id'] ?? 0)] ?? '';
             }
+            if (!empty($item['pending_by_other'])) {
+                $item['pending_by_label'] = $labels[(int) ($item['pending_by_id'] ?? 0)] ?? '';
+            }
         }
         unset($item);
 
@@ -252,9 +259,11 @@ class Occurrence
     /**
      * Marca em cada item se ele tem pendência ativa deste usuário.
      * `$forceType` fixa o itemtype (tarefas próprias); com null, usa o
-     * `source` do item nativo (TicketTask / ProjectTask).
+     * `source` do item nativo (TicketTask / ProjectTask). `$ownerId`
+     * (5b-2) é o DONO do payload: pendência com criador diferente dele
+     * ganha a marca de autoria (gestor pela Equipe).
      */
-    private static function applyPendings(array $items, array $pendings, ?string $forceType): array
+    private static function applyPendings(array $items, array $pendings, ?string $forceType, int $ownerId = 0): array
     {
         $sourceMap = [
             'ticket'  => Pending::TYPE_TICKET_TASK,
@@ -264,12 +273,15 @@ class Occurrence
         foreach ($items as &$item) {
             $type = $forceType ?? ($sourceMap[$item['source'] ?? ''] ?? null);
 
-            $item['pending_type']   = $type;
-            $item['is_pending']     = false;
-            $item['pending_reason'] = '';
-            $item['pending_label']  = '';
-            $item['pending_until']  = '';
-            $item['pending_time']   = '';
+            $item['pending_type']     = $type;
+            $item['is_pending']       = false;
+            $item['pending_reason']   = '';
+            $item['pending_label']    = '';
+            $item['pending_until']    = '';
+            $item['pending_time']     = '';
+            $item['pending_by_other'] = false;
+            $item['pending_by_id']    = 0;
+            $item['pending_by_label'] = '';
 
             if ($type === null) {
                 continue;
@@ -282,6 +294,11 @@ class Occurrence
                 $item['pending_label']  = $pendings[$key]['label'];
                 $item['pending_until']  = $pendings[$key]['until'];
                 $item['pending_time']   = $pendings[$key]['time'] ?? '';
+                // 5b-2: pendência marcada por OUTRO usuário (gestor).
+                // creator 0 = linha anterior à coluna → foi o dono.
+                $creator = (int) ($pendings[$key]['creator'] ?? 0);
+                $item['pending_by_id']    = $creator;
+                $item['pending_by_other'] = $creator > 0 && $ownerId > 0 && $creator !== $ownerId;
                 // Pendente não é atrasada: a espera foi combinada
                 $item['is_late'] = false;
             }
@@ -494,10 +511,21 @@ class Occurrence
 
     private static function update(array $input, int $usersId): array
     {
+        return self::updateFor($input, $usersId);
+    }
+
+    /**
+     * Edita a ocorrência do dono $ownerId (5b-2: a tela Equipe chama com
+     * o TÉCNICO como dono — a validação de escopo já foi feita no
+     * Team::handle; posse e regras de rotina são reverificadas aqui, na
+     * hora da escrita, como manda a T18).
+     */
+    public static function updateFor(array $input, int $ownerId): array
+    {
         /** @var \DBmysql $DB */
         global $DB;
 
-        $row = self::ownRow((int) ($input['id'] ?? 0), $usersId);
+        $row = self::ownRow((int) ($input['id'] ?? 0), $ownerId);
         if ($row === null) {
             return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
         }
@@ -598,24 +626,47 @@ class Occurrence
      */
     private static function setPending(array $input, int $usersId): array
     {
+        // Dono marcando a própria pendência: dono = autor
+        return self::setPendingFor($input, $usersId, $usersId);
+    }
+
+    /**
+     * Marca pendência em nome do dono $ownerId, com $creatorId como
+     * AUTOR (5b-2: gestor pela Equipe). A pendência é DO DONO — é na
+     * tela Hoje dele que ela aparece e expira; a autoria fica na trilha
+     * e vira o badge "pendência pelo gestor". Posse reverificada na
+     * hora (T18); item nativo só chega pelo caminho do próprio dono
+     * (a Equipe nunca envia itemtype — decisão nº 12).
+     */
+    public static function setPendingFor(array $input, int $ownerId, int $creatorId): array
+    {
         $itemtype = (string) ($input['itemtype'] ?? Pending::TYPE_OCCURRENCE);
         $itemsId  = (int) ($input['id'] ?? 0);
 
         // Só a tarefa PRÓPRIA passa pela checagem de dono: item nativo já
         // chega filtrado pela consulta do Native (users_id_tech / equipe).
-        if ($itemtype === Pending::TYPE_OCCURRENCE && self::ownRow($itemsId, $usersId) === null) {
+        if ($itemtype === Pending::TYPE_OCCURRENCE && self::ownRow($itemsId, $ownerId) === null) {
             return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
         }
 
-        return Pending::set($itemtype, $itemsId, $usersId, $input);
+        return Pending::set($itemtype, $itemsId, $ownerId, $input, $creatorId);
     }
 
     private static function clearPending(array $input, int $usersId): array
     {
+        return self::clearPendingFor($input, $usersId);
+    }
+
+    /**
+     * Encerra a pendência do dono $ownerId (5b-2: a Equipe chama com o
+     * técnico como dono — "liberar pendência" devolve a tarefa ao fluxo).
+     */
+    public static function clearPendingFor(array $input, int $ownerId): array
+    {
         return Pending::clear(
             (string) ($input['itemtype'] ?? Pending::TYPE_OCCURRENCE),
             (int) ($input['id'] ?? 0),
-            $usersId
+            $ownerId
         );
     }
 

@@ -465,4 +465,11 @@
 .taskplus-team__act:hover { background: #2f9e44; color: #fff; }
 .taskplus-team__act--undo { border-color: #b3bcc5; color: #6c7a89; }
 .taskplus-team__act--undo:hover { background: #eef2f6; color: #2c3947; }
-.taskplus-team__act--solo { margin-left: auto; }
+
+/* 5b-2: grupo de ações por item + variantes Editar/Pendência-Liberar */
+.taskplus-team__acts { display: inline-flex; gap: 6px; flex: 0 0 auto; margin-left: 8px; }
+.taskplus-team__acts--solo { margin-left: auto; }
+.taskplus-team__act--edit { border-color: #2a76a8; color: #2a76a8; }
+.taskplus-team__act--edit:hover { background: #2a76a8; color: #fff; }
+.taskplus-team__act--pend { border-color: #d9822b; color: #d9822b; }
+.taskplus-team__act--pend:hover { background: #d9822b; color: #fff; }
