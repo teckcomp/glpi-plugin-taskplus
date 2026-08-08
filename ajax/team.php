@@ -46,9 +46,15 @@ $action  = (string) ($_POST['action'] ?? '');
 
 $result = Team::handle($action, $_POST, $usersId);
 
+// 5b-2 p2: período ativo viaja em todo POST — o payload de resposta
+// devolve o mesmo recorte (normalização em Occurrence::periodRange,
+// chamada dentro do Team::payload).
+$pf = isset($_POST['period_from']) ? (string) $_POST['period_from'] : null;
+$pt = isset($_POST['period_to']) ? (string) $_POST['period_to'] : null;
+
 // Token novo para o JS rotacionar + estado atualizado para re-render
 $result['csrf'] = Session::getNewCSRFToken();
-$result['data'] = Team::payload($usersId);
+$result['data'] = Team::payload($usersId, $pf, $pt);
 
 header('Content-Type: application/json; charset=UTF-8');
 echo json_encode($result, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);

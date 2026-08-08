@@ -22,11 +22,22 @@
         csrf: '',
         showDone: false,
         source: 'all',
+        // 5b-2 p2: busca 100% local (título+descrição+categoria) e
+        // período de–até — o período vai em TODO POST para o re-render
+        // manter o recorte; a busca nunca vai ao servidor.
+        search: '',
+        period: { from: '', to: '' },
         pendingItem: null,
         skipItem: null,
         editingId: null,
         busy: false,
-        data: { date: '', kpis: { today: 0, done: 0, late: 0 }, today: [], overdue: [] }
+        data: {
+            date: '',
+            kpis: { today: 0, done: 0, late: 0 },
+            today: [],
+            overdue: [],
+            period: { from: '', to: '', active: false }
+        }
     };
 
     function $(id) {
@@ -51,6 +62,7 @@
     function safeData(raw) {
         var d = (raw && typeof raw === 'object') ? raw : {};
         var k = (d.kpis && typeof d.kpis === 'object') ? d.kpis : {};
+        var p = (d.period && typeof d.period === 'object') ? d.period : {};
         return {
             date: (typeof d.date === 'string') ? d.date : '',
             kpis: {
@@ -61,7 +73,13 @@
                 done: Number(k.done) || 0
             },
             today: Array.isArray(d.today) ? d.today : [],
-            overdue: Array.isArray(d.overdue) ? d.overdue : []
+            overdue: Array.isArray(d.overdue) ? d.overdue : [],
+            // 5b-2 p2: eco do período (o servidor normaliza as datas)
+            period: {
+                from: (typeof p.from === 'string') ? p.from : '',
+                to: (typeof p.to === 'string') ? p.to : '',
+                active: !!p.active
+            }
         };
     }
 
@@ -94,6 +112,14 @@
             fd.append(key, fields[key]);
         });
         fd.append('_glpi_csrf_token', state.csrf);
+        // Período ativo acompanha TODA ação (5b-2 p2): a resposta
+        // re-renderiza a tela e precisa devolver o MESMO recorte.
+        if (state.period.from !== '') {
+            fd.append('period_from', state.period.from);
+        }
+        if (state.period.to !== '') {
+            fd.append('period_to', state.period.to);
+        }
 
         fetch(state.ajaxUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(function (resp) { return resp.json(); })
@@ -105,6 +131,7 @@
                 }
                 if (res && res.data) {
                     state.data = safeData(res.data);
+                    syncToolbar();
                 }
                 if (!res || !res.success) {
                     toast((res && res.message) ? res.message : 'Erro ao processar a ação', true);
@@ -123,6 +150,151 @@
                 state.busy = false;
                 toast('Falha de comunicação com o servidor', true);
             });
+    }
+
+    // ------------------------------------------------------------------
+    // Busca local + período (5b-2 pacote 2)
+    // ------------------------------------------------------------------
+
+    /** Minúsculas e sem acentos: "Relatório" casa com "relatorio". */
+    function norm(s) {
+        return String(s || '').toLowerCase().normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+    }
+
+    /** O item casa com a busca (título + descrição + categoria)? */
+    function matchesSearch(item) {
+        if (state.search === '') {
+            return true;
+        }
+        var q = norm(state.search);
+        return norm(item.name).indexOf(q) !== -1
+            || norm(item.description).indexOf(q) !== -1
+            || norm(item.category).indexOf(q) !== -1;
+    }
+
+    function periodActive() {
+        return !!(state.data.period && state.data.period.active);
+    }
+
+    /** "2026-08-01" → "01/08". */
+    function brDate(iso) {
+        return (typeof iso === 'string' && iso.length >= 10)
+            ? iso.substr(8, 2) + '/' + iso.substr(5, 2)
+            : '';
+    }
+
+    /** "de 01/08 a 07/08" | "a partir de 01/08" | "até 07/08". */
+    function periodLabel() {
+        var p = state.data.period || {};
+        var f = brDate(p.from);
+        var t = brDate(p.to);
+        if (f !== '' && t !== '') {
+            return 'de ' + f + ' a ' + t;
+        }
+        return (f !== '') ? 'a partir de ' + f : 'até ' + t;
+    }
+
+    /**
+     * Barra de busca + período, criada UMA vez no init, acima dos KPIs.
+     * Gerada no JS (mesmo padrão do filtro de setor da Equipe): o padrão
+     * replica nas três telas sem tocar nos templates.
+     */
+    function buildToolbar() {
+        var anchor = state.root.querySelector('.taskplus-kpis');
+        if (!anchor || $('tp-flt-search')) {
+            return;
+        }
+
+        var bar = el('div', 'taskplus-toolbar2');
+
+        var search = document.createElement('input');
+        search.type = 'search';
+        search.id = 'tp-flt-search';
+        search.className = 'taskplus-toolbar2__search';
+        search.placeholder = 'Buscar por título, descrição ou categoria';
+        search.setAttribute('aria-label', 'Buscar');
+        search.addEventListener('input', function () {
+            state.search = search.value.trim();
+            render();
+        });
+        bar.appendChild(search);
+
+        bar.appendChild(dateField('De', 'tp-flt-from'));
+        bar.appendChild(dateField('Até', 'tp-flt-to'));
+
+        var apply = el('button', 'btn btn-primary btn-sm', 'Aplicar');
+        apply.type = 'button';
+        apply.id = 'tp-flt-apply';
+        apply.addEventListener('click', applyPeriod);
+        bar.appendChild(apply);
+
+        var clear = el('button', 'btn btn-ghost-secondary btn-sm', 'Limpar');
+        clear.type = 'button';
+        clear.id = 'tp-flt-clear';
+        clear.hidden = true;
+        clear.addEventListener('click', clearPeriod);
+        bar.appendChild(clear);
+
+        var note = el('div', 'taskplus-toolbar2__note');
+        note.id = 'tp-flt-note';
+        note.hidden = true;
+        bar.appendChild(note);
+
+        anchor.parentNode.insertBefore(bar, anchor);
+    }
+
+    function dateField(label, id) {
+        var wrap = el('label', 'taskplus-toolbar2__label', label);
+        var input = document.createElement('input');
+        input.type = 'date';
+        input.id = id;
+        wrap.appendChild(input);
+        return wrap;
+    }
+
+    function applyPeriod() {
+        state.period = {
+            from: ($('tp-flt-from') ? $('tp-flt-from').value : '') || '',
+            to: ($('tp-flt-to') ? $('tp-flt-to').value : '') || ''
+        };
+        post({ action: 'list' });
+    }
+
+    function clearPeriod() {
+        state.period = { from: '', to: '' };
+        post({ action: 'list' });
+    }
+
+    /**
+     * Espelha o período ECOADO pelo servidor (fonte da verdade — ele
+     * descarta data inválida e desinverte o par) nos inputs, no botão
+     * Limpar e no aviso fixo da barra.
+     */
+    function syncToolbar() {
+        var p = state.data.period || { from: '', to: '', active: false };
+        state.period = { from: p.active ? p.from : '', to: p.active ? p.to : '' };
+
+        var from = $('tp-flt-from');
+        var to = $('tp-flt-to');
+        if (from) {
+            from.value = state.period.from;
+        }
+        if (to) {
+            to.value = state.period.to;
+        }
+        var clear = $('tp-flt-clear');
+        if (clear) {
+            clear.hidden = !p.active;
+        }
+        var note = $('tp-flt-note');
+        if (note) {
+            note.hidden = !p.active;
+            note.textContent = p.active
+                ? 'Período ativo ' + periodLabel()
+                    + ' — KPIs e "Minhas tarefas" sobre o período; as origens do GLPI seguem no estado atual.'
+                : '';
+        }
     }
 
     // ------------------------------------------------------------------
@@ -192,14 +364,24 @@
 
         var todayItems = state.data.today.filter(function (item) {
             return OWN_GROUPS.indexOf(groupOf(item)) !== -1
-                && (state.showDone || !item.is_done);
+                && (state.showDone || !item.is_done)
+                && matchesSearch(item);
         });
         var overdueItems = state.data.overdue.filter(function (item) {
-            return OWN_GROUPS.indexOf(groupOf(item)) !== -1;
+            return OWN_GROUPS.indexOf(groupOf(item)) !== -1
+                && matchesSearch(item);
         });
 
         if (overdueItems.length === 0 && todayItems.length === 0) {
             list.appendChild(emptyOwn());
+            return;
+        }
+
+        // Modo período (5b-2 p2): UMA seção, já ordenada por data no
+        // servidor — Atrasadas/rotinas/avulsas são recortes do DIA e
+        // não fazem sentido num intervalo (a data vira badge no card).
+        if (periodActive()) {
+            list.appendChild(section('Período ' + periodLabel(), todayItems, false));
             return;
         }
 
@@ -244,9 +426,21 @@
         var list = $('tp-list-native');
         list.textContent = '';
 
+        // Premissa 3 da decisão nº 14: o período NÃO recorta as origens
+        // do GLPI (elas são estado atual, sem data por dia) — o aviso
+        // fica no bloco para o número não parecer errado.
+        if (periodActive()) {
+            var warn = el('div', 'taskplus-native-warn');
+            warn.appendChild(el('i', 'ti ti-info-circle'));
+            warn.appendChild(el('span', null,
+                'O período não se aplica às origens do GLPI — abaixo está o estado atual.'));
+            list.appendChild(warn);
+        }
+
         var items = state.data.today.filter(function (item) {
             return NATIVE_GROUPS.indexOf(groupOf(item)) !== -1
-                && matchesSource(item);
+                && matchesSource(item)
+                && matchesSearch(item);
         });
 
         if (items.length === 0) {
@@ -269,6 +463,22 @@
 
     /** Estado vazio do bloco 1 (tarefas próprias). */
     function emptyOwn() {
+        // Busca ativa escondendo tudo ≠ "não há nada" (mesma lógica do
+        // filtro de origem do bloco nativo).
+        if (state.search !== '') {
+            var sbox = el('div', 'taskplus-empty');
+            sbox.appendChild(el('i', 'ti ti-zoom-cancel taskplus-empty__icon'));
+            sbox.appendChild(el('h3', null, 'Nada encontrado'));
+            sbox.appendChild(el('p', null, 'Nenhuma tarefa casa com a busca.'));
+            return sbox;
+        }
+        if (periodActive()) {
+            var pbox = el('div', 'taskplus-empty');
+            pbox.appendChild(el('i', 'ti ti-calendar-off taskplus-empty__icon'));
+            pbox.appendChild(el('h3', null, 'Nada no período'));
+            pbox.appendChild(el('p', null, 'Nenhuma tarefa sua ' + periodLabel() + '.'));
+            return pbox;
+        }
         var own = state.data.today.filter(function (item) {
             return OWN_GROUPS.indexOf(groupOf(item)) !== -1;
         });
@@ -289,6 +499,13 @@
 
     /** Estado vazio do bloco 2 (origens do GLPI). */
     function emptyNative() {
+        if (state.search !== '') {
+            var sbox = el('div', 'taskplus-empty taskplus-empty--sm');
+            sbox.appendChild(el('i', 'ti ti-zoom-cancel taskplus-empty__icon'));
+            sbox.appendChild(el('h3', null, 'Nada encontrado'));
+            sbox.appendChild(el('p', null, 'Nenhum item do GLPI casa com a busca.'));
+            return sbox;
+        }
         // Filtro ativo escondendo tudo é diferente de "não há nada":
         // dizer "nenhuma tarefa" aqui confundiria.
         var filtering = state.source !== 'all';
@@ -367,7 +584,9 @@
         }
 
         var badges = el('div', 'taskplus-card__badges');
-        if ((isOverdue || item.was_overdue) && item.date_label) {
+        if ((isOverdue || item.was_overdue
+                || (periodActive() && item.date !== state.data.date))
+            && item.date_label) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--late', item.date_label));
         }
         // Na seção "Atrasadas" as origens se misturam (o agrupamento por
@@ -649,6 +868,10 @@
             }
         }
         state.data = safeData(raw);
+
+        // 5b-2 p2: barra de busca + período acima dos KPIs
+        buildToolbar();
+        syncToolbar();
 
         $('tp-btn-new').addEventListener('click', function () {
             openModal(null);

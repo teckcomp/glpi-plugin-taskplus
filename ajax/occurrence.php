@@ -35,9 +35,16 @@ $action  = (string) ($_POST['action'] ?? '');
 
 $result = Occurrence::handle($action, $_POST, $usersId);
 
+// 5b-2 p2: o período ativo viaja em TODO POST (o JS o anexa) — o
+// payload de resposta precisa devolver o MESMO recorte que o usuário
+// está vendo. A normalização (data inválida, par invertido) é do
+// próprio payload; aqui só se repassa o que veio.
+$pf = isset($_POST['period_from']) ? (string) $_POST['period_from'] : null;
+$pt = isset($_POST['period_to']) ? (string) $_POST['period_to'] : null;
+
 // Token novo para o JS rotacionar + estado atualizado para re-render
 $result['csrf'] = Session::getNewCSRFToken();
-$result['data'] = Occurrence::payload($usersId);
+$result['data'] = Occurrence::payload($usersId, $pf, $pt);
 
 header('Content-Type: application/json; charset=UTF-8');
 echo json_encode($result, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);

@@ -473,3 +473,37 @@
 .taskplus-team__act--edit:hover { background: #2a76a8; color: #fff; }
 .taskplus-team__act--pend { border-color: #d9822b; color: #d9822b; }
 .taskplus-team__act--pend:hover { background: #d9822b; color: #fff; }
+
+/* ===== 5b-2 pacote 2 — busca + período (Hoje · Quadro · Equipe) ===== */
+.taskplus-toolbar2 {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    margin-bottom: 14px;
+}
+.taskplus-toolbar2__search {
+    flex: 1 1 240px; min-width: 180px; padding: 6px 10px;
+    border: 1px solid #c8d0d9; border-radius: 6px; font-size: 0.85rem;
+    background: #fff; color: #2c3947;
+}
+.taskplus-toolbar2__search:focus {
+    outline: none; border-color: #2a76a8;
+    box-shadow: 0 0 0 2px rgba(42, 118, 168, 0.15);
+}
+.taskplus-toolbar2__label {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.8rem; color: #6c7a89; margin: 0;
+}
+.taskplus-toolbar2__label input[type="date"] {
+    padding: 5px 8px; border: 1px solid #c8d0d9; border-radius: 6px;
+    font-size: 0.82rem; background: #fff; color: #2c3947;
+}
+.taskplus-toolbar2__note {
+    flex-basis: 100%; padding: 6px 10px; border-radius: 6px;
+    background: #fdf4e3; color: #9a6a1b; border: 1px solid #f0d9a8;
+    font-size: 0.8rem;
+}
+.taskplus-native-warn {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; margin-bottom: 10px; border-radius: 6px;
+    background: #fdf4e3; color: #9a6a1b; border: 1px solid #f0d9a8;
+    font-size: 0.8rem;
+}

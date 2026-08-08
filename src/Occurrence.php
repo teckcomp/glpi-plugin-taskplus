@@ -42,15 +42,51 @@ class Occurrence
      * dia; late = pendentes de dias anteriores + pendentes de hoje com o
      * horário-limite estourado.
      */
-    public static function payload(int $usersId): array
+    public static function payload(int $usersId, ?string $from = null, ?string $to = null): array
     {
         /** @var \DBmysql $DB */
         global $DB;
 
+        // 5b-2 pacote 2: período (de–até) OPCIONAL. Com os dois nulos o
+        // caminho é EXATAMENTE o de sempre (premissa 1 da decisão
+        // nº 14). Com período ativo, a lista vira "tarefas próprias com
+        // data no intervalo" e os KPIs valem para esse conjunto
+        // (premissa 2); as origens nativas seguem como estado atual,
+        // fora do recorte (premissa 3).
+        [$from, $to]  = self::periodRange($from, $to);
+        $periodActive = ($from !== null || $to !== null);
+
         $today   = date('Y-m-d');
         $nowTime = date('H:i:s');
 
-        $todayRows = [];
+        $todayRows   = [];
+        $overdueRows = [];
+
+        if ($periodActive) {
+            // Uma consulta só: tudo do intervalo (aberta, concluída,
+            // pendente), sem excluídas nem puladas. As linhas vão TODAS
+            // para $todayRows — "atrasada" num intervalo é estado do
+            // item (is_late), não uma lista à parte.
+            $where = [
+                self::TABLE . '.users_id'   => $usersId,
+                self::TABLE . '.is_deleted' => 0,
+                self::TABLE . '.is_skipped' => 0,
+            ];
+            // Duas restrições sobre a MESMA coluna não podem dividir a
+            // chave do array (a segunda sobrescreveria a primeira):
+            // entram como critérios aninhados, que o iterator ANDa.
+            if ($from !== null) {
+                $where[] = [self::TABLE . '.date' => ['>=', $from]];
+            }
+            if ($to !== null) {
+                $where[] = [self::TABLE . '.date' => ['<=', $to]];
+            }
+            foreach ($DB->request(self::baseQuery() + ['WHERE' => $where]) as $row) {
+                $todayRows[] = self::format($row, $today, $nowTime);
+            }
+            // Cronológica: a leitura natural de um intervalo
+            usort($todayRows, [self::class, 'compareOverdue']);
+        } else {
         foreach ($DB->request(self::baseQuery() + [
             'WHERE' => [
                 self::TABLE . '.users_id'   => $usersId,
@@ -63,7 +99,6 @@ class Occurrence
             $todayRows[] = self::format($row, $today, $nowTime);
         }
 
-        $overdueRows = [];
         foreach ($DB->request(self::baseQuery() + [
             'WHERE' => [
                 self::TABLE . '.users_id'   => $usersId,
@@ -102,6 +137,7 @@ class Occurrence
         // time_limit por último") é mais simples e testável aqui.
         usort($todayRows, [self::class, 'compareToday']);
         usort($overdueRows, [self::class, 'compareOverdue']);
+        } // fim do modo-dia (sem período)
 
 
         // Origens nativas (Etapa 3): leitura + link, no fim da lista.
@@ -151,7 +187,26 @@ class Occurrence
         $todayCount   = 0;
         $done         = 0;
         $lateToday    = 0;
+        $overdueCount = 0;
 
+        if ($periodActive) {
+            // KPIs do CONJUNTO do período (premissa 2), SÓ tarefas
+            // próprias: as nativas estão fora do recorte (premissa 3) e
+            // por isso também ficam fora destes números — inclusive do
+            // KPI de pendentes, que no modo-dia as soma. Precedência
+            // igual à do Quadro: pendente · concluída · atrasada · aberta.
+            foreach ($todayRows as $item) {
+                if (!empty($item['is_pending'])) {
+                    $pendingCount++;
+                } elseif (!empty($item['is_done'])) {
+                    $done++;
+                } elseif (!empty($item['is_late'])) {
+                    $overdueCount++;
+                } else {
+                    $todayCount++; // aberta no período (hoje ou futura)
+                }
+            }
+        } else {
         foreach ($todayRows as $item) {
             if (!empty($item['is_pending'])) {
                 $pendingCount++;
@@ -174,7 +229,6 @@ class Occurrence
             }
         }
 
-        $overdueCount = 0;
         foreach ($overdueRows as $item) {
             if (!empty($item['is_pending'])) {
                 $pendingCount++;
@@ -188,6 +242,7 @@ class Occurrence
                 $pendingCount++;
             }
         }
+        } // fim dos KPIs do modo-dia
 
         $kpis = [
             'late'    => $overdueCount + $lateToday,
@@ -201,7 +256,49 @@ class Occurrence
             'kpis'    => $kpis,
             'today'   => array_merge($todayRows, $native),
             'overdue' => $overdueRows,
+            // Eco do recorte já NORMALIZADO (datas inválidas caem, par
+            // invertido vira crescente): é a fonte da verdade que o JS
+            // espelha nos inputs e no aviso. Chave nova → safeData.
+            'period'  => [
+                'from'   => $from ?? '',
+                'to'     => $to ?? '',
+                'active' => $periodActive,
+            ],
         ];
+    }
+
+    // =====================================================================
+    // Período (5b-2 pacote 2)
+    // =====================================================================
+
+    /**
+     * Normaliza UMA borda de período vinda do POST: '' ou data inválida
+     * viram null (borda ausente — o recorte fica aberto daquele lado).
+     */
+    public static function periodBound(?string $raw): ?string
+    {
+        $raw = trim((string) $raw);
+        if ($raw === '') {
+            return null;
+        }
+        return self::validDate($raw);
+    }
+
+    /**
+     * Normaliza o PAR de bordas: cada uma pelo periodBound e, com as
+     * duas presentes e invertidas (de > até), troca em vez de recusar —
+     * a intenção do usuário é óbvia e a tela não precisa de um erro.
+     * Usada aqui, no Board e no Team: a régua do recorte é UMA só.
+     */
+    public static function periodRange(?string $from, ?string $to): array
+    {
+        $from = self::periodBound($from);
+        $to   = self::periodBound($to);
+
+        if ($from !== null && $to !== null && $from > $to) {
+            return [$to, $from];
+        }
+        return [$from, $to];
     }
 
     /**

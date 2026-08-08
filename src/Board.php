@@ -63,14 +63,17 @@ class Board
      *
      * ATENÇÃO safeData(): chave nova aqui precisa entrar no board.js.
      */
-    public static function payload(int $usersId): array
+    public static function payload(int $usersId, ?string $from = null, ?string $to = null): array
     {
         $memberGroups = Access::memberGroups($usersId);
         $columns      = Phase::boardColumns(array_keys($memberGroups));
 
         // Reusa o payload da tela Hoje: as regras de dia/atraso/pendência
-        // já moram lá e os dois payloads NUNCA podem divergir.
-        $data = Occurrence::payload($usersId);
+        // já moram lá e os dois payloads NUNCA podem divergir. 5b-2 p2:
+        // o período só CASCATEIA — a normalização e o recorte moram no
+        // Occurrence; concluída/pendente/atrasada do intervalo caem nas
+        // colunas de estado, aberta cai na fase gravada (ou na padrão).
+        $data = Occurrence::payload($usersId, $from, $to);
 
         $cards = [];
         foreach (array_merge($data['today'] ?? [], $data['overdue'] ?? []) as $item) {
@@ -95,6 +98,11 @@ class Board
             'date'    => (string) ($data['date'] ?? date('Y-m-d')),
             'columns' => $columns,
             'cards'   => $cards,
+            // Eco do recorte, já normalizado pelo Occurrence (5b-2 p2).
+            // Chave nova → safeData do board.js.
+            'period'  => (isset($data['period']) && is_array($data['period']))
+                ? $data['period']
+                : ['from' => '', 'to' => '', 'active' => false],
         ];
     }
 

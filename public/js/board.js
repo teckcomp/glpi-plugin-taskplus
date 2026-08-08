@@ -27,7 +27,10 @@
         justDragged: false,
         pendingCard: null,
         editingCard: null,
-        data: { date: '', columns: [], cards: [] }
+        // 5b-2 p2: busca local + período (viaja em todo POST)
+        search: '',
+        period: { from: '', to: '' },
+        data: { date: '', columns: [], cards: [], period: { from: '', to: '', active: false } }
     };
 
     function $(id) {
@@ -51,10 +54,17 @@
      */
     function safeData(raw) {
         var d = (raw && typeof raw === 'object') ? raw : {};
+        var p = (d.period && typeof d.period === 'object') ? d.period : {};
         return {
             date: (typeof d.date === 'string') ? d.date : '',
             columns: Array.isArray(d.columns) ? d.columns : [],
-            cards: Array.isArray(d.cards) ? d.cards : []
+            cards: Array.isArray(d.cards) ? d.cards : [],
+            // 5b-2 p2: eco do período (o servidor normaliza as datas)
+            period: {
+                from: (typeof p.from === 'string') ? p.from : '',
+                to: (typeof p.to === 'string') ? p.to : '',
+                active: !!p.active
+            }
         };
     }
 
@@ -87,6 +97,14 @@
             fd.append(key, fields[key]);
         });
         fd.append('_glpi_csrf_token', state.csrf);
+        // Período ativo acompanha TODA ação (5b-2 p2): a resposta
+        // re-renderiza o quadro e precisa devolver o MESMO recorte.
+        if (state.period.from !== '') {
+            fd.append('period_from', state.period.from);
+        }
+        if (state.period.to !== '') {
+            fd.append('period_to', state.period.to);
+        }
 
         fetch(state.ajaxUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(function (resp) { return resp.json(); })
@@ -98,6 +116,7 @@
                 }
                 if (res && res.data) {
                     state.data = safeData(res.data);
+                    syncToolbar();
                 }
                 if (!res || !res.success) {
                     toast((res && res.message) ? res.message : 'Erro ao processar a ação', true);
@@ -116,6 +135,143 @@
                 state.busy = false;
                 toast('Falha de comunicação com o servidor', true);
             });
+    }
+
+    // ------------------------------------------------------------------
+    // Busca local + período (5b-2 pacote 2 — mesmo padrão da tela Hoje)
+    // ------------------------------------------------------------------
+
+    /** Minúsculas e sem acentos: "Relatório" casa com "relatorio". */
+    function norm(s) {
+        return String(s || '').toLowerCase().normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+    }
+
+    /** O card casa com a busca (título + descrição + categoria)? */
+    function matchesSearch(item) {
+        if (state.search === '') {
+            return true;
+        }
+        var q = norm(state.search);
+        return norm(item.name).indexOf(q) !== -1
+            || norm(item.description).indexOf(q) !== -1
+            || norm(item.category).indexOf(q) !== -1;
+    }
+
+    function periodActive() {
+        return !!(state.data.period && state.data.period.active);
+    }
+
+    /** "2026-08-01" → "01/08". */
+    function brDate(iso) {
+        return (typeof iso === 'string' && iso.length >= 10)
+            ? iso.substr(8, 2) + '/' + iso.substr(5, 2)
+            : '';
+    }
+
+    /** "de 01/08 a 07/08" | "a partir de 01/08" | "até 07/08". */
+    function periodLabel() {
+        var p = state.data.period || {};
+        var f = brDate(p.from);
+        var t = brDate(p.to);
+        if (f !== '' && t !== '') {
+            return 'de ' + f + ' a ' + t;
+        }
+        return (f !== '') ? 'a partir de ' + f : 'até ' + t;
+    }
+
+    /** Barra de busca + período, criada UMA vez no init, acima do quadro. */
+    function buildToolbar() {
+        var anchor = $('tp-board');
+        if (!anchor || $('tp-bflt-search')) {
+            return;
+        }
+
+        var bar = el('div', 'taskplus-toolbar2');
+
+        var search = document.createElement('input');
+        search.type = 'search';
+        search.id = 'tp-bflt-search';
+        search.className = 'taskplus-toolbar2__search';
+        search.placeholder = 'Buscar por título, descrição ou categoria';
+        search.setAttribute('aria-label', 'Buscar');
+        search.addEventListener('input', function () {
+            state.search = search.value.trim();
+            render();
+        });
+        bar.appendChild(search);
+
+        bar.appendChild(dateField('De', 'tp-bflt-from'));
+        bar.appendChild(dateField('Até', 'tp-bflt-to'));
+
+        var apply = el('button', 'btn btn-primary btn-sm', 'Aplicar');
+        apply.type = 'button';
+        apply.id = 'tp-bflt-apply';
+        apply.addEventListener('click', applyPeriod);
+        bar.appendChild(apply);
+
+        var clear = el('button', 'btn btn-ghost-secondary btn-sm', 'Limpar');
+        clear.type = 'button';
+        clear.id = 'tp-bflt-clear';
+        clear.hidden = true;
+        clear.addEventListener('click', clearPeriod);
+        bar.appendChild(clear);
+
+        var note = el('div', 'taskplus-toolbar2__note');
+        note.id = 'tp-bflt-note';
+        note.hidden = true;
+        bar.appendChild(note);
+
+        anchor.parentNode.insertBefore(bar, anchor);
+    }
+
+    function dateField(label, id) {
+        var wrap = el('label', 'taskplus-toolbar2__label', label);
+        var input = document.createElement('input');
+        input.type = 'date';
+        input.id = id;
+        wrap.appendChild(input);
+        return wrap;
+    }
+
+    function applyPeriod() {
+        state.period = {
+            from: ($('tp-bflt-from') ? $('tp-bflt-from').value : '') || '',
+            to: ($('tp-bflt-to') ? $('tp-bflt-to').value : '') || ''
+        };
+        post({ action: 'list' });
+    }
+
+    function clearPeriod() {
+        state.period = { from: '', to: '' };
+        post({ action: 'list' });
+    }
+
+    /** Espelha o período ecoado pelo servidor (fonte da verdade). */
+    function syncToolbar() {
+        var p = state.data.period || { from: '', to: '', active: false };
+        state.period = { from: p.active ? p.from : '', to: p.active ? p.to : '' };
+
+        var from = $('tp-bflt-from');
+        var to = $('tp-bflt-to');
+        if (from) {
+            from.value = state.period.from;
+        }
+        if (to) {
+            to.value = state.period.to;
+        }
+        var clear = $('tp-bflt-clear');
+        if (clear) {
+            clear.hidden = !p.active;
+        }
+        var note = $('tp-bflt-note');
+        if (note) {
+            note.hidden = !p.active;
+            note.textContent = p.active
+                ? 'Período ativo ' + periodLabel()
+                    + ' — cards do período; os itens do GLPI seguem no estado atual.'
+                : '';
+        }
     }
 
     // ------------------------------------------------------------------
@@ -269,7 +425,8 @@
         box.setAttribute('data-col-id', String(colId));
 
         var cards = state.data.cards.filter(function (card) {
-            return Number(card.column) === colId;
+            return Number(card.column) === colId
+                && matchesSearch(card);
         });
 
         // Cabeçalho: barra na cor da fase + nome + tag do setor + contagem
@@ -549,6 +706,10 @@
             }
         }
         state.data = safeData(raw);
+
+        // 5b-2 p2: barra de busca + período acima do quadro
+        buildToolbar();
+        syncToolbar();
 
         $('tp-be-cancel').addEventListener('click', closeEditModal);
         $('tp-be-save').addEventListener('click', saveEdit);

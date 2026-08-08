@@ -31,7 +31,10 @@
         // Modais do 5b-2: {item, tech} em edição / pendência
         editCtx: null,
         pendCtx: null,
-        data: { date: '', groups: [], techs: [] }
+        // 5b-2 p2: busca local + período (viaja em todo POST)
+        search: '',
+        period: { from: '', to: '' },
+        data: { date: '', groups: [], techs: [], period: { from: '', to: '', active: false } }
     };
 
     function $(id) {
@@ -57,10 +60,17 @@
      */
     function safeData(raw) {
         var d = (raw && typeof raw === 'object') ? raw : {};
+        var p = (d.period && typeof d.period === 'object') ? d.period : {};
         return {
             date: (typeof d.date === 'string') ? d.date : '',
             groups: Array.isArray(d.groups) ? d.groups : [],
-            techs: Array.isArray(d.techs) ? d.techs.map(safeTech) : []
+            techs: Array.isArray(d.techs) ? d.techs.map(safeTech) : [],
+            // 5b-2 p2: eco do período (o servidor normaliza as datas)
+            period: {
+                from: (typeof p.from === 'string') ? p.from : '',
+                to: (typeof p.to === 'string') ? p.to : '',
+                active: !!p.active
+            }
         };
     }
 
@@ -139,6 +149,14 @@
             fd.append(key, fields[key]);
         });
         fd.append('_glpi_csrf_token', state.csrf);
+        // Período ativo acompanha TODA ação (5b-2 p2): a resposta
+        // re-renderiza a tela e precisa devolver o MESMO recorte.
+        if (state.period.from !== '') {
+            fd.append('period_from', state.period.from);
+        }
+        if (state.period.to !== '') {
+            fd.append('period_to', state.period.to);
+        }
 
         fetch(state.ajaxUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(function (resp) { return resp.json(); })
@@ -150,6 +168,7 @@
                 }
                 if (res && res.data) {
                     state.data = safeData(res.data);
+                    syncToolbar();
                 }
                 if (!res || !res.success) {
                     toast((res && res.message) ? res.message : 'Erro ao processar a ação', true);
@@ -168,6 +187,143 @@
                 state.busy = false;
                 toast('Falha de comunicação com o servidor', true);
             });
+    }
+
+    // ------------------------------------------------------------------
+    // Busca local + período (5b-2 pacote 2 — mesmo padrão da tela Hoje)
+    // ------------------------------------------------------------------
+
+    /** Minúsculas e sem acentos: "Relatório" casa com "relatorio". */
+    function norm(s) {
+        return String(s || '').toLowerCase().normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+    }
+
+    /** O item casa com a busca (título + descrição + categoria)? */
+    function matchesSearch(item) {
+        if (state.search === '') {
+            return true;
+        }
+        var q = norm(state.search);
+        return norm(item.name).indexOf(q) !== -1
+            || norm(item.description).indexOf(q) !== -1
+            || norm(item.category).indexOf(q) !== -1;
+    }
+
+    function periodActive() {
+        return !!(state.data.period && state.data.period.active);
+    }
+
+    /** "2026-08-01" → "01/08". */
+    function brDate(iso) {
+        return (typeof iso === 'string' && iso.length >= 10)
+            ? iso.substr(8, 2) + '/' + iso.substr(5, 2)
+            : '';
+    }
+
+    /** "de 01/08 a 07/08" | "a partir de 01/08" | "até 07/08". */
+    function periodLabel() {
+        var p = state.data.period || {};
+        var f = brDate(p.from);
+        var t = brDate(p.to);
+        if (f !== '' && t !== '') {
+            return 'de ' + f + ' a ' + t;
+        }
+        return (f !== '') ? 'a partir de ' + f : 'até ' + t;
+    }
+
+    /** Barra de busca + período, criada UMA vez no init, acima da lista. */
+    function buildToolbar() {
+        var anchor = $('tp-team');
+        if (!anchor || $('tp-tflt-search')) {
+            return;
+        }
+
+        var bar = el('div', 'taskplus-toolbar2');
+
+        var search = document.createElement('input');
+        search.type = 'search';
+        search.id = 'tp-tflt-search';
+        search.className = 'taskplus-toolbar2__search';
+        search.placeholder = 'Buscar por título, descrição ou categoria';
+        search.setAttribute('aria-label', 'Buscar');
+        search.addEventListener('input', function () {
+            state.search = search.value.trim();
+            render();
+        });
+        bar.appendChild(search);
+
+        bar.appendChild(dateField('De', 'tp-tflt-from'));
+        bar.appendChild(dateField('Até', 'tp-tflt-to'));
+
+        var apply = el('button', 'btn btn-primary btn-sm', 'Aplicar');
+        apply.type = 'button';
+        apply.id = 'tp-tflt-apply';
+        apply.addEventListener('click', applyPeriod);
+        bar.appendChild(apply);
+
+        var clear = el('button', 'btn btn-ghost-secondary btn-sm', 'Limpar');
+        clear.type = 'button';
+        clear.id = 'tp-tflt-clear';
+        clear.hidden = true;
+        clear.addEventListener('click', clearPeriod);
+        bar.appendChild(clear);
+
+        var note = el('div', 'taskplus-toolbar2__note');
+        note.id = 'tp-tflt-note';
+        note.hidden = true;
+        bar.appendChild(note);
+
+        anchor.parentNode.insertBefore(bar, anchor);
+    }
+
+    function dateField(label, id) {
+        var wrap = el('label', 'taskplus-toolbar2__label', label);
+        var input = document.createElement('input');
+        input.type = 'date';
+        input.id = id;
+        wrap.appendChild(input);
+        return wrap;
+    }
+
+    function applyPeriod() {
+        state.period = {
+            from: ($('tp-tflt-from') ? $('tp-tflt-from').value : '') || '',
+            to: ($('tp-tflt-to') ? $('tp-tflt-to').value : '') || ''
+        };
+        post({ action: 'list' });
+    }
+
+    function clearPeriod() {
+        state.period = { from: '', to: '' };
+        post({ action: 'list' });
+    }
+
+    /** Espelha o período ecoado pelo servidor (fonte da verdade). */
+    function syncToolbar() {
+        var p = state.data.period || { from: '', to: '', active: false };
+        state.period = { from: p.active ? p.from : '', to: p.active ? p.to : '' };
+
+        var from = $('tp-tflt-from');
+        var to = $('tp-tflt-to');
+        if (from) {
+            from.value = state.period.from;
+        }
+        if (to) {
+            to.value = state.period.to;
+        }
+        var clear = $('tp-tflt-clear');
+        if (clear) {
+            clear.hidden = !p.active;
+        }
+        var note = $('tp-tflt-note');
+        if (note) {
+            note.hidden = !p.active;
+            note.textContent = p.active
+                ? 'Período ativo ' + periodLabel()
+                    + ' — placares e listas sobre o período; os itens do GLPI seguem no estado atual.'
+                : '';
+        }
     }
 
     // ------------------------------------------------------------------
@@ -255,11 +411,21 @@
 
         renderFilter(box);
 
+        var searching = state.search !== '';
         var techs = visibleTechs();
+        // Buscando, técnico SEM resultado sai da tela — sobra só quem
+        // tem tarefa que casa (padrão de qualquer busca de lista).
+        if (searching) {
+            techs = techs.filter(function (tech) {
+                return tech.items.some(matchesSearch);
+            });
+        }
         if (techs.length === 0) {
-            box.appendChild(el('p', 'taskplus-empty', state.group === 'all'
-                ? 'Nenhum técnico nos setores que você administra.'
-                : 'Nenhum técnico neste setor.'));
+            box.appendChild(el('p', 'taskplus-empty', searching
+                ? 'Nenhuma tarefa da equipe casa com a busca.'
+                : (state.group === 'all'
+                    ? 'Nenhum técnico nos setores que você administra.'
+                    : 'Nenhum técnico neste setor.')));
             return;
         }
 
@@ -295,24 +461,33 @@
 
         var pills = el('span', 'taskplus-team__pills');
         pills.appendChild(pill(tech.kpis.late, 'atrasadas', STATUS_BADGE.late));
-        pills.appendChild(pill(tech.kpis.today, 'para hoje', STATUS_BADGE.today));
+        // No modo período "para hoje" enganaria: o número é de ABERTAS
+        // no intervalo (hoje ou futuras) — o rótulo acompanha.
+        pills.appendChild(pill(tech.kpis.today,
+            periodActive() ? 'abertas' : 'para hoje', STATUS_BADGE.today));
         pills.appendChild(pill(tech.kpis.pending, 'pendentes', STATUS_BADGE.pending));
         pills.appendChild(pill(tech.kpis.done, 'concluídas', STATUS_BADGE.done));
         head.appendChild(pills);
 
         // -------- corpo (lista do dia; a memória de expandidos faz o
-        // técnico aberto continuar aberto quando o filtro re-renderiza) --------
-        var isOpen = !!state.open[tech.id];
+        // técnico aberto continuar aberto quando o filtro re-renderiza).
+        // Buscando (5b-2 p2): só os itens que casam, e o técnico abre
+        // sozinho — SEM gravar em state.open: limpar a busca devolve o
+        // estado de antes.
+        var searching = state.search !== '';
+        var items = searching ? tech.items.filter(matchesSearch) : tech.items;
+        var isOpen = !!state.open[tech.id] || searching;
         var body = el('div', 'taskplus-team__body');
         body.hidden = !isOpen;
         head.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
         chev.className = 'ti taskplus-team__chevron ti-chevron-'
             + (isOpen ? 'down' : 'right');
 
-        if (tech.items.length === 0) {
-            body.appendChild(el('p', 'taskplus-empty', 'Nada para hoje.'));
+        if (items.length === 0) {
+            body.appendChild(el('p', 'taskplus-empty',
+                periodActive() ? 'Nada no período.' : 'Nada para hoje.'));
         } else {
-            tech.items.forEach(function (item) {
+            items.forEach(function (item) {
                 body.appendChild(renderItem(item, tech));
             });
         }
@@ -344,7 +519,9 @@
 
         row.appendChild(el('span',
             'taskplus-badge ' + (STATUS_BADGE[item.status] || STATUS_BADGE.today),
-            STATUS_LABEL[item.status] || STATUS_LABEL.today));
+            (item.status === 'today' && periodActive())
+                ? 'Aberta'
+                : (STATUS_LABEL[item.status] || STATUS_LABEL.today)));
 
         // Nativa: o nome é um LINK para o item no GLPI (leitura + link,
         // decisão nº 12 — o gestor não age sobre item nativo de outro).
@@ -571,6 +748,9 @@
             }
         }
         state.data = safeData(raw);
+        // 5b-2 p2: barra de busca + período acima da lista
+        buildToolbar();
+        syncToolbar();
         bindModals();
         render();
     }

@@ -53,8 +53,13 @@ class Team
      *
      * ATENÇÃO safeData(): chave nova aqui precisa entrar no team.js.
      */
-    public static function payload(int $usersId): array
+    public static function payload(int $usersId, ?string $from = null, ?string $to = null): array
     {
+        // 5b-2 p2: MESMA normalização das outras telas (uma régua só) —
+        // o eco daqui e o recorte de cada técnico nunca divergem.
+        [$from, $to]  = Occurrence::periodRange($from, $to);
+        $periodActive = ($from !== null || $to !== null);
+
         $isAdmin = Access::isPhaseAdmin();
         $groups  = Access::managedGroups($usersId, $isAdmin);
 
@@ -66,7 +71,7 @@ class Team
             // resto da equipe: ele entra zerado, marcado com load_error,
             // e o JS mostra o aviso na linha dele.
             try {
-                $occ = Occurrence::payload($techId);
+                $occ = Occurrence::payload($techId, $from, $to);
                 $techs[] = self::techEntry($techId, $info['label'], $info['groups'], $occ);
             } catch (\Throwable $e) {
                 $entry               = self::techEntry($techId, $info['label'], $info['groups'], []);
@@ -89,6 +94,12 @@ class Team
             'date'   => date('Y-m-d'),
             'groups' => $groupNames,
             'techs'  => $techs,
+            // Eco do recorte normalizado (5b-2 p2). Chave nova → safeData.
+            'period' => [
+                'from'   => $from ?? '',
+                'to'     => $to ?? '',
+                'active' => $periodActive,
+            ],
         ];
     }
 
@@ -257,17 +268,22 @@ class Team
     {
         $kpis = is_array($occ['kpis'] ?? null) ? $occ['kpis'] : [];
 
+        // 5b-2 p2: a data-base do payload (hoje) desce até o itemRow —
+        // no modo período, item ABERTO de outro dia ganha "de DD/MM" no
+        // detalhe (sem isso, uma tarefa futura pareceria "para hoje").
+        $payloadDate = (string) ($occ['date'] ?? '');
+
         $items = [];
         // Atrasadas vêm da lista própria do payload; o flag de origem
         // garante o status mesmo se is_late vier inesperadamente falso.
         foreach ((array) ($occ['overdue'] ?? []) as $item) {
             if (is_array($item)) {
-                $items[] = self::itemRow($item, true);
+                $items[] = self::itemRow($item, true, $payloadDate);
             }
         }
         foreach ((array) ($occ['today'] ?? []) as $item) {
             if (is_array($item)) {
-                $items[] = self::itemRow($item, false);
+                $items[] = self::itemRow($item, false, $payloadDate);
             }
         }
 
@@ -298,7 +314,7 @@ class Team
      * Pura (testável). O status segue a MESMA precedência do Quadro
      * (Board::resolveColumn): pendente · concluída · atrasada · do dia.
      */
-    public static function itemRow(array $item, bool $fromOverdue): array
+    public static function itemRow(array $item, bool $fromOverdue, string $payloadDate = ''): array
     {
         $status = 'today';
         if (!empty($item['is_pending'])) {
@@ -337,8 +353,17 @@ class Team
                 }
                 break;
             default:
+                // Aberta de OUTRO dia (modo período): a data entra no
+                // detalhe. $payloadDate vazio (chamada legada) mantém o
+                // comportamento antigo — só o horário-limite.
+                $itemDate = (string) ($item['date'] ?? '');
+                if ($payloadDate !== '' && $itemDate !== '' && $itemDate !== $payloadDate
+                    && !empty($item['date_label'])) {
+                    $detail = sprintf(__('de %s', 'taskplus'), (string) $item['date_label']);
+                }
                 if (!empty($item['time_limit'])) {
-                    $detail = sprintf(__('até %s', 'taskplus'), (string) $item['time_limit']);
+                    $limit  = sprintf(__('até %s', 'taskplus'), (string) $item['time_limit']);
+                    $detail = ($detail !== '') ? $detail . ' · ' . $limit : $limit;
                 }
         }
 
