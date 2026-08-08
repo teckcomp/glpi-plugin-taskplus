@@ -5,8 +5,11 @@
  *  - estado inicial embutido em <script type="application/json"
  *    id="taskplus-team-data"> (gerado pelo front/team.php com
  *    JSON_HEX_* — seguro contra </script>);
- *  - SEM AJAX nesta sub-etapa: a tela é leitura pura, o expandir/
- *    recolher é local. As ações do gestor chegam na 5a-2.
+ *  - ações do gestor (5b-1: concluir/desfazer tarefa própria do Task+
+ *    do técnico) vão por POST ao ajax/team.php com `_glpi_csrf_token`;
+ *    a resposta traz `csrf` NOVO (rotação — o token é de uso único) e
+ *    `data` com o payload atualizado, que re-renderiza a tela inteira
+ *    preservando os técnicos expandidos (state.open).
  *
  * Todo texto de usuário entra no DOM via textContent (nunca innerHTML).
  * Módulo expõe window.TaskplusTeam.init() — o harness jsdom roda com
@@ -17,6 +20,9 @@
 
     var state = {
         root: null,
+        csrf: '',
+        ajaxUrl: '',
+        busy: false,
         // Filtro de setor (pacote 3): 'all' ou o NOME do grupo — o
         // payload identifica setor por nome (os chips), não por id
         group: 'all',
@@ -76,13 +82,72 @@
     function safeItem(raw) {
         var i = (raw && typeof raw === 'object') ? raw : {};
         return {
+            id: (typeof i.id === 'number') ? i.id : 0,
             name: (typeof i.name === 'string') ? i.name : '',
             status: (typeof i.status === 'string') ? i.status : 'today',
             detail: (typeof i.detail === 'string') ? i.detail : '',
+            // 5b-1: botão de concluir/desfazer só onde o servidor deixou
+            can_act: !!i.can_act,
+            is_done: !!i.is_done,
+            // Nome de quem concluiu, quando NÃO foi o próprio técnico
+            done_by: (typeof i.done_by === 'string') ? i.done_by : '',
             is_native: !!i.is_native,
             source: (typeof i.source === 'string') ? i.source : '',
             url: (typeof i.url === 'string') ? i.url : ''
         };
+    }
+
+    // ------------------------------------------------------------------
+    // Toast de feedback + comunicação com o servidor (padrão taskplus.js)
+    // ------------------------------------------------------------------
+
+    function toast(msg, isError) {
+        var t = el('div', 'taskplus-toast' + (isError ? ' taskplus-toast--error' : ''), msg);
+        document.body.appendChild(t);
+        window.setTimeout(function () {
+            if (t.parentNode) {
+                t.parentNode.removeChild(t);
+            }
+        }, 4000);
+    }
+
+    function post(fields) {
+        if (state.busy) {
+            return;
+        }
+        state.busy = true;
+
+        var fd = new FormData();
+        Object.keys(fields).forEach(function (key) {
+            fd.append(key, fields[key]);
+        });
+        fd.append('_glpi_csrf_token', state.csrf);
+
+        fetch(state.ajaxUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (resp) { return resp.json(); })
+            .then(function (res) {
+                state.busy = false;
+                // Rotação do token: o que foi enviado já era (uso único)
+                if (res && typeof res.csrf === 'string' && res.csrf !== '') {
+                    state.csrf = res.csrf;
+                }
+                if (res && res.data) {
+                    state.data = safeData(res.data);
+                }
+                if (!res || !res.success) {
+                    toast((res && res.message) ? res.message : 'Erro ao processar a ação', true);
+                    render();
+                    return;
+                }
+                if (res.message) {
+                    toast(res.message, false);
+                }
+                render();
+            })
+            .catch(function () {
+                state.busy = false;
+                toast('Falha de comunicação com o servidor', true);
+            });
     }
 
     // ------------------------------------------------------------------
@@ -228,7 +293,7 @@
             body.appendChild(el('p', 'taskplus-empty', 'Nada para hoje.'));
         } else {
             tech.items.forEach(function (item) {
-                body.appendChild(renderItem(item));
+                body.appendChild(renderItem(item, tech.id));
             });
         }
 
@@ -254,7 +319,7 @@
         return wrap;
     }
 
-    function renderItem(item) {
+    function renderItem(item, techId) {
         var row = el('div', 'taskplus-team__item');
 
         row.appendChild(el('span',
@@ -279,8 +344,35 @@
             row.appendChild(el('span', 'taskplus-badge taskplus-badge--project', 'Projeto'));
         }
 
+        // Auditoria (5b-1): concluída por OUTRO usuário (gestor/admin)
+        if (item.status === 'done' && item.done_by) {
+            row.appendChild(el('span', 'taskplus-badge taskplus-badge--manager',
+                'pelo gestor ' + item.done_by));
+        }
+
         if (item.detail) {
             row.appendChild(el('span', 'taskplus-team__detail', item.detail));
+        }
+
+        // Ação do gestor (5b-1): concluir/desfazer tarefa PRÓPRIA do
+        // Task+ do técnico. O servidor decide onde o botão existe
+        // (can_act: nunca em nativa, nunca em pendente) e revalida tudo
+        // no POST — o botão é só o atalho.
+        if (item.can_act) {
+            var btn = el('button', 'taskplus-team__act'
+                + (item.is_done ? ' taskplus-team__act--undo' : '')
+                + (item.detail ? '' : ' taskplus-team__act--solo'),
+                item.is_done ? 'Desfazer' : 'Concluir');
+            btn.type = 'button';
+            btn.addEventListener('click', function () {
+                post({
+                    action: 'toggle',
+                    id: item.id,
+                    tech_id: techId,
+                    done: item.is_done ? 0 : 1
+                });
+            });
+            row.appendChild(btn);
         }
 
         return row;
@@ -295,6 +387,9 @@
         if (!state.root) {
             return;
         }
+
+        state.csrf = state.root.getAttribute('data-csrf') || '';
+        state.ajaxUrl = state.root.getAttribute('data-ajax-url') || '';
 
         var raw = {};
         var holder = $('taskplus-team-data');

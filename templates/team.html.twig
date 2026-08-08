@@ -5,7 +5,9 @@
 <link rel="stylesheet" href="{{ plugin_web_dir }}/css/taskplus.css">
 
 <div class="taskplus-app" id="taskplus-team"
-     data-user-id="{{ current_user_id }}">
+     data-user-id="{{ current_user_id }}"
+     data-csrf="{{ csrf_token }}"
+     data-ajax-url="{{ plugin_web_dir }}/ajax/team.php">
 
     {# ================= COLUNA ESQUERDA: título + sidebar ================= #}
     {% include '@taskplus/_sidebar.html.twig' with {'active': 'team'} %}

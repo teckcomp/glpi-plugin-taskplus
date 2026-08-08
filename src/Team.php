@@ -5,11 +5,13 @@ namespace GlpiPlugin\Taskplus;
 /**
  * Task+ — tela "Equipe" (Etapa 5a: leitura para o gestor).
  *
- * Camada única de dados da tela Equipe, usada pelo front/team.php.
- * SEM endpoint ajax nesta sub-etapa: a tela é leitura pura, o payload
- * inteiro (placar + tarefas de cada técnico) vai embutido na página e o
- * expandir/recolher é só JS. Ações do gestor (concluir/editar tarefa do
- * técnico) chegam na 5a-2, com endpoint próprio e validação por ação.
+ * Camada única de dados E ações da tela Equipe, usada pelo
+ * front/team.php e pelo ajax/team.php (5b-1). O payload inteiro
+ * (placar + tarefas de cada técnico) vai embutido na página; as ações
+ * do gestor chegam por POST no endpoint e passam por handle(), que
+ * valida o ESCOPO por ação (técnico membro de setor gerido, nunca item
+ * nativo — decisão nº 12) antes de delegar a escrita à Occurrence, que
+ * reverifica posse/estado na hora (T18).
  *
  * MODELO (decisões da abertura da Etapa 5):
  *
@@ -88,6 +90,76 @@ class Team
             'groups' => $groupNames,
             'techs'  => $techs,
         ];
+    }
+
+    // =====================================================================
+    // Ações do gestor (5b-1) — endpoint ajax/team.php
+    // =====================================================================
+
+    /**
+     * Despacha a ação do gestor. Mesmo contrato do Occurrence::handle:
+     * devolve ['success' => bool, 'message' => string] e o endpoint
+     * completa com o token CSRF novo e o payload atualizado da Equipe.
+     *
+     * 5b-1 só tem `toggle` (concluir/desfazer); editar e pendência são
+     * o 5b-2. `list` existe para o JS pedir só o re-render.
+     */
+    public static function handle(string $action, array $input, int $usersId): array
+    {
+        switch ($action) {
+            case 'toggle':
+                return self::toggleTech($input, $usersId);
+            case 'list':
+                return ['success' => true, 'message' => ''];
+            default:
+                return ['success' => false, 'message' => __('Ação desconhecida', 'taskplus')];
+        }
+    }
+
+    /**
+     * Concluir/desfazer tarefa PRÓPRIA do Task+ de um técnico da equipe.
+     *
+     * Validação POR AÇÃO, reexecutada a cada POST (T18 — nada herdado
+     * do carregamento da tela):
+     *  1. o gestor ainda administra pelo menos um setor;
+     *  2. o técnico é MEMBRO (ativo, não excluído) de setor gerido —
+     *     a MESMA régua members() que monta a tela, para a ação nunca
+     *     alcançar quem a tela não mostra;
+     *  3. a ocorrência pertence ao técnico e não está excluída —
+     *     validado dentro de Occurrence::toggleFor, que só enxerga a
+     *     tabela de ocorrências: item NATIVO não tem caminho até aqui
+     *     (decisão nº 12).
+     *
+     * Auditoria: users_id_done = GESTOR (autor), users_id = técnico
+     * (dono) — o payload exibe "pelo gestor <nome>" quando diferem.
+     */
+    private static function toggleTech(array $input, int $usersId): array
+    {
+        $isAdmin = Access::isPhaseAdmin();
+        $groups  = Access::managedGroups($usersId, $isAdmin);
+        if ($groups === []) {
+            return ['success' => false, 'message' => __('Você não administra nenhum setor', 'taskplus')];
+        }
+
+        $techId = (int) ($input['tech_id'] ?? 0);
+        if ($techId <= 0) {
+            return ['success' => false, 'message' => __('Técnico inválido', 'taskplus')];
+        }
+
+        $members = self::members(array_keys($groups), $groups);
+        if (!isset($members[$techId])) {
+            return ['success' => false, 'message' => __('Técnico fora dos setores que você administra', 'taskplus')];
+        }
+
+        $done = ((int) ($input['done'] ?? 0)) === 1;
+
+        $result = Occurrence::toggleFor((int) ($input['id'] ?? 0), $techId, $usersId, $done);
+        if ($result['success']) {
+            $result['message'] = $done
+                ? sprintf(__('Tarefa de %s concluída', 'taskplus'), $members[$techId]['label'])
+                : sprintf(__('Conclusão de %s desfeita', 'taskplus'), $members[$techId]['label']);
+        }
+        return $result;
     }
 
     /**
@@ -186,12 +258,29 @@ class Team
 
         $weights = ['late' => 0, 'today' => 1, 'pending' => 2, 'done' => 3];
 
+        $isNative = !empty($item['is_native']);
+
         return [
+            // Id da OCORRÊNCIA (5b-1): é o que o botão de ação envia ao
+            // endpoint. Zero nas nativas — elas nem ganham botão.
+            'id'        => $isNative ? 0 : (int) ($item['id'] ?? 0),
             'name'      => (string) ($item['name'] ?? ''),
             'status'    => $status,
             'weight'    => $weights[$status],
             'detail'    => $detail,
-            'is_native' => !empty($item['is_native']),
+            // Concluir/desfazer só em tarefa PRÓPRIA do Task+ (decisão
+            // nº 12) e fora de pendência — pendência é assunto do 5b-2
+            // (a precedência pendente > concluída esconderia o efeito).
+            'can_act'   => !$isNative
+                && (int) ($item['id'] ?? 0) > 0
+                && $status !== 'pending',
+            'is_done'   => $status === 'done',
+            // Auditoria 5b-1: nome de quem concluiu, QUANDO não foi o
+            // próprio técnico (vazio no caso normal) — vira badge no JS
+            'done_by'   => (!empty($item['done_by_other']))
+                ? (string) ($item['done_by_label'] ?? '')
+                : '',
+            'is_native' => $isNative,
             // 'ticket' | 'project' | '' (própria)
             'source'    => (string) ($item['source'] ?? ''),
             // Link do item nativo (abre no GLPI); vazio nas próprias

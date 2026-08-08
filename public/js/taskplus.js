@@ -413,6 +413,13 @@
         if (item.is_done && item.done_time) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--done', 'concluída às ' + item.done_time));
         }
+        // Auditoria (5b-1): a tarefa foi concluída pelo GESTOR na tela
+        // Equipe — o técnico vê quem foi. Chaves novas do payload
+        // (done_by_other/done_by_label); payload antigo cai no falsy.
+        if (item.is_done && item.done_by_other && item.done_by_label) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--manager',
+                'pelo gestor ' + item.done_by_label));
+        }
         if (badges.childNodes.length > 0) {
             body.appendChild(badges);
         }

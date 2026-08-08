@@ -98,6 +98,11 @@ class Occurrence
             $todayRows[]         = $item;
         }
 
+        // Auditoria da 5b-1: resolve o NOME de quem concluiu quando não
+        // foi o próprio dono (gestor pela Equipe). Só a lista do dia —
+        // atrasada, por definição, ainda não foi concluída.
+        $todayRows = self::fillDoneBy($todayRows);
+
         // Ordenação em PHP, não no SQL: o controle fino ("NULL de
         // time_limit por último") é mais simples e testável aqui.
         usort($todayRows, [self::class, 'compareToday']);
@@ -199,6 +204,52 @@ class Occurrence
     }
 
     /**
+     * Preenche `done_by_label` nos itens concluídos por OUTRO usuário
+     * (5b-1): uma única consulta para todos os ids, mesmo formato de
+     * nome da tela Equipe (firstname+realname, fallback no login).
+     * Gestor excluído do GLPI depois de concluir deixa o label vazio —
+     * o front simplesmente não mostra o badge.
+     */
+    private static function fillDoneBy(array $rows): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $ids = [];
+        foreach ($rows as $item) {
+            if (!empty($item['done_by_other']) && (int) ($item['done_by_id'] ?? 0) > 0) {
+                $ids[(int) $item['done_by_id']] = true;
+            }
+        }
+        if ($ids === []) {
+            return $rows;
+        }
+
+        $labels = [];
+        foreach ($DB->request([
+            'FROM'  => 'glpi_users',
+            'WHERE' => ['glpi_users.id' => array_keys($ids) ?: [0]],
+        ]) as $row) {
+            $label = trim(
+                (string) ($row['firstname'] ?? '') . ' ' . (string) ($row['realname'] ?? '')
+            );
+            if ($label === '') {
+                $label = (string) ($row['name'] ?? '');
+            }
+            $labels[(int) ($row['id'] ?? 0)] = $label;
+        }
+
+        foreach ($rows as &$item) {
+            if (!empty($item['done_by_other'])) {
+                $item['done_by_label'] = $labels[(int) ($item['done_by_id'] ?? 0)] ?? '';
+            }
+        }
+        unset($item);
+
+        return $rows;
+    }
+
+    /**
      * Marca em cada item se ele tem pendência ativa deste usuário.
      * `$forceType` fixa o itemtype (tarefas próprias); com null, usa o
      * `source` do item nativo (TicketTask / ProjectTask).
@@ -256,6 +307,8 @@ class Occurrence
             'SELECT' => [
                 self::TABLE . '.id',
                 self::TABLE . '.plugin_taskplus_routines_id',
+                self::TABLE . '.users_id',
+                self::TABLE . '.users_id_done',
                 self::TABLE . '.name',
                 self::TABLE . '.description',
                 self::TABLE . '.category',
@@ -327,6 +380,15 @@ class Occurrence
             'time_limit'  => ($limit !== null && $limit !== '') ? substr((string) $limit, 0, 5) : null,
             'is_done'     => $isDone,
             'done_time'   => !empty($row['done_date']) ? substr((string) $row['done_date'], 11, 5) : null,
+            // Auditoria da 5b-1: quem concluiu (users_id_done, gravado
+            // desde a Etapa 1). `done_by_other` = concluída por OUTRO
+            // usuário (gestor pela tela Equipe); o nome é resolvido em
+            // lote por fillDoneBy() no payload — aqui fica vazio.
+            'done_by_other' => $isDone
+                && ((int) ($row['users_id_done'] ?? 0)) > 0
+                && ((int) ($row['users_id_done'] ?? 0)) !== ((int) ($row['users_id'] ?? 0)),
+            'done_by_id'    => (int) ($row['users_id_done'] ?? 0),
+            'done_by_label' => '',
             'is_late'     => $isLate,
             // Setada como true só na consulta "concluída hoje, de dia
             // anterior" (4d-2); presente em todo item pela mesma higiene
@@ -587,22 +649,38 @@ class Occurrence
      */
     private static function toggle(array $input, int $usersId): array
     {
+        $done = ((int) ($input['done'] ?? 0)) === 1;
+
+        // Dono agindo sobre a própria tarefa: dono = autor da conclusão
+        return self::toggleFor((int) ($input['id'] ?? 0), $usersId, $usersId, $done);
+    }
+
+    /**
+     * Concluir/desfazer a ocorrência $occId do usuário $ownerId, tendo
+     * $actorId como AUTOR da ação (5b-1). É o único caminho de escrita
+     * do toggle: a tela Hoje passa dono = autor; a tela Equipe passa o
+     * TÉCNICO como dono e o GESTOR como autor — `users_id_done` é a
+     * trilha de auditoria ("quem concluiu"), exibida quando difere do
+     * dono. Público de propósito: Team::handle valida o ESCOPO (técnico
+     * de setor gerido) e delega a validação de posse/estado para cá,
+     * reverificada NA HORA da escrita (T18).
+     */
+    public static function toggleFor(int $occId, int $ownerId, int $actorId, bool $done): array
+    {
         /** @var \DBmysql $DB */
         global $DB;
 
-        $row = self::ownRow((int) ($input['id'] ?? 0), $usersId);
+        $row = self::ownRow($occId, $ownerId);
         if ($row === null) {
             return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
         }
-
-        $done = ((int) ($input['done'] ?? 0)) === 1;
 
         $DB->update(
             self::TABLE,
             [
                 'is_done'       => $done ? 1 : 0,
                 'done_date'     => $done ? date('Y-m-d H:i:s') : null,
-                'users_id_done' => $done ? $usersId : 0,
+                'users_id_done' => $done ? $actorId : 0,
                 'date_mod'      => date('Y-m-d H:i:s'),
             ],
             [self::TABLE . '.id' => (int) $row['id']]

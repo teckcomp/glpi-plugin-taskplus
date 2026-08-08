@@ -453,3 +453,16 @@
 
 /* 5a pacote 3: filtro de setor da tela Equipe */
 .taskplus-team__filter { margin-bottom: 10px; }
+
+/* 5b-1: auditoria "pelo gestor" + botão concluir/desfazer da Equipe */
+.taskplus-badge--manager { background: #f1e8fb; color: #7048a8; }
+.taskplus-team__act {
+    flex: 0 0 auto; padding: 3px 12px; border: 1px solid #2f9e44;
+    border-radius: 14px; background: #fff; color: #2f9e44;
+    font-size: 0.78rem; font-weight: 600; cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.taskplus-team__act:hover { background: #2f9e44; color: #fff; }
+.taskplus-team__act--undo { border-color: #b3bcc5; color: #6c7a89; }
+.taskplus-team__act--undo:hover { background: #eef2f6; color: #2c3947; }
+.taskplus-team__act--solo { margin-left: auto; }
