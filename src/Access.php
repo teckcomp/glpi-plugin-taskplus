@@ -75,6 +75,7 @@ class Access
 
         return [
             'today'    => $task,
+            'board'    => $task,
             'routines' => $task,
             'week'     => $task,
             'team'     => $manage,
@@ -137,6 +138,37 @@ class Access
         }
 
         return $managed;
+    }
+
+    /**
+     * Setores (grupos do GLPI) em que $usersId é MEMBRO: mapa
+     * [groups_id => nome do grupo]. É a leitura do QUADRO (Etapa 4d):
+     * o usuário vê as fases dos grupos de que participa — qualquer
+     * vínculo em glpi_groups_users conta, gestor ou não (administrar as
+     * fases é outra régua: managedGroups, acima).
+     */
+    public static function memberGroups(int $usersId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $allGroups = [];
+        foreach ($DB->request(['FROM' => 'glpi_groups']) as $row) {
+            $allGroups[(int) ($row['id'] ?? 0)] = (string) ($row['name'] ?? '');
+        }
+
+        $member = [];
+        foreach ($DB->request([
+            'FROM'  => 'glpi_groups_users',
+            'WHERE' => ['glpi_groups_users.users_id' => $usersId],
+        ]) as $row) {
+            $gid = (int) ($row['groups_id'] ?? 0);
+            if (isset($allGroups[$gid])) {
+                $member[$gid] = $allGroups[$gid];
+            }
+        }
+
+        return $member;
     }
 
     /**

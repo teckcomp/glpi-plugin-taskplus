@@ -18,6 +18,11 @@
                 <a href="{{ plugin_web_dir }}/front/today.php"><i class="ti ti-checkbox"></i>{{ __('Hoje', 'taskplus') }}</a>
             </li>
             {% endif %}
+            {% if nav.board %}
+            <li class="taskplus-sidebar__item{{ active == 'board' ? ' taskplus-sidebar__item--active' : '' }}">
+                <a href="{{ plugin_web_dir }}/front/board.php"><i class="ti ti-layout-kanban"></i>{{ __('Quadro', 'taskplus') }}</a>
+            </li>
+            {% endif %}
             {% if nav.routines %}
             <li class="taskplus-sidebar__item{{ active == 'routines' ? ' taskplus-sidebar__item--active' : '' }}">
                 <a href="{{ plugin_web_dir }}/front/routines.php"><i class="ti ti-repeat"></i>{{ __('Rotinas', 'taskplus') }}</a>

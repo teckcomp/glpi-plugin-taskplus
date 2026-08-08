@@ -353,3 +353,70 @@
 /* Setas de reordenação nas pontas ficam visivelmente inertes */
 .taskplus-iconbtn:disabled { opacity: 0.35; cursor: default; }
 .taskplus-iconbtn:disabled:hover { background: none; color: #8a97a5; }
+
+/* ===================== Etapa 4d: Quadro (kanban) ===================== */
+
+.taskplus-board-hint {
+    display: flex; align-items: flex-start; gap: 8px;
+    background: #f4f8fb; border: 1px solid #dde5ec; border-radius: 8px;
+    padding: 8px 12px; margin-bottom: 14px;
+    font-size: 0.82rem; color: #5a7684;
+}
+.taskplus-board-hint i { font-size: 1rem; color: #2a76a8; margin-top: 1px; }
+
+.taskplus-board {
+    display: flex; gap: 12px; align-items: flex-start;
+    overflow-x: auto; padding-bottom: 8px;
+}
+
+.taskplus-bcol {
+    flex: 1 1 0; min-width: 220px; max-width: 320px;
+    background: #f7f9fb; border: 1px solid #dde5ec; border-radius: 8px;
+    display: flex; flex-direction: column;
+}
+.taskplus-bcol__head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 8px 10px 6px;
+    border-top: 3px solid #5a6b7b; /* cor da fase via JS */
+    border-radius: 8px 8px 0 0;
+}
+.taskplus-bcol__title {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0;
+}
+.taskplus-bcol__name {
+    font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; color: #344054;
+}
+.taskplus-bcol--late .taskplus-bcol__name { color: #d9480f; }
+.taskplus-bcol__body {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 4px 8px 10px; min-height: 90px;
+}
+.taskplus-bcol__empty {
+    border: 1px dashed #c6d0d9; border-radius: 6px;
+    padding: 16px 8px; text-align: center;
+    font-size: 0.78rem; color: #b3bcc5;
+}
+
+/* Alvos do arrasto: válidos acendem, o sob o cursor destaca */
+.taskplus-bcol--allowed { border-color: #2a76a8; box-shadow: 0 0 0 1px #2a76a8 inset; }
+.taskplus-bcol--over { background: #e3f0fa; }
+
+/* Card do quadro (mais enxuto que o da tela Hoje) */
+.taskplus-bcard {
+    background: #fff; border: 1px solid #dde5ec; border-radius: 6px;
+    padding: 8px 10px; cursor: grab;
+}
+.taskplus-bcard:active { cursor: grabbing; }
+.taskplus-bcard--dragging { opacity: 0.45; }
+.taskplus-bcard__name { font-size: 0.85rem; font-weight: 600; color: #2c3947; }
+.taskplus-bcard .taskplus-card__badges { margin-top: 4px; gap: 4px; }
+.taskplus-bcard .taskplus-badge { font-size: 0.7rem; padding: 1px 7px; }
+.taskplus-bcard--done { opacity: 0.75; }
+.taskplus-bcard--done .taskplus-bcard__name { text-decoration: line-through; color: #8a97a5; }
+.taskplus-bcard--pending { border-left: 3px solid #e8a13c; }
+.taskplus-bcard--late { border-left: 3px solid #d9480f; }
+
+/* 4d-2: card nativo no quadro (leitura, clique abre no GLPI) */
+.taskplus-bcard--native { background: #fbfcfd; border-style: dashed; }
+.taskplus-bcard--native .taskplus-bcard__name { color: #45525e; }

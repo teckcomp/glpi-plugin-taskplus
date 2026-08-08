@@ -59,6 +59,51 @@ class Phase
     private const ORDER_TAIL = ['pending', 'done'];
 
     // =====================================================================
+    // Leitura para o Quadro (Etapa 4d)
+    // =====================================================================
+
+    /**
+     * Colunas do quadro do usuário, na ORDEM CANÔNICA: as 4 fases de
+     * sistema + as customizadas dos grupos em que ele é MEMBRO
+     * ($memberGroupIds, de Access::memberGroups). Fases legadas "sem
+     * setor" (groups_id = 0) ficam FORA — são transitórias da 4c e só o
+     * admin as vê, em Configurações.
+     *
+     * Usa o MESMO ordenador do payload/renumber (orderedRows): o quadro
+     * e a tela de Configurações nunca divergem na ordem.
+     */
+    public static function boardColumns(array $memberGroupIds): array
+    {
+        $memberGroupIds = array_map('intval', $memberGroupIds);
+        $groupNames     = self::groupNames();
+
+        $columns = [];
+        foreach (self::orderedRows($groupNames) as $row) {
+            $isSystem = ((int) ($row['is_system'] ?? 0)) === 1;
+            $gid      = (int) ($row['groups_id'] ?? 0);
+
+            if (!$isSystem && !in_array($gid, $memberGroupIds, true)) {
+                continue; // setor alheio (e legadas gid=0) fora do quadro
+            }
+
+            $columns[] = [
+                'id'         => (int) ($row['id'] ?? 0),
+                'name'       => (string) ($row['name'] ?? ''),
+                'color'      => self::normalizeColor((string) ($row['color'] ?? '')) ?? '#5a6b7b',
+                'is_system'  => $isSystem,
+                'is_default' => ((int) ($row['is_default'] ?? 0)) === 1,
+                'system_key' => (string) ($row['system_key'] ?? ''),
+                'groups_id'  => $gid,
+                'group_name' => (!$isSystem && $gid > 0)
+                    ? (string) ($groupNames[$gid] ?? ('Setor #' . $gid))
+                    : '',
+            ];
+        }
+
+        return $columns;
+    }
+
+    // =====================================================================
     // Payload da seção "Fases do quadro" (tela Configurações)
     // =====================================================================
 

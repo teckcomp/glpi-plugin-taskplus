@@ -367,7 +367,7 @@
         }
 
         var badges = el('div', 'taskplus-card__badges');
-        if (isOverdue && item.date_label) {
+        if ((isOverdue || item.was_overdue) && item.date_label) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--late', item.date_label));
         }
         // Na seção "Atrasadas" as origens se misturam (o agrupamento por
@@ -491,6 +491,11 @@
         $('tp-modal-title').textContent = item ? 'Editar tarefa' : 'Nova tarefa avulsa';
         $('tp-f-name').value = item ? item.name : '';
         $('tp-f-date').value = item ? item.date : (state.data.date || '');
+        // Ocorrência de rotina: a DATA não é editável (regra da 4b,
+        // confirmada na homologação do 4d) — o servidor a descarta,
+        // aqui o campo travado só deixa isso claro.
+        $('tp-f-date').disabled = !!(item && item.is_routine);
+        $('tp-f-date').removeAttribute('min');
         $('tp-f-time').value = (item && item.time_limit) ? item.time_limit : '';
         $('tp-f-category').value = item ? item.category : '';
         $('tp-f-description').value = item ? item.description : '';

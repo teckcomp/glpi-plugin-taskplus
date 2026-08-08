@@ -76,6 +76,28 @@ class Occurrence
             $overdueRows[] = self::format($row, $today, $nowTime);
         }
 
+        // Concluída HOJE, mas de dia anterior (4d-2): não casa com "do
+        // dia" (date = hoje) nem com "atrasadas" (is_done = 0) — sem esta
+        // terceira consulta ela sumia das duas telas ao ser concluída.
+        // Entra na lista do dia marcada com `was_overdue`: vai para a
+        // coluna Concluídas do quadro, para o "Mostrar concluídas" da
+        // tela Hoje (com a data original no badge) e para o KPI de
+        // Concluídas — sem inflar o KPI "Para hoje", que é do dia.
+        foreach ($DB->request(self::baseQuery() + [
+            'WHERE' => [
+                self::TABLE . '.users_id'   => $usersId,
+                self::TABLE . '.is_deleted' => 0,
+                self::TABLE . '.is_done'    => 1,
+                self::TABLE . '.is_skipped' => 0,
+                self::TABLE . '.date'       => ['<', $today],
+                self::TABLE . '.done_date'  => ['>=', $today . ' 00:00:00'],
+            ],
+        ]) as $row) {
+            $item                = self::format($row, $today, $nowTime);
+            $item['was_overdue'] = true;
+            $todayRows[]         = $item;
+        }
+
         // Ordenação em PHP, não no SQL: o controle fino ("NULL de
         // time_limit por último") é mais simples e testável aqui.
         usort($todayRows, [self::class, 'compareToday']);
@@ -127,6 +149,15 @@ class Occurrence
         foreach ($todayRows as $item) {
             if (!empty($item['is_pending'])) {
                 $pendingCount++;
+                continue;
+            }
+            if (!empty($item['was_overdue'])) {
+                // De dia anterior, concluída hoje: conta em Concluídas
+                // (foi trabalho de hoje), mas não em "Para hoje" — esse
+                // KPI é do que estava agendado para o dia.
+                if ($item['is_done']) {
+                    $done++;
+                }
                 continue;
             }
             $todayCount++;
@@ -233,6 +264,7 @@ class Occurrence
                 self::TABLE . '.is_done',
                 self::TABLE . '.done_date',
                 self::TABLE . '.is_edited',
+                self::TABLE . '.plugin_taskplus_phases_id',
                 Routine::TABLE . '.name AS routine_name',
                 Routine::TABLE . '.frequency AS routine_frequency',
             ],
@@ -283,6 +315,8 @@ class Occurrence
             // Origem própria do Task+ (as nativas vêm de Native.php)
             'is_native'   => false,
             'is_edited'   => ((int) ($row['is_edited'] ?? 0)) === 1,
+            // Fase de trabalho do Quadro (Etapa 4d). NULL/0 = padrão.
+            'phases_id'   => (int) ($row['plugin_taskplus_phases_id'] ?? 0),
             'group'       => $group,
             'routine_name' => (string) ($row['routine_name'] ?? ''),
             'name'        => (string) ($row['name'] ?? ''),
@@ -294,6 +328,10 @@ class Occurrence
             'is_done'     => $isDone,
             'done_time'   => !empty($row['done_date']) ? substr((string) $row['done_date'], 11, 5) : null,
             'is_late'     => $isLate,
+            // Setada como true só na consulta "concluída hoje, de dia
+            // anterior" (4d-2); presente em todo item pela mesma higiene
+            // do resto do payload (chave usada nunca pode faltar).
+            'was_overdue' => false,
         ];
     }
 
@@ -412,6 +450,9 @@ class Occurrence
             // intacta e amanhã o cron gera uma nova, limpa. Mudar a DATA
             // fica de fora — ela é metade da UNIQUE `routine_day`, e mover
             // o dia colidiria com a ocorrência que já existe lá.
+            // (Revisado e CONFIRMADO na homologação do 4d, 08/08: tarefa
+            // atrasada não ganha data nova — ou se conclui, ou vira
+            // pendência, que já carrega a data/hora de retorno.)
             unset($fields['date']);
             $fields['is_edited'] = 1;
         }
@@ -646,6 +687,16 @@ class Occurrence
             return null;
         }
         return $m[1] . ':' . $m[2] . ':00';
+    }
+
+    /**
+     * A ocorrência $id, se pertencer a $usersId e não estiver excluída —
+     * versão PÚBLICA de ownRow, para o Board (Etapa 4d) validar dono e
+     * estado sem duplicar a consulta.
+     */
+    public static function findOwn(int $id, int $usersId): ?array
+    {
+        return self::ownRow($id, $usersId);
     }
 
     /**
