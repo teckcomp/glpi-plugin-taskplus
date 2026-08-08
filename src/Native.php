@@ -4,16 +4,22 @@ namespace GlpiPlugin\Taskplus;
 
 use ProjectTask;
 use Ticket;
+use TicketTask;
 
 /**
- * Task+ — origens NATIVAS do GLPI (Etapa 3).
+ * Task+ — origens NATIVAS do GLPI (Etapa 3 + conclusão na 4d-3).
  *
- * Somente LEITURA. Nada aqui escreve em tabela nativa — concluir uma
- * tarefa de chamado ou de projeto continua sendo feito na tela do item
- * nativo (decisão de produto nº 2; gravação fica para etapa futura).
+ * Leitura como regra; a ÚNICA escrita é a conclusão da 4d-3 (decisão de
+ * produto nº 11, fechada em 08/08/2026): arrastar a nativa para
+ * Concluídas no quadro grava no GLPI **via objeto nativo**
+ * (TicketTask::update / ProjectTask::update — NUNCA SQL direto em tabela
+ * nativa, para o core disparar histórico, notificações e recálculos).
+ * SEM texto de "solução": só o estado/percentual muda, e concluir a
+ * tarefa NÃO resolve o chamado.
  *
  * 3a: tarefas de chamado (`glpi_tickettasks`).
  * 3b: tarefas de projeto (`glpi_projecttasks`) + filtro por origem na tela.
+ * 4d-3: completeTicketTask() / completeProjectTask().
  *
  * Regras decididas em 03/08/2026 com o usuário:
  *  - aparecem TODAS as tarefas com estado "A fazer", sem filtro por data
@@ -36,11 +42,12 @@ class Native
     public const PROJECT_TABLE           = 'glpi_projects';
 
     /**
-     * Estado "A fazer" das tarefas de ITIL (Planning::TODO).
-     * Fixado aqui de propósito: evita depender da classe Planning para
-     * uma constante estável, e deixa o harness rodar sem o core.
+     * Estados das tarefas de ITIL (Planning::TODO / Planning::DONE).
+     * Fixados aqui de propósito: evita depender da classe Planning para
+     * constantes estáveis, e deixa o harness rodar sem o core.
      */
     public const STATE_TODO = 1;
+    public const STATE_DONE = 2;
 
     /**
      * Tarefas de chamado do usuário, já no formato de item da tela Hoje.
@@ -286,6 +293,149 @@ class Native
             return (string) ProjectTask::getFormURLWithID($taskId);
         }
         return '/front/projecttask.form.php?id=' . $taskId;
+    }
+
+    // =====================================================================
+    // Conclusão pelo quadro (Etapa 4d-3) — decisão de produto nº 11
+    // =====================================================================
+
+    /**
+     * Marca a tarefa de chamado como "Feita" (state = DONE), gravando
+     * pelo objeto nativo. NÃO resolve o chamado e NÃO acrescenta texto.
+     *
+     * A posse e o estado são reverificados AQUI, na hora da ação — o
+     * payload que desenhou o card pode estar velho (outro técnico pode
+     * ter assumido ou concluído a tarefa nesse meio-tempo).
+     */
+    public static function completeTicketTask(int $taskId, int $usersId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        if ($taskId <= 0 || $usersId <= 0) {
+            return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
+        }
+
+        $row = null;
+        foreach ($DB->request([
+            'SELECT' => [
+                self::TICKET_TASK_TABLE . '.id',
+                self::TICKET_TASK_TABLE . '.state',
+                self::TICKET_TASK_TABLE . '.users_id_tech',
+            ],
+            'FROM'  => self::TICKET_TASK_TABLE,
+            'WHERE' => [self::TICKET_TASK_TABLE . '.id' => $taskId],
+        ]) as $r) {
+            $row = $r;
+        }
+
+        if ($row === null || (int) ($row['users_id_tech'] ?? 0) !== $usersId) {
+            // Mesma régua da leitura: "minha" tarefa = users_id_tech = eu.
+            return ['success' => false, 'message' => __('Tarefa de chamado não encontrada ou não é sua', 'taskplus')];
+        }
+        if ((int) ($row['state'] ?? 0) !== self::STATE_TODO) {
+            // Idempotente: repetir o gesto não é erro (mesmo espírito do
+            // "já estava concluída" da ocorrência própria).
+            return ['success' => true, 'message' => __('Tarefa do chamado já estava feita', 'taskplus')];
+        }
+
+        return self::nativeUpdate(
+            TicketTask::class,
+            ['id' => $taskId, 'state' => self::STATE_DONE],
+            __('Tarefa do chamado marcada como feita (o chamado continua aberto)', 'taskplus')
+        );
+    }
+
+    /**
+     * Conclui a tarefa de projeto: percent_done = 100, gravando pelo
+     * objeto nativo (o core recalcula o percentual do projeto sozinho).
+     * Vale para a equipe TODA da tarefa — ela some da tela de todos.
+     */
+    public static function completeProjectTask(int $taskId, int $usersId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        if ($taskId <= 0 || $usersId <= 0) {
+            return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
+        }
+
+        // 1) Posse = estou na EQUIPE da tarefa (mesma régua da leitura).
+        $inTeam = false;
+        foreach ($DB->request([
+            'SELECT' => [self::PROJECT_TASK_TEAM_TABLE . '.id'],
+            'FROM'   => self::PROJECT_TASK_TEAM_TABLE,
+            'WHERE'  => [
+                self::PROJECT_TASK_TEAM_TABLE . '.projecttasks_id' => $taskId,
+                self::PROJECT_TASK_TEAM_TABLE . '.itemtype'        => 'User',
+                self::PROJECT_TASK_TEAM_TABLE . '.items_id'        => $usersId,
+            ],
+        ]) as $ignored) {
+            $inTeam = true;
+        }
+        if (!$inTeam) {
+            return ['success' => false, 'message' => __('Você não está na equipe desta tarefa de projeto', 'taskplus')];
+        }
+
+        // 2) Estado atual da tarefa.
+        $select = [
+            self::PROJECT_TASK_TABLE . '.id',
+            self::PROJECT_TASK_TABLE . '.percent_done',
+        ];
+        $hasAuto = self::hasField(self::PROJECT_TASK_TABLE, 'auto_percent_done');
+        if ($hasAuto) {
+            $select[] = self::PROJECT_TASK_TABLE . '.auto_percent_done';
+        }
+
+        $row = null;
+        foreach ($DB->request([
+            'SELECT' => $select,
+            'FROM'   => self::PROJECT_TASK_TABLE,
+            'WHERE'  => [self::PROJECT_TASK_TABLE . '.id' => $taskId],
+        ]) as $r) {
+            $row = $r;
+        }
+
+        if ($row === null) {
+            return ['success' => false, 'message' => __('Tarefa de projeto não encontrada', 'taskplus')];
+        }
+        if ((int) ($row['percent_done'] ?? 0) >= 100) {
+            return ['success' => true, 'message' => __('Tarefa de projeto já estava concluída', 'taskplus')];
+        }
+        if ($hasAuto && (int) ($row['auto_percent_done'] ?? 0) === 1) {
+            // Percentual automático = calculado pelas subtarefas; o core
+            // ignoraria o 100 manual e o card "voltaria" sem explicação.
+            return ['success' => false, 'message' => __('Esta tarefa tem percentual automático: conclua as subtarefas dela no GLPI', 'taskplus')];
+        }
+
+        return self::nativeUpdate(
+            ProjectTask::class,
+            ['id' => $taskId, 'percent_done' => 100],
+            __('Tarefa de projeto concluída (100% — vale para toda a equipe)', 'taskplus')
+        );
+    }
+
+    /**
+     * Gravação via objeto nativo do GLPI — o ÚNICO caminho de escrita em
+     * item nativo permitido no plugin (nunca SQL direto): é o update()
+     * do core que dispara histórico, notificações e recálculos.
+     */
+    private static function nativeUpdate(string $class, array $input, string $okMessage): array
+    {
+        if (!class_exists($class)) {
+            // Sem o core (harness) não há o que gravar.
+            return ['success' => false, 'message' => __('Núcleo do GLPI indisponível para gravar', 'taskplus')];
+        }
+
+        $item = new $class();
+        if (!$item->getFromDB((int) ($input['id'] ?? 0))) {
+            return ['success' => false, 'message' => __('Item não encontrado no GLPI', 'taskplus')];
+        }
+        if (!$item->update($input)) {
+            return ['success' => false, 'message' => __('O GLPI recusou a gravação — veja o item na tela dele', 'taskplus')];
+        }
+
+        return ['success' => true, 'message' => $okMessage];
     }
 
     /**

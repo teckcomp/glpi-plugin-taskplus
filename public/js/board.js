@@ -174,11 +174,11 @@
         var todayId = today ? Number(today.id) : -1;
         var current = Number(card.column);
 
-        // Nativa (4d-2): leitura. Vai para Pendentes; pendente volta
-        // para "Para hoje" (encerra a pendência). Concluir gravando no
-        // GLPI é o 4d-3.
+        // Nativa: vai para Pendentes ou Concluídas (4d-3 — concluir
+        // grava no GLPI via objeto nativo, sem texto); pendente volta
+        // para "Para hoje" (encerra a pendência) ou conclui direto.
         if (card.is_native) {
-            return (current === pendingId ? [todayId] : [pendingId])
+            return (current === pendingId ? [todayId, doneId] : [pendingId, doneId])
                 .filter(function (id) { return id > 0; });
         }
 
@@ -223,14 +223,16 @@
             openPendingModal(card);
             return;
         }
-        if (card.is_native) {
-            // Único outro alvo válido da nativa é "Para hoje" quando
-            // pendente: o solte encerra a pendência.
-            post({ action: 'unpending', id: String(card.id), itemtype: typeOf(card) });
+        if (done && Number(colId) === Number(done.id)) {
+            // 4d-3: o itemtype VAI no POST — para nativa, o servidor
+            // grava no GLPI via objeto nativo (e o card some do quadro
+            // no re-render, porque deixa de casar com as consultas).
+            post({ action: 'done', id: String(card.id), itemtype: typeOf(card) });
             return;
         }
-        if (done && Number(colId) === Number(done.id)) {
-            post({ action: 'done', id: String(card.id), itemtype: 'Occurrence' });
+        if (card.is_native) {
+            // Restou "Para hoje" com nativa pendente: encerra a pendência.
+            post({ action: 'unpending', id: String(card.id), itemtype: typeOf(card) });
             return;
         }
         post({ action: 'set_phase', id: String(card.id), itemtype: 'Occurrence', phases_id: String(colId) });
@@ -326,7 +328,7 @@
             + (item.is_late ? ' taskplus-bcard--late' : ''));
         c.draggable = true;
         c.title = item.is_native
-            ? 'Clique para abrir no GLPI; arraste para Pendentes'
+            ? 'Clique para abrir no GLPI; arraste para Pendentes ou Concluídas'
             : 'Clique para editar; arraste entre as colunas';
 
         c.appendChild(el('div', 'taskplus-bcard__name', item.name || '(sem título)'));

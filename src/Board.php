@@ -35,7 +35,10 @@ namespace GlpiPlugin\Taskplus;
  *        pendência se vinha de Pendentes; RECUSA card atrasado (atraso
  *        se resolve concluindo, pendenciando ou dando nova data);
  *      · soltar em Concluídas → done: conclui (mesma gravação de autor e
- *        hora do 1 clique), encerrando pendência ativa antes;
+ *        hora do 1 clique), encerrando pendência ativa antes. Nativa
+ *        (4d-3, decisão nº 11): grava no GLPI via objeto nativo — tarefa
+ *        de chamado vira "Feita" (sem resolver o chamado), tarefa de
+ *        projeto vira 100% (vale para a equipe toda), sem texto;
  *      · soltar em Pendentes → pending: o JS abre o modal de motivo/
  *        data/hora e a gravação é a MESMA da Etapa 4b (Pending::set);
  *        concluída não fica pendente;
@@ -71,9 +74,10 @@ class Board
 
         $cards = [];
         foreach (array_merge($data['today'] ?? [], $data['overdue'] ?? []) as $item) {
-            // 4d-2: nativas ENTRAM no quadro, como leitura — ficam em
-            // "Para hoje" (ou Pendentes) e só se movem para Pendentes.
-            // Concluir nativa gravando no GLPI é o 4d-3.
+            // 4d-2: nativas ENTRAM no quadro — ficam em "Para hoje" (ou
+            // Pendentes). 4d-3: além de Pendentes, vão para Concluídas
+            // (gravando no GLPI); concluída nativa some do payload na
+            // rodada seguinte, então não há coluna Concluídas para ela.
             $item['column'] = self::resolveColumn($item, $columns);
 
             // Chave única do card: id de chamado/projeto PODE colidir com
@@ -296,9 +300,29 @@ class Board
         /** @var \DBmysql $DB */
         global $DB;
 
-        if (((string) ($input['itemtype'] ?? 'Occurrence')) !== 'Occurrence') {
-            // Concluir nativa gravando no GLPI é o 4d-3.
-            return ['success' => false, 'message' => __('Concluir tarefa do GLPI ainda é pela tela do item', 'taskplus')];
+        $itemtype = (string) ($input['itemtype'] ?? 'Occurrence');
+
+        // 4d-3 (decisão nº 11): nativa conclui GRAVANDO NO GLPI, sempre
+        // via objeto nativo e sem texto de solução. Chamado: tarefa vira
+        // "Feita" (o chamado NÃO se resolve). Projeto: 100% para todos.
+        if ($itemtype === Pending::TYPE_TICKET_TASK || $itemtype === Pending::TYPE_PROJECT_TASK) {
+            $itemsId = (int) ($input['id'] ?? 0);
+            $result  = ($itemtype === Pending::TYPE_TICKET_TASK)
+                ? Native::completeTicketTask($itemsId, $usersId)
+                : Native::completeProjectTask($itemsId, $usersId);
+
+            if (!empty($result['success'])) {
+                // Concluir encerra a espera — mesma regra da própria.
+                // Sem pendência ativa, o clear só devolve "não achei" e
+                // é ignorado de propósito.
+                Pending::clear($itemtype, $itemsId, $usersId);
+            }
+
+            return $result;
+        }
+
+        if ($itemtype !== 'Occurrence') {
+            return ['success' => false, 'message' => __('Ação desconhecida para este item', 'taskplus')];
         }
 
         $row = Occurrence::findOwn((int) ($input['id'] ?? 0), $usersId);
