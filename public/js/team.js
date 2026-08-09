@@ -36,7 +36,7 @@
         // 5b-2 p2: busca local + período (viaja em todo POST)
         search: '',
         period: { from: '', to: '' },
-        data: { date: '', groups: [], techs: [], period: { from: '', to: '', active: false } }
+        data: { date: '', groups: [], sectors: [], techs: [], period: { from: '', to: '', active: false } }
     };
 
     function $(id) {
@@ -66,6 +66,8 @@
         return {
             date: (typeof d.date === 'string') ? d.date : '',
             groups: Array.isArray(d.groups) ? d.groups : [],
+            // 5c-3: setores administrados (id+nome) — seletor do modal
+            sectors: Array.isArray(d.sectors) ? d.sectors.map(safeSector) : [],
             techs: Array.isArray(d.techs) ? d.techs.map(safeTech) : [],
             // 5b-2 p2: eco do período (o servidor normaliza as datas)
             period: {
@@ -73,6 +75,14 @@
                 to: (typeof p.to === 'string') ? p.to : '',
                 active: !!p.active
             }
+        };
+    }
+
+    function safeSector(raw) {
+        var s = (raw && typeof raw === 'object') ? raw : {};
+        return {
+            id: (typeof s.id === 'number') ? s.id : 0,
+            name: (typeof s.name === 'string') ? s.name : ''
         };
     }
 
@@ -746,6 +756,14 @@
         $('tp-t-c-time').value = '';
         $('tp-t-c-category').value = '';
         $('tp-t-c-description').value = '';
+        // 5c-3: destino sempre volta ao TÉCNICO expandido; o seletor de
+        // setor é repovoado a cada abertura (o payload pode ter mudado)
+        setCreateDest('tech');
+        fillSectorSelect(tech);
+        var includeMe = $('tp-t-c-include-me');
+        if (includeMe) {
+            includeMe.checked = false;
+        }
         // 5c-2: estado inicial da recorrência — sempre volta a Avulsa
         setCreateKind('avulsa');
         $('tp-t-c-frequency').value = 'daily';
@@ -757,11 +775,66 @@
         $('tp-t-c-monthweekday').value = '1';
         $('tp-t-c-begin').value = state.data.date || '';
         $('tp-t-c-end').value = '';
+        syncCreateDest();
         syncCreateKind();
         syncCreateFreq();
         syncMonthlyMode();
         $('tp-t-create-modal').hidden = false;
         $('tp-t-c-name').focus();
+    }
+
+    // ---- helpers do destino (5c-3) ----
+
+    function createDest() {
+        var checked = document.querySelector('input[name="tp-t-c-dest"]:checked');
+        return checked ? checked.value : 'tech';
+    }
+
+    function setCreateDest(dest) {
+        var radios = document.querySelectorAll('input[name="tp-t-c-dest"]');
+        Array.prototype.forEach.call(radios, function (r) {
+            r.checked = (r.value === dest);
+        });
+    }
+
+    /**
+     * Repovoa o seletor de setor com os setores ADMINISTRADOS (payload
+     * `sectors`). Pré-seleção: o setor de mesmo nome do primeiro chip
+     * do técnico expandido — o caso comum "criar para o setor deste
+     * técnico" sai sem toque extra; sem casamento, fica o primeiro.
+     */
+    function fillSectorSelect(tech) {
+        var select = $('tp-t-c-group');
+        if (!select) {
+            return;
+        }
+        while (select.firstChild) {
+            select.removeChild(select.firstChild);
+        }
+        var techGroup = (tech && Array.isArray(tech.groups) && tech.groups.length > 0)
+            ? tech.groups[0] : '';
+        var preselect = '';
+        state.data.sectors.forEach(function (s) {
+            var opt = document.createElement('option');
+            opt.value = String(s.id);
+            opt.textContent = s.name;
+            select.appendChild(opt);
+            if (preselect === '' && techGroup !== '' && s.name === techGroup) {
+                preselect = String(s.id);
+            }
+        });
+        if (preselect !== '') {
+            select.value = preselect;
+        }
+    }
+
+    /** Destino "setor" mostra o bloco de setor (seletor + incluir a mim). */
+    function syncCreateDest() {
+        var group = createDest() === 'group';
+        var block = $('tp-t-c-group-block');
+        if (block) {
+            block.hidden = !group;
+        }
     }
 
     // ---- helpers do tipo/recorrência (5c-2) ----
@@ -837,16 +910,34 @@
             return;
         }
 
+        // 5c-3: destino do POST — técnico expandido (fluxo 5c-1/5c-2,
+        // intacto) ou todos de um setor administrado. No setor viajam
+        // group_id + include_me; a ação ganha o sufixo _group.
+        var toGroup = createDest() === 'group';
+        var dest;
+        if (toGroup) {
+            var select = $('tp-t-c-group');
+            var groupId = (select && select.value) ? select.value : '';
+            if (groupId === '') {
+                toast('Selecione o setor', true);
+                return;
+            }
+            dest = {
+                group_id: groupId,
+                include_me: ($('tp-t-c-include-me') && $('tp-t-c-include-me').checked) ? '1' : '0'
+            };
+        } else {
+            dest = { tech_id: String(ctx.tech.id) };
+        }
+
         if (createKind() !== 'rotina') {
-            post({
-                action: 'create',
-                tech_id: String(ctx.tech.id),
-                name: name,
-                date: $('tp-t-c-date').value,
-                time_limit: $('tp-t-c-time').value,
-                category: $('tp-t-c-category').value.trim(),
-                description: $('tp-t-c-description').value.trim()
-            }, closeCreateModal);
+            dest.action = toGroup ? 'create_group' : 'create';
+            dest.name = name;
+            dest.date = $('tp-t-c-date').value;
+            dest.time_limit = $('tp-t-c-time').value;
+            dest.category = $('tp-t-c-category').value.trim();
+            dest.description = $('tp-t-c-description').value.trim();
+            post(dest, closeCreateModal);
             return;
         }
 
@@ -871,25 +962,23 @@
             return;
         }
 
-        post({
-            action: 'create_routine',
-            tech_id: String(ctx.tech.id),
-            name: name,
-            instructions: $('tp-t-c-description').value.trim(),
-            frequency: frequency,
-            only_workdays: $('tp-t-c-only-workdays').checked ? '1' : '0',
-            weekdays: weekdays,
-            // XOR do mensal: só o modo escolhido viaja preenchido
-            monthday: (frequency === 'monthly' && mode === 'day')
-                ? $('tp-t-c-monthday').value.trim() : '',
-            monthweek: (frequency === 'monthly' && mode === 'pos')
-                ? $('tp-t-c-monthweek').value : '',
-            monthweekday: (frequency === 'monthly' && mode === 'pos')
-                ? $('tp-t-c-monthweekday').value : '',
-            time_limit: $('tp-t-c-time').value,
-            date_begin: $('tp-t-c-begin').value,
-            date_end: $('tp-t-c-end').value
-        }, closeCreateModal);
+        dest.action = toGroup ? 'create_group_routine' : 'create_routine';
+        dest.name = name;
+        dest.instructions = $('tp-t-c-description').value.trim();
+        dest.frequency = frequency;
+        dest.only_workdays = $('tp-t-c-only-workdays').checked ? '1' : '0';
+        dest.weekdays = weekdays;
+        // XOR do mensal: só o modo escolhido viaja preenchido
+        dest.monthday = (frequency === 'monthly' && mode === 'day')
+            ? $('tp-t-c-monthday').value.trim() : '';
+        dest.monthweek = (frequency === 'monthly' && mode === 'pos')
+            ? $('tp-t-c-monthweek').value : '';
+        dest.monthweekday = (frequency === 'monthly' && mode === 'pos')
+            ? $('tp-t-c-monthweekday').value : '';
+        dest.time_limit = $('tp-t-c-time').value;
+        dest.date_begin = $('tp-t-c-begin').value;
+        dest.date_end = $('tp-t-c-end').value;
+        post(dest, closeCreateModal);
     }
 
     /**
@@ -917,6 +1006,10 @@
         Array.prototype.forEach.call(
             document.querySelectorAll('input[name="tp-t-c-kind"]'),
             function (r) { r.addEventListener('change', syncCreateKind); });
+        // 5c-3: destino técnico × setor
+        Array.prototype.forEach.call(
+            document.querySelectorAll('input[name="tp-t-c-dest"]'),
+            function (r) { r.addEventListener('change', syncCreateDest); });
         var freq = $('tp-t-c-frequency');
         if (freq) {
             freq.addEventListener('change', syncCreateFreq);

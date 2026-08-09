@@ -88,12 +88,34 @@
     </div>
 </div>
 
-{# ================= MODAL de criação (5c-1 avulsa · 5c-2 rotina: gestor
-   cria para o técnico — mesmos campos e validação das telas dele) ==== #}
+{# ================= MODAL de criação (5c-1 avulsa · 5c-2 rotina · 5c-3
+   destino "todos do setor": gestor cria para o técnico OU para todos os
+   membros de um setor administrado — uma cópia por membro) =========== #}
 <div class="taskplus-modal" id="tp-t-create-modal" hidden>
     <div class="taskplus-modal__box taskplus-modal__box--wide">
-        <h3>{{ __('Nova tarefa para o técnico', 'taskplus') }}</h3>
+        <h3>{{ __('Nova tarefa (Equipe)', 'taskplus') }}</h3>
         <p class="taskplus-modal__subject" id="tp-t-c-tech"></p>
+
+        {# 5c-3: destino — o técnico expandido (padrão) ou todos de um
+           setor. No setor entram o seletor (setores administrados, via
+           payload) e o checkbox "incluir a mim". #}
+        <div class="taskplus-field">
+            <span>{{ __('Destino', 'taskplus') }}</span>
+            <div class="taskplus-monthly-mode" id="tp-t-c-dest-wrap">
+                <label><input type="radio" name="tp-t-c-dest" value="tech" checked>{{ __('O técnico acima', 'taskplus') }}</label>
+                <label><input type="radio" name="tp-t-c-dest" value="group">{{ __('Todos de um setor', 'taskplus') }}</label>
+            </div>
+        </div>
+        <div id="tp-t-c-group-block" hidden>
+            <label class="taskplus-field">
+                <span>{{ __('Setor', 'taskplus') }}</span>
+                <select id="tp-t-c-group"></select>
+            </label>
+            <label class="taskplus-checkline">
+                <input type="checkbox" id="tp-t-c-include-me">
+                {{ __('Incluir a mim como destinatário', 'taskplus') }}
+            </label>
+        </div>
 
         {# 5c-2: Avulsa (um dia) ou Rotina (recorrente) #}
         <div class="taskplus-field">

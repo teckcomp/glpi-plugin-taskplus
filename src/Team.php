@@ -91,9 +91,13 @@ class Team
         sort($groupNames, SORT_FLAG_CASE | SORT_NATURAL);
 
         return [
-            'date'   => date('Y-m-d'),
-            'groups' => $groupNames,
-            'techs'  => $techs,
+            'date'    => date('Y-m-d'),
+            'groups'  => $groupNames,
+            // 5c-3: setores administrados COM id — alimenta o seletor de
+            // setor do modal de criação (destino "todos do setor").
+            // Chave nova → safeData do team.js.
+            'sectors' => self::sectorOptions($groups),
+            'techs'   => $techs,
             // Eco do recorte normalizado (5b-2 p2). Chave nova → safeData.
             'period' => [
                 'from'   => $from ?? '',
@@ -134,6 +138,10 @@ class Team
                 return self::createTech($input, $usersId);
             case 'create_routine':
                 return self::createRoutineTech($input, $usersId);
+            case 'create_group':
+                return self::createGroup($input, $usersId);
+            case 'create_group_routine':
+                return self::createGroupRoutine($input, $usersId);
             case 'list':
                 return ['success' => true, 'message' => ''];
             default:
@@ -305,6 +313,175 @@ class Team
             $result['message'] = sprintf(__('Rotina criada para %s', 'taskplus'), $tech['label']);
         }
         return $result;
+    }
+
+    // =====================================================================
+    // Criação em lote para o setor (5c-3)
+    // =====================================================================
+
+    /**
+     * Mapa [groups_id => nome] → lista ordenada [['id','name'], ...]
+     * para o seletor de setor do modal. Pura (testável): a ordenação é
+     * a mesma dos chips (natural, sem caixa), e a chave numérica vira
+     * campo explícito — JSON de mapa com chave inteira viraria objeto
+     * com chaves-string no JS e a ordem se perderia.
+     */
+    public static function sectorOptions(array $groups): array
+    {
+        $options = [];
+        foreach ($groups as $gid => $name) {
+            $options[] = ['id' => (int) $gid, 'name' => (string) $name];
+        }
+        usort($options, static function (array $a, array $b): int {
+            return [mb_strtolower($a['name']), $a['id']]
+                <=> [mb_strtolower($b['name']), $b['id']];
+        });
+        return $options;
+    }
+
+    /**
+     * Validação de ESCOPO do destino "todos do setor" — o espelho do
+     * managedTech, reexecutada a cada POST (T18): o setor enviado tem
+     * que estar entre os que o gestor administra AGORA (a MESMA régua
+     * managedGroups da tela e do seletor).
+     *
+     * Devolve ['group_id' => int, 'name' => string] ou a MENSAGEM de
+     * erro (string).
+     */
+    private static function managedSector(array $input, int $usersId): array|string
+    {
+        $isAdmin = Access::isPhaseAdmin();
+        $groups  = Access::managedGroups($usersId, $isAdmin);
+        if ($groups === []) {
+            return __('Você não administra nenhum setor', 'taskplus');
+        }
+
+        $groupId = (int) ($input['group_id'] ?? 0);
+        if ($groupId <= 0 || !isset($groups[$groupId])) {
+            return __('Setor fora dos que você administra', 'taskplus');
+        }
+
+        return ['group_id' => $groupId, 'name' => $groups[$groupId]];
+    }
+
+    /**
+     * Destinatários da criação em lote: os MEMBROS do setor (a mesma
+     * régua members() da tela — ativo, não excluído), com o gestor
+     * regido pelo checkbox "incluir a mim" (decisão da abertura 5c-3):
+     *
+     *  - marcado: o gestor SEMPRE entra (membro ou não — admin que
+     *    administra sem ser membro também pode se incluir);
+     *  - desmarcado: o gestor sai da lista mesmo sendo membro.
+     *
+     * Devolve a lista de users_id (pode ficar vazia — quem chama trata).
+     */
+    private static function groupRecipients(int $groupId, string $groupName, int $usersId, bool $includeMe): array
+    {
+        $ids = array_keys(self::members([$groupId], [$groupId => $groupName]));
+
+        if ($includeMe) {
+            if (!in_array($usersId, $ids, true)) {
+                $ids[] = $usersId;
+            }
+        } else {
+            $ids = array_values(array_filter($ids, static function (int $id) use ($usersId): bool {
+                return $id !== $usersId;
+            }));
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Criar AVULSA para TODOS do setor (5c-3): uma CÓPIA por membro —
+     * o modelo de um dono por tarefa fica intacto, cada técnico vê e
+     * conclui a sua. Os campos são validados pelo cleanFields dentro do
+     * primeiro addFor; como o input é IDÊNTICO para todos, erro de
+     * campo aborta na primeira chamada com ZERO inserts (o addFor
+     * valida antes de gravar).
+     */
+    private static function createGroup(array $input, int $usersId): array
+    {
+        $sector = self::managedSector($input, $usersId);
+        if (is_string($sector)) {
+            return ['success' => false, 'message' => $sector];
+        }
+
+        $includeMe  = ((int) ($input['include_me'] ?? 0)) === 1;
+        $recipients = self::groupRecipients($sector['group_id'], $sector['name'], $usersId, $includeMe);
+        if ($recipients === []) {
+            return ['success' => false, 'message' => __('Nenhum destinatário no setor', 'taskplus')];
+        }
+
+        $created = 0;
+        foreach ($recipients as $ownerId) {
+            $result = Occurrence::addFor($input, $ownerId, $usersId);
+            if (!$result['success']) {
+                // Só acontece na PRIMEIRA volta (validação de campos,
+                // idêntica para todos): devolve o erro com nada gravado.
+                if ($created === 0) {
+                    return $result;
+                }
+                continue;
+            }
+            $created++;
+        }
+
+        return [
+            'success' => true,
+            'message' => sprintf(
+                __('Tarefa criada para %d técnico(s) do setor %s', 'taskplus'),
+                $created,
+                $sector['name']
+            ),
+        ];
+    }
+
+    /**
+     * Criar ROTINA para TODOS do setor (5c-3): N rotinas INDEPENDENTES
+     * (decisão da abertura) — cada técnico é dono da sua e a pausa,
+     * edita ou exclui sem afetar os colegas; o gestor fica na autoria
+     * de todas. A geração da ocorrência de hoje (regra do 5c-2) roda
+     * UMA vez ao fim do loop, não uma por membro — por isso o addFor
+     * recebe $generate = false aqui.
+     */
+    private static function createGroupRoutine(array $input, int $usersId): array
+    {
+        $sector = self::managedSector($input, $usersId);
+        if (is_string($sector)) {
+            return ['success' => false, 'message' => $sector];
+        }
+
+        $includeMe  = ((int) ($input['include_me'] ?? 0)) === 1;
+        $recipients = self::groupRecipients($sector['group_id'], $sector['name'], $usersId, $includeMe);
+        if ($recipients === []) {
+            return ['success' => false, 'message' => __('Nenhum destinatário no setor', 'taskplus')];
+        }
+
+        $created = 0;
+        foreach ($recipients as $ownerId) {
+            $result = Routine::addFor($input, $ownerId, $usersId, false);
+            if (!$result['success']) {
+                if ($created === 0) {
+                    return $result;
+                }
+                continue;
+            }
+            $created++;
+        }
+
+        // Rotina devida hoje aparece NA HORA para toda a equipe — uma
+        // varredura só, idempotente (mesma regra do 5c-2, decisão nº 15).
+        Routine::generateForDate();
+
+        return [
+            'success' => true,
+            'message' => sprintf(
+                __('Rotina criada para %d técnico(s) do setor %s', 'taskplus'),
+                $created,
+                $sector['name']
+            ),
+        ];
     }
 
     /**

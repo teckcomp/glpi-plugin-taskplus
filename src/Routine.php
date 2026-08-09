@@ -267,8 +267,14 @@ class Routine
      * ocorrência gerada, então o badge da tela Hoje/Equipe sai de
      * graça, sem mudança no cron. Escopo já validado no Team::handle;
      * os CAMPOS passam pelo cleanFields de sempre.
+     *
+     * $generate (5c-3): a criação em LOTE para o setor chama addFor uma
+     * vez por membro — gerar as ocorrências dentro de cada chamada
+     * seria N varreduras completas da tabela de rotinas. O loop passa
+     * false e dispara generateForDate() UMA vez ao fim. O default true
+     * preserva o comportamento do 5c-2 em todos os caminhos existentes.
      */
-    public static function addFor(array $input, int $ownerId, int $creatorId): array
+    public static function addFor(array $input, int $ownerId, int $creatorId, bool $generate = true): array
     {
         /** @var \DBmysql $DB */
         global $DB;
@@ -294,7 +300,9 @@ class Routine
         // (aresta achada na homologação do 5c-2). generateForDate é
         // idempotente (occurrenceExists), então a passada extra é segura
         // e cobre também quem cria rotina para si na tela Rotinas.
-        self::generateForDate();
+        if ($generate) {
+            self::generateForDate();
+        }
 
         return ['success' => true, 'message' => __('Rotina criada', 'taskplus')];
     }
