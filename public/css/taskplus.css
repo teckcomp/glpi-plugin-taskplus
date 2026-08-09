@@ -720,3 +720,66 @@
 /* --- 6c-2: acao "Restaurar" no card excluida do Historico ------------- */
 .taskplus-hcard__actions { margin-top: 6px; }
 .taskplus-hcard__restore { font-size: 0.75rem; padding: 2px 12px; }
+
+/* --- 7a: sino de alertas na sidebar (padrão do ProjectPlus) ----------- */
+/* 7a-3: ancorado no canto superior direito do cabeçalho — na linha da
+   brand ele sobrepunha o subtítulo; o padding-right reserva o espaço. */
+.taskplus-pagetitle { position: relative; padding-right: 44px; }
+.taskplus-bell-wrap { position: absolute; top: 0; right: 0; }
+.taskplus-bell {
+    position: relative; border: 1px solid #d5dce2; background: #fff;
+    border-radius: 8px; padding: 4px 9px; cursor: pointer; color: #46535f;
+    line-height: 1;
+}
+.taskplus-bell:hover { background: #f4f6f8; }
+.taskplus-bell .ti { font-size: 1rem; }
+.taskplus-bell__badge {
+    position: absolute; top: -7px; right: -7px; min-width: 17px;
+    padding: 1px 4px; border-radius: 999px; background: #d9480f;
+    /* 7a-3: !important — o tema do GLPI vencia a cor e o número saía escuro */
+    color: #fff !important; font-size: 0.66rem; font-weight: 700;
+    text-align: center; line-height: 1.4;
+}
+.taskplus-bell__panel {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
+    width: 320px; max-height: 380px; overflow-y: auto; background: #fff;
+    border: 1px solid #d5dce2; border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(30, 42, 54, 0.14);
+}
+.taskplus-bell__head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 8px 12px; border-bottom: 1px solid #e7ebef;
+    font-size: 0.82rem;
+}
+.taskplus-bell__readall {
+    border: 0; background: none; color: #1c6fb8; cursor: pointer;
+    font-size: 0.74rem; padding: 0;
+}
+.taskplus-bell__readall:disabled { color: #a5b0ba; cursor: default; }
+.taskplus-bell__list { list-style: none; margin: 0; padding: 0; }
+.taskplus-bell__item {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 8px 12px; border-bottom: 1px solid #f0f2f5;
+}
+.taskplus-bell__item--read { opacity: 0.62; }
+.taskplus-bell__body { flex: 1; min-width: 0; }
+.taskplus-bell__msg {
+    display: block; font-size: 0.8rem; color: #2c3844;
+    overflow-wrap: anywhere;
+}
+.taskplus-bell__body em {
+    display: block; font-style: normal; font-size: 0.7rem; color: #8a97a3;
+    margin-top: 2px;
+}
+.taskplus-bell__read {
+    border: 1px solid #d5dce2; background: #fff; border-radius: 6px;
+    color: #2f9e44; cursor: pointer; font-size: 0.78rem; padding: 1px 7px;
+}
+.taskplus-bell__read:hover { background: #f1faf3; }
+.taskplus-bell__empty, .taskplus-bell__section {
+    padding: 10px 12px; font-size: 0.76rem; color: #7a8894;
+}
+.taskplus-bell__section {
+    background: #f7f9fa; border-bottom: 1px solid #f0f2f5;
+    font-weight: 600; padding: 6px 12px;
+}

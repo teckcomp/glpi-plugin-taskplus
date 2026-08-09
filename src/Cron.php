@@ -11,8 +11,9 @@ use CronTask;
  *                     dia a partir das rotinas ativas, de forma idempotente
  *                     (a UNIQUE `routine_day` garante que rodar 2x não
  *                     duplica);
- *  - taskplusalerts → Etapa 6: sino + e-mail de horário-limite estourado,
- *                     fim de dia com pendências e resumo ao gestor.
+ *  - taskplusalerts → Etapa 7a (ENTREGUE): sino de horário-limite
+ *                     estourado (régua e trilha em Alerts.php);
+ *                     e-mail de fim de dia e resumo ao gestor na 7b.
  */
 class Cron
 {
@@ -65,11 +66,33 @@ class Cron
     }
 
     /**
-     * Alertas (lógica na Etapa 6).
+     * Alertas (Etapa 7a: horário-limite estourado → sino).
+     *
+     * Só orquestra: a régua de "quem alerta" (hoje + limite estourado +
+     * viva + sem pendência ativa + sem alerta prévio) e a trilha
+     * `date_alert_limit` moram em Alerts::process() — exercitável por
+     * harness, o que este método não seria.
+     *
+     * Frequência fina (10 min no Install): alerta de horário-limite com
+     * até 1h de atraso não serve. Idempotente por construção — a trilha
+     * garante UMA tentativa por ocorrência, rode o cron quantas vezes for.
      */
     public static function cronTaskplusalerts(CronTask $task): int
     {
-        $task->log('Task+ Etapa 0: alertas registrados, lógica chega na Etapa 6.');
+        $result = Alerts::process();
+
+        $task->log(sprintf(
+            'Task+ alertas: %d candidata(s) de horario-limite, %d no sino, %d via navegador.',
+            $result['candidates'],
+            $result['bell'],
+            $result['raised']
+        ));
+
+        if ($result['candidates'] > 0) {
+            $task->addVolume($result['candidates']);
+            return 1;
+        }
+
         return 0; // nada a fazer
     }
 }

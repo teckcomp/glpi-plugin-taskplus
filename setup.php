@@ -43,6 +43,15 @@ function plugin_init_taskplus(): void
         ['addtabon' => 'Profile']
     );
 
+    // Etapa 7a: itemtype de notificação do plugin. Habilita "Tarefa do
+    // Task+" nos cadastros de modelos/notificações do GLPI e permite ao
+    // NotificationEvent::raiseEvent achar o target por convenção de nome
+    // (NotificationTargetOccurrenceAlert).
+    Plugin::registerClass(
+        GlpiPlugin\Taskplus\OccurrenceAlert::class,
+        ['notificationtemplates_types' => true]
+    );
+
     // Item de menu: Ferramentas > Task+ (tela Hoje)
     if (Session::haveRight('plugin_taskplus_task', READ)) {
         $PLUGIN_HOOKS['menu_toadd']['taskplus'] = [
@@ -57,6 +66,11 @@ function plugin_init_taskplus(): void
 
     // CSS carregado em todas as páginas do GLPI (só estiliza as telas do plugin)
     $PLUGIN_HOOKS[Hooks::ADD_CSS]['taskplus'] = 'css/taskplus.css';
+
+    // 7a: JS do sino de alertas, mesma filosofia do CSS — carrega em
+    // todas as páginas, mas a guarda do bell.js o torna inerte fora das
+    // telas do plugin (o markup do sino só existe na sidebar do Task+).
+    $PLUGIN_HOOKS[Hooks::ADD_JAVASCRIPT]['taskplus'] = 'js/bell.js';
 }
 
 /**

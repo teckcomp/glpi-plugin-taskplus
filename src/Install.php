@@ -5,6 +5,11 @@ namespace GlpiPlugin\Taskplus;
 use Config as CoreConfig;
 use CronTask;
 use Migration;
+use Notification;
+use Notification_NotificationTemplate;
+use NotificationTarget;
+use NotificationTemplate;
+use NotificationTemplateTranslation;
 use ProfileRight;
 
 /**
@@ -30,6 +35,7 @@ class Install
         'glpi_plugin_taskplus_occurrences',
         'glpi_plugin_taskplus_phases',
         'glpi_plugin_taskplus_pendings',
+        'glpi_plugin_taskplus_alerts',
     ];
 
     /**
@@ -95,6 +101,9 @@ class Install
             'users_id_creator' => 'INT %SIGN% NOT NULL DEFAULT 0',
             'date'             => 'DATE NULL DEFAULT NULL',
             'time_limit'       => 'TIME NULL DEFAULT NULL',
+            // 7a: trilha do alerta de horário-limite (NULL = nunca
+            // alertou). Garante UMA tentativa por ocorrência.
+            'date_alert_limit' => 'TIMESTAMP NULL DEFAULT NULL',
             'is_done'          => 'TINYINT NOT NULL DEFAULT 0',
             'done_date'        => 'TIMESTAMP NULL DEFAULT NULL',
             'users_id_done'    => 'INT %SIGN% NOT NULL DEFAULT 0',
@@ -139,6 +148,17 @@ class Install
             'is_active'     => 'TINYINT NOT NULL DEFAULT 1',
             'date_creation' => 'TIMESTAMP NULL DEFAULT NULL',
             'date_mod'      => 'TIMESTAMP NULL DEFAULT NULL',
+        ],
+        // 7a: alertas internos do SINO (padrão trazido do ProjectPlus).
+        // A UNIQUE de dedup fica só no CREATE TABLE (regra do topo).
+        'glpi_plugin_taskplus_alerts' => [
+            'users_id'      => 'INT %SIGN% NOT NULL DEFAULT 0',
+            'itemtype'      => "VARCHAR(100) NOT NULL DEFAULT ''",
+            'items_id'      => 'INT %SIGN% NOT NULL DEFAULT 0',
+            'kind'          => "VARCHAR(30) NOT NULL DEFAULT ''",
+            'message'       => 'TEXT',
+            'is_read'       => 'TINYINT NOT NULL DEFAULT 0',
+            'date_creation' => 'TIMESTAMP NULL DEFAULT NULL',
         ],
     ];
 
@@ -313,6 +333,33 @@ class Install
         }
 
         // ------------------------------------------------------------------
+        // 5) Alertas internos — o SINO do plugin (Etapa 7a; padrão do
+        //    ProjectPlus). Cada linha é um aviso para UM usuário; a
+        //    UNIQUE `dedup` garante no banco que a mesma ocorrência não
+        //    gera o mesmo tipo de alerta duas vezes para o mesmo dono
+        //    (defesa em profundidade — a trilha date_alert_limit já
+        //    segura isso na aplicação).
+        // ------------------------------------------------------------------
+        if (!$DB->tableExists('glpi_plugin_taskplus_alerts')) {
+            $DB->doQuery("
+                CREATE TABLE `glpi_plugin_taskplus_alerts` (
+                    `id`            INT {$sign} NOT NULL AUTO_INCREMENT,
+                    `users_id`      INT {$sign} NOT NULL DEFAULT 0 COMMENT 'para quem e o aviso',
+                    `itemtype`      VARCHAR(100) NOT NULL DEFAULT '' COMMENT 'Occurrence',
+                    `items_id`      INT {$sign} NOT NULL DEFAULT 0,
+                    `kind`          VARCHAR(30) NOT NULL DEFAULT '' COMMENT 'time_limit',
+                    `message`       TEXT COMMENT 'texto pronto exibido no sino',
+                    `is_read`       TINYINT NOT NULL DEFAULT 0,
+                    `date_creation` TIMESTAMP NULL DEFAULT NULL,
+                    PRIMARY KEY (`id`),
+                    KEY `user_unread` (`users_id`, `is_read`),
+                    KEY `item` (`itemtype`, `items_id`),
+                    UNIQUE KEY `dedup` (`users_id`, `itemtype`, `items_id`, `kind`)
+                ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collation}
+            ");
+        }
+
+        // ------------------------------------------------------------------
         // Reconciliação de schema: garante as colunas que passarem a
         // existir DEPOIS da criação da tabela (bases de versões antigas).
         // ------------------------------------------------------------------
@@ -364,7 +411,7 @@ class Install
         CronTask::register(
             Cron::class,
             'taskplusalerts',
-            HOUR_TIMESTAMP,
+            10 * MINUTE_TIMESTAMP,
             [
                 'state'         => CronTask::STATE_WAITING,
                 'mode'          => CronTask::MODE_EXTERNAL,
@@ -373,9 +420,135 @@ class Install
             ]
         );
 
+        // ------------------------------------------------------------------
+        // 7a: register() é idempotente e NÃO altera linha existente — em
+        // base instalada antes do 7a o taskplusalerts ficou registrado de
+        // hora em hora, granularidade inútil para horário-limite. Ajusta
+        // UMA vez, e SÓ se a frequência ainda for o default antigo (1h):
+        // qualquer outro valor é ajuste do admin e fica intocado.
+        // ------------------------------------------------------------------
+        $alertTask = new CronTask();
+        if (
+            $alertTask->getFromDBbyName(Cron::class, 'taskplusalerts')
+            && (int) $alertTask->fields['frequency'] === HOUR_TIMESTAMP
+        ) {
+            $alertTask->update([
+                'id'        => $alertTask->getID(),
+                'frequency' => 10 * MINUTE_TIMESTAMP,
+            ]);
+        }
+
+        self::ensureNotifications();
+
         $migration->executeMigration();
 
         return true;
+    }
+
+    /**
+     * Semeia a cadeia de notificação do 7a (modelo → tradução →
+     * notificação → modo sino → destinatário), tudo via objetos nativos
+     * (invariante do plugin: tabela nativa só se escreve pelo core) e
+     * idempotente: cada elo é procurado antes de criado — reexecutar o
+     * install (plugin:install --force) não duplica nada e PRESERVA
+     * edições do admin (modelo alterado, notificação desativada etc.).
+     *
+     * Liga/desliga fica na rota nativa (decisão da abertura do 7a):
+     * Administração → Notificações (o evento) e as preferências de
+     * notificação do próprio usuário — nenhuma tela nova no plugin.
+     */
+    private static function ensureNotifications(): void
+    {
+        $itemtype = OccurrenceAlert::class;
+
+        // 1) Modelo
+        $template    = new NotificationTemplate();
+        $templateRow = $template->find(['itemtype' => $itemtype]);
+        if ($templateRow !== []) {
+            $templatesId = (int) reset($templateRow)['id'];
+        } else {
+            $templatesId = (int) $template->add([
+                'name'     => 'Task+ horario-limite',
+                'itemtype' => $itemtype,
+            ]);
+        }
+        if ($templatesId <= 0) {
+            return; // sem modelo não há cadeia — melhor parar que semear órfãos
+        }
+
+        // 2) Tradução default (language = '') com as tags do target
+        $translation = new NotificationTemplateTranslation();
+        if ($translation->find(['notificationtemplates_id' => $templatesId]) === []) {
+            $translation->add([
+                'notificationtemplates_id' => $templatesId,
+                'language'                 => '',
+                'subject'                  => 'Task+: horário-limite estourado — ##taskplus.name##',
+                'content_text'             =>
+                    "A tarefa ##taskplus.name## tinha horário-limite ##taskplus.limit## "
+                    . "de hoje (##taskplus.date##) e ainda está aberta.\n\n"
+                    . "##taskplus.description##\n\n"
+                    . "Abrir a tela Hoje: ##taskplus.url##",
+                'content_html'             =>
+                    '&lt;p&gt;A tarefa &lt;strong&gt;##taskplus.name##&lt;/strong&gt; tinha '
+                    . 'horário-limite &lt;strong&gt;##taskplus.limit##&lt;/strong&gt; de hoje '
+                    . '(##taskplus.date##) e ainda está aberta.&lt;/p&gt;'
+                    . '&lt;p&gt;##taskplus.description##&lt;/p&gt;'
+                    . '&lt;p&gt;&lt;a href="##taskplus.url##"&gt;Abrir a tela Hoje&lt;/a&gt;&lt;/p&gt;',
+            ]);
+        }
+
+        // 3) Notificação do evento time_limit (entidade raiz, recursiva)
+        $notification    = new Notification();
+        $notificationRow = $notification->find([
+            'itemtype' => $itemtype,
+            'event'    => Alerts::EVENT_TIME_LIMIT,
+        ]);
+        if ($notificationRow !== []) {
+            $notificationsId = (int) reset($notificationRow)['id'];
+        } else {
+            $notificationsId = (int) $notification->add([
+                'name'         => 'Task+ — horário-limite estourado',
+                'entities_id'  => 0,
+                'is_recursive' => 1,
+                'itemtype'     => $itemtype,
+                'event'        => Alerts::EVENT_TIME_LIMIT,
+                'is_active'    => 1,
+            ]);
+        }
+        if ($notificationsId <= 0) {
+            return;
+        }
+
+        // 4) Canal: sino (modo ajax — "Notificações do navegador")
+        $mode = new Notification_NotificationTemplate();
+        if (
+            $mode->find([
+                'notifications_id' => $notificationsId,
+                'mode'             => Notification_NotificationTemplate::MODE_AJAX,
+            ]) === []
+        ) {
+            $mode->add([
+                'notifications_id'         => $notificationsId,
+                'mode'                     => Notification_NotificationTemplate::MODE_AJAX,
+                'notificationtemplates_id' => $templatesId,
+            ]);
+        }
+
+        // 5) Destinatário: o responsável (users_id da ocorrência)
+        $target = new NotificationTarget();
+        if (
+            $target->find([
+                'notifications_id' => $notificationsId,
+                'type'             => Notification::USER_TYPE,
+                'items_id'         => Notification::AUTHOR,
+            ]) === []
+        ) {
+            $target->add([
+                'notifications_id' => $notificationsId,
+                'type'             => Notification::USER_TYPE,
+                'items_id'         => Notification::AUTHOR,
+            ]);
+        }
     }
 
     /**

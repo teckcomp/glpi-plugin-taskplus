@@ -9,6 +9,29 @@
                  src="{{ plugin_web_dir }}/img/taskplus-mark.svg">
             <h2>{{ __('Task+', 'taskplus') }}</h2>
         </div>
+        {# 7a: sino de alertas — mesmo padrão do ProjectPlus. Ancorado no
+           CANTO SUPERIOR DIREITO do cabeçalho (posição absoluta, 7a-3:
+           dentro da linha da brand ele sobrepunha o subtítulo). O JS
+           (public/js/bell.js, hook global) acha o widget pelo id; fora
+           das telas do plugin o markup não existe e o JS é inerte. O 1º
+           token CSRF vem do próprio GET list do endpoint — por isso a
+           sidebar NÃO precisa de csrf_token. #}
+        <div class="taskplus-bell-wrap" id="taskplus-bell-wrap"
+             data-alerts-url="{{ plugin_web_dir }}/ajax/alerts.php">
+            <button type="button" id="taskplus-bell" class="taskplus-bell"
+                    title="{{ __('Alertas', 'taskplus') }}">
+                <i class="ti ti-bell"></i><span class="taskplus-bell__badge" hidden>0</span>
+            </button>
+            <div id="taskplus-bell-panel" class="taskplus-bell__panel" hidden>
+                <div class="taskplus-bell__head">
+                    <strong>{{ __('Alertas', 'taskplus') }}</strong>
+                    <button type="button" class="taskplus-bell__readall">
+                        {{ __('Marcar todas como lidas', 'taskplus') }}
+                    </button>
+                </div>
+                <ul class="taskplus-bell__list"></ul>
+            </div>
+        </div>
         <span>{{ __('Suas tarefas do dia, num lugar só', 'taskplus') }}</span>
     </div>
     <nav class="taskplus-sidebar">
