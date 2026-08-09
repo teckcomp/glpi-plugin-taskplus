@@ -1,0 +1,75 @@
+{# Task+ — tela "Semana" (Etapa 6a: grade seg–dom, leitura) #}
+
+<link rel="stylesheet" href="{{ plugin_web_dir }}/css/taskplus.css">
+
+<div class="taskplus-app" id="taskplus-week"
+     data-csrf="{{ csrf_token }}"
+     data-user-id="{{ current_user_id }}"
+     data-ajax-url="{{ plugin_web_dir }}/ajax/week.php"
+     data-today-url="{{ plugin_web_dir }}/front/today.php">
+
+    {# ================= COLUNA ESQUERDA: título + sidebar ================= #}
+    {% include '@taskplus/_sidebar.html.twig' with {'active': 'week'} %}
+
+    {# ================= ÁREA PRINCIPAL ================= #}
+    <div class="taskplus-main">
+
+        {# Navegação de semana + busca local (padrão 5b-2 p2, sem período
+           livre: o recorte da tela É a semana). Rótulo e visibilidade do
+           "Esta semana" são do JS, a partir do payload. #}
+        <div class="taskplus-weekbar">
+            <button type="button" class="btn btn-ghost-secondary btn-sm" id="tp-w-prev"
+                    title="{{ __('Semana anterior', 'taskplus') }}" aria-label="{{ __('Semana anterior', 'taskplus') }}">
+                <i class="ti ti-chevron-left"></i>
+            </button>
+            <span class="taskplus-weekbar__label" id="tp-w-label"></span>
+            <button type="button" class="btn btn-ghost-secondary btn-sm" id="tp-w-next"
+                    title="{{ __('Próxima semana', 'taskplus') }}" aria-label="{{ __('Próxima semana', 'taskplus') }}">
+                <i class="ti ti-chevron-right"></i>
+            </button>
+            <button type="button" class="btn btn-ghost-secondary btn-sm" id="tp-w-current" hidden>
+                {{ __('Esta semana', 'taskplus') }}
+            </button>
+            <input type="search" id="tp-w-search" class="taskplus-toolbar2__search"
+                   placeholder="{{ __('Buscar por título, descrição ou categoria', 'taskplus') }}"
+                   aria-label="{{ __('Buscar', 'taskplus') }}">
+        </div>
+
+        {# KPIs do CONJUNTO da semana — mesma régua do modo-período
+           (pendente · concluída · atrasada · aberta). #}
+        <div class="taskplus-kpis">
+            <div class="taskplus-kpi taskplus-kpi--late">
+                <span class="taskplus-kpi__value" id="tp-wk-late">0</span>
+                <span class="taskplus-kpi__label">{{ __('Atrasadas', 'taskplus') }}</span>
+            </div>
+            <div class="taskplus-kpi">
+                <span class="taskplus-kpi__value" id="tp-wk-open">0</span>
+                <span class="taskplus-kpi__label">{{ __('Abertas', 'taskplus') }}</span>
+            </div>
+            <div class="taskplus-kpi taskplus-kpi--pending">
+                <span class="taskplus-kpi__value" id="tp-wk-pending">0</span>
+                <span class="taskplus-kpi__label">{{ __('Pendentes', 'taskplus') }}</span>
+            </div>
+            <div class="taskplus-kpi taskplus-kpi--done">
+                <span class="taskplus-kpi__value" id="tp-wk-done">0</span>
+                <span class="taskplus-kpi__label">{{ __('Concluídas', 'taskplus') }}</span>
+            </div>
+        </div>
+
+        {# Aviso fixo (decisão nº 3): as origens do GLPI são estado atual,
+           sem dado por dia — ficam fora da grade, como no modo-período. #}
+        <div class="taskplus-weeknote">
+            <i class="ti ti-info-circle"></i>
+            <span>{{ __('A grade mostra suas tarefas do Task+ (rotinas e avulsas). As origens do GLPI — chamados e projetos — não têm dado por dia e seguem na tela Hoje.', 'taskplus') }}</span>
+        </div>
+
+        {# Grade seg–dom, renderizada pelo JS a partir do payload #}
+        <div class="taskplus-week" id="tp-w-grid"></div>
+    </div>
+</div>
+
+{# Estado inicial da tela. O front gera este JSON com JSON_HEX_TAG & cia,
+   então um "</script>" em nome de tarefa NÃO quebra a página — por isso
+   (e só por isso) o |raw é seguro aqui. #}
+<script type="application/json" id="taskplus-week-data">{{ payload_json|raw }}</script>
+<script src="{{ plugin_web_dir }}/js/week.js?v={{ plugin_version }}"></script>

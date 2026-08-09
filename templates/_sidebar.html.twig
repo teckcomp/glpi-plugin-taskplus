@@ -28,13 +28,13 @@
                 <a href="{{ plugin_web_dir }}/front/routines.php"><i class="ti ti-repeat"></i>{{ __('Rotinas', 'taskplus') }}</a>
             </li>
             {% endif %}
-            {# Telas das próximas etapas: entradas desabilitadas de propósito
-               (link morto daria 404). Viram <a> quando cada etapa fechar. #}
             {% if nav.week %}
-            <li class="taskplus-sidebar__item taskplus-sidebar__item--disabled" title="{{ __('Em breve (Etapa 6)', 'taskplus') }}">
-                <span><i class="ti ti-calendar-week"></i>{{ __('Semana', 'taskplus') }}</span>
+            <li class="taskplus-sidebar__item{{ active == 'week' ? ' taskplus-sidebar__item--active' : '' }}">
+                <a href="{{ plugin_web_dir }}/front/week.php"><i class="ti ti-calendar-week"></i>{{ __('Semana', 'taskplus') }}</a>
             </li>
             {% endif %}
+            {# Telas das próximas etapas: entradas desabilitadas de propósito
+               (link morto daria 404). Viram <a> quando cada etapa fechar. #}
             {% if nav.team %}
             <li class="taskplus-sidebar__item{{ active == 'team' ? ' taskplus-sidebar__item--active' : '' }}">
                 <a href="{{ plugin_web_dir }}/front/team.php"><i class="ti ti-users"></i>{{ __('Equipe', 'taskplus') }}</a>

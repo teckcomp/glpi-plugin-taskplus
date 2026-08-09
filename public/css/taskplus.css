@@ -511,3 +511,82 @@
     background: #fdf4e3; color: #9a6a1b; border: 1px solid #f0d9a8;
     font-size: 0.8rem;
 }
+
+/* ===================== Etapa 6a: tela Semana (grade seg-dom) ===================== */
+
+/* Barra de navegação da semana + busca local */
+.taskplus-weekbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    margin-bottom: 14px;
+}
+.taskplus-weekbar__label {
+    font-size: 0.95rem; font-weight: 700; color: #2c3844;
+    min-width: 150px; text-align: center;
+}
+
+/* Aviso fixo: origens nativas fora da grade (decisão nº 3) */
+.taskplus-weeknote {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; margin-bottom: 12px; border-radius: 6px;
+    background: #eaf4fb; color: #2a76a8; border: 1px solid #cfe4f3;
+    font-size: 0.8rem;
+}
+
+/* Grade: 7 colunas iguais; empilha em tela estreita */
+.taskplus-week {
+    display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px; align-items: stretch;
+}
+@media (max-width: 1100px) {
+    .taskplus-week { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Coluna de um dia */
+.taskplus-wday {
+    background: #f7f9fb; border: 1px solid #dde5ec; border-radius: 8px;
+    padding: 8px; min-height: 140px; display: flex; flex-direction: column;
+}
+.taskplus-wday--today {
+    background: #eef6fc; border-color: #9cc4e0;
+}
+.taskplus-wday__head {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
+}
+.taskplus-wday__title { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.taskplus-wday__dow {
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; color: #8a97a5;
+}
+.taskplus-wday--today .taskplus-wday__dow { color: #2a76a8; }
+.taskplus-wday__date { font-size: 0.85rem; font-weight: 600; color: #2c3844; }
+.taskplus-wday__link {
+    color: #2a76a8; text-decoration: none; font-size: 0.9rem;
+    padding: 2px 4px; border-radius: 4px;
+}
+.taskplus-wday__link:hover { background: #dcedf8; }
+.taskplus-wday__list { flex: 1 1 auto; }
+.taskplus-wday__empty {
+    color: #b3bcc5; font-size: 0.82rem; text-align: center; padding: 14px 0;
+}
+
+/* Card compacto (leitura pura: sem check, sem acoes) */
+.taskplus-wcard {
+    background: #fff; border: 1px solid #dde5ec; border-radius: 6px;
+    padding: 6px 8px; margin-bottom: 6px;
+}
+.taskplus-wcard__name { font-size: 0.83rem; font-weight: 600; color: #2c3844; }
+.taskplus-wcard--late { border-left: 3px solid #d9480f; }
+.taskplus-wcard--pending { border-left: 3px solid #e8a13c; }
+.taskplus-wcard--done { opacity: 0.65; }
+.taskplus-wcard--done .taskplus-wcard__name { text-decoration: line-through; }
+
+/* Ajuste pos-homologacao 6a: o .taskplus-badge global usa nowrap (cards
+   largos das outras telas); nas colunas estreitas da grade o texto longo
+   (ex.: "criada pelo gestor <nome>") estourava o card. Aqui o badge
+   quebra linha e fica CONTIDO. */
+.taskplus-wcard { overflow: hidden; }
+.taskplus-wcard__name { overflow-wrap: anywhere; }
+.taskplus-wcard .taskplus-badge {
+    white-space: normal; overflow-wrap: anywhere; max-width: 100%;
+    line-height: 1.35;
+}
