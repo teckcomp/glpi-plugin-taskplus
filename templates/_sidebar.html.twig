@@ -41,8 +41,8 @@
             </li>
             {% endif %}
             {% if nav.panel %}
-            <li class="taskplus-sidebar__item taskplus-sidebar__item--disabled" title="{{ __('Em breve (Etapa 6)', 'taskplus') }}">
-                <span><i class="ti ti-chart-bar"></i>{{ __('Painel', 'taskplus') }}</span>
+            <li class="taskplus-sidebar__item{{ active == 'panel' ? ' taskplus-sidebar__item--active' : '' }}">
+                <a href="{{ plugin_web_dir }}/front/panel.php"><i class="ti ti-chart-bar"></i>{{ __('Painel', 'taskplus') }}</a>
             </li>
             {% endif %}
             {% if nav.history %}

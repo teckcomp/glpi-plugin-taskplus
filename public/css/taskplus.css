@@ -590,3 +590,68 @@
     white-space: normal; overflow-wrap: anywhere; max-width: 100%;
     line-height: 1.35;
 }
+
+/* ==========================================================================
+   Etapa 6b — tela Painel (indicadores pessoais)
+   ========================================================================== */
+
+.taskplus-panelblock {
+    background: #fff; border: 1px solid #dde5ec; border-radius: 8px;
+    padding: 14px 16px; margin-bottom: 14px;
+}
+.taskplus-panelblock__head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 10px;
+}
+.taskplus-panelblock__head h3 {
+    font-size: 0.95rem; font-weight: 600; color: #2c3844; margin: 0;
+}
+
+/* Heatmap calendário: colunas = semanas, linhas = seg-dom */
+.taskplus-hm { display: flex; gap: 3px; overflow-x: auto; padding-bottom: 4px; }
+.taskplus-hm__dows { display: flex; flex-direction: column; gap: 3px; margin-right: 4px; }
+.taskplus-hm__dow {
+    height: 14px; font-size: 0.62rem; line-height: 14px; color: #7a8894;
+    text-align: right; min-width: 26px;
+}
+.taskplus-hm__weeks { display: flex; gap: 3px; }
+.taskplus-hm__week { display: flex; flex-direction: column; gap: 3px; }
+.taskplus-hm__month {
+    height: 14px; font-size: 0.62rem; line-height: 14px; color: #7a8894;
+    white-space: nowrap; overflow: visible;
+}
+.taskplus-hm__cell {
+    width: 14px; height: 14px; border-radius: 3px; display: inline-block;
+    background: #edf1f5;
+}
+.taskplus-hm__cell--out { background: transparent; }
+.taskplus-hm__cell--empty { background: #edf1f5; }
+.taskplus-hm__cell--l0 { background: #f6cfc0; }   /* devida, nada feita */
+.taskplus-hm__cell--l1 { background: #c2e7cc; }   /* menos da metade */
+.taskplus-hm__cell--l2 { background: #74c48a; }   /* metade ou mais */
+.taskplus-hm__cell--l3 { background: #2f9e44; }   /* tudo concluído */
+.taskplus-hm__cell--today { outline: 2px solid #1c7ed6; outline-offset: -1px; }
+.taskplus-hm__cell--future { opacity: 0.45; }
+.taskplus-hm__legend { display: flex; align-items: center; gap: 3px; }
+.taskplus-hm__legendtext { font-size: 0.68rem; color: #7a8894; margin: 0 3px; }
+.taskplus-hm__empty { color: #7a8894; font-size: 0.85rem; padding: 8px 0; }
+
+/* Tabela de taxa por rotina */
+.taskplus-rtable { width: 100%; border-collapse: collapse; }
+.taskplus-rtable th {
+    text-align: left; font-size: 0.72rem; text-transform: uppercase;
+    letter-spacing: 0.03em; color: #7a8894; font-weight: 600;
+    padding: 4px 8px; border-bottom: 1px solid #dde5ec;
+}
+.taskplus-rtable td { padding: 7px 8px; border-bottom: 1px solid #eef2f6; font-size: 0.85rem; }
+.taskplus-rtable__name { color: #2c3844; font-weight: 500; overflow-wrap: anywhere; }
+.taskplus-rtable__num { white-space: nowrap; color: #4a5560; width: 1%; }
+.taskplus-rtable__rate { width: 40%; }
+.taskplus-rtable__bar {
+    display: inline-block; vertical-align: middle; width: 60%;
+    height: 8px; background: #edf1f5; border-radius: 4px; overflow: hidden;
+    margin-right: 8px;
+}
+.taskplus-rtable__fill { display: block; height: 100%; background: #2f9e44; border-radius: 4px; }
+.taskplus-rtable__ratetext { font-size: 0.8rem; color: #4a5560; vertical-align: middle; }
+.taskplus-rtable__more { font-size: 0.78rem; color: #7a8894; padding-top: 8px; }

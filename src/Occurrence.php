@@ -492,6 +492,10 @@ class Occurrence
             // Fase de trabalho do Quadro (Etapa 4d). NULL/0 = padrão.
             'phases_id'   => (int) ($row['plugin_taskplus_phases_id'] ?? 0),
             'group'       => $group,
+            // 6b: id da rotina-mãe (0 = avulsa), para o Painel agrupar a
+            // taxa por rotina SEM colidir nomes iguais. Chave nova é
+            // inofensiva para os safeItem existentes (whitelist ignora).
+            'routines_id' => (int) ($row['plugin_taskplus_routines_id'] ?? 0),
             'routine_name' => (string) ($row['routine_name'] ?? ''),
             'name'        => (string) ($row['name'] ?? ''),
             'description' => (string) ($row['description'] ?? ''),
