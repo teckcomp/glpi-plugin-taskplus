@@ -1,5 +1,5 @@
 /**
- * Task+ — tela "Histórico" (Etapa 6c-1: trilha auditável, SÓ leitura).
+ * Task+ — tela "Histórico" (6c-1: trilha auditável · 6c-2: restaurar).
  *
  * Contrato com o servidor:
  *  - estado inicial embutido em <script type="application/json"
@@ -11,6 +11,10 @@
  *    token é de uso único) e `data` com o payload do período pedido,
  *    para re-render. O servidor é a fonte da verdade do recorte:
  *    default de 30 dias, teto de 180 (flag `clamped`);
+ *  - ÚNICA ação da tela (6c-2): "Restaurar" nos cards EXCLUÍDA — POST
+ *    `restore` + id; posse e estado são revalidados no SERVIDOR (T18)
+ *    e a resposta volta com o payload completo, então o re-render é
+ *    integral (badge troca, contadores se corrigem, busca reaplica);
  *  - busca 100% LOCAL (título/descrição/categoria, sem acento): item
  *    fora da busca some e o cabeçalho do dia some junto quando o dia
  *    esvazia;
@@ -181,6 +185,11 @@
                     render();
                     return;
                 }
+                // Ação com mensagem (restore) confirma no toast; o
+                // `list` volta com message vazia e segue silencioso.
+                if (typeof res.message === 'string' && res.message !== '') {
+                    toast(res.message, false);
+                }
                 render();
             })
             .catch(function () {
@@ -341,9 +350,10 @@
     }
 
     /**
-     * Linha de um item da trilha. SÓ leitura no 6c-1: sem ações — o
-     * "restaurar" das excluídas é o 6c-2. Badges e autores são os
-     * mesmos das outras telas.
+     * Linha de um item da trilha. Badges e autores são os mesmos das
+     * outras telas. Única ação (6c-2): "Restaurar" no card EXCLUÍDA —
+     * o servidor revalida posse e estado a cada POST (T18); rotina
+     * excluída (se um dia existir) é recusada lá e o toast explica.
      */
     function card(item) {
         var c = el('div', 'taskplus-hcard taskplus-hcard--' + item.state);
@@ -392,6 +402,18 @@
 
         if (item.description) {
             c.appendChild(el('div', 'taskplus-hcard__desc', item.description));
+        }
+
+        if (item.state === 'deleted') {
+            var actions = el('div', 'taskplus-hcard__actions');
+            var btn = el('button', 'btn btn-sm btn-outline-secondary taskplus-hcard__restore',
+                'Restaurar');
+            btn.type = 'button';
+            btn.addEventListener('click', function () {
+                post({ action: 'restore', id: String(item.id) });
+            });
+            actions.appendChild(btn);
+            c.appendChild(actions);
         }
 
         return c;

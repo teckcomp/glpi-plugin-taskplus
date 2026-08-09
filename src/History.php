@@ -8,7 +8,8 @@ namespace GlpiPlugin\Taskplus;
  * Decisão nº 9 (travada na abertura da Etapa 6): o Histórico exibe TUDO
  * que passou pelas tarefas próprias do usuário — concluídas, pendentes,
  * atrasadas, abertas, PULADAS e EXCLUÍDAS (soft) — com badge de estado
- * e autor. O "restaurar" das excluídas é o 6c-2; este bloco é SÓ leitura.
+ * e autor. Desde a 6c-2, a tela tem UMA ação: "restaurar" a excluída
+ * (decisão nº 9) — pulada NÃO se restaura; o resto segue leitura.
  *
  * Decisão nº 19 (abertura do 6c, sessão 18):
  *  - período herda o padrão de–até (mesma régua comum periodBound/
@@ -501,16 +502,79 @@ class History
     // =====================================================================
 
     /**
-     * 6c-1 é leitura pura: a única ação é `list` (o endpoint anexa o
-     * payload sozinho). O "restaurar" das excluídas entra aqui no 6c-2.
+     * Ações da tela: `list` (o endpoint anexa o payload sozinho) e,
+     * desde a 6c-2, `restore` — a resposta de AMBAS volta com o payload
+     * completo do período, então o JS só re-renderiza.
      */
     public static function handle(string $action, array $input, int $usersId): array
     {
         switch ($action) {
             case 'list':
                 return ['success' => true, 'message' => ''];
+            case 'restore':
+                return self::restore($input, $usersId);
             default:
                 return ['success' => false, 'message' => __('Ação desconhecida', 'taskplus')];
         }
+    }
+
+    /**
+     * 6c-2 — restaura uma tarefa EXCLUÍDA (decisão nº 9): SÓ zera
+     * `is_deleted` (conclusão, pendência e datas ficam intactas — a
+     * tarefa volta ao estado que tinha) e atualiza `date_mod`. Ela
+     * reaparece nas telas vivas conforme a própria data.
+     *
+     * Regras revalidadas a CADA POST (T18), nunca herdadas da tela:
+     *  - posse: a linha tem que ser do PRÓPRIO usuário — o restaurar
+     *    pelo gestor fica para quando existir trilha na visão da
+     *    equipe (backlog, junto do 6b-2);
+     *  - só EXCLUÍDA (`is_deleted` = 1) se restaura — pulada não;
+     *  - só AVULSA: o delete atual já recusa ocorrência de rotina, mas
+     *    a dupla checagem fica aqui de defesa — se um dia surgir rotina
+     *    excluída por outro caminho, recusar é mais honesto que
+     *    restaurar um órfão.
+     */
+    private static function restore(array $input, int $usersId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $id = (int) ($input['id'] ?? 0);
+        if ($id <= 0) {
+            return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
+        }
+
+        // Busca da linha do PRÓPRIO usuário SEM filtro de is_deleted —
+        // o ownRow do Occurrence filtra is_deleted = 0 de propósito
+        // (régua do trabalho vivo); aqui a excluída é exatamente o alvo.
+        $row = null;
+        foreach ($DB->request([
+            'FROM'  => Occurrence::TABLE,
+            'WHERE' => [
+                Occurrence::TABLE . '.id'       => $id,
+                Occurrence::TABLE . '.users_id' => $usersId,
+            ],
+        ]) as $r) {
+            $row = $r;
+            break;
+        }
+        if ($row === null) {
+            return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
+        }
+
+        if (((int) ($row['is_deleted'] ?? 0)) !== 1) {
+            return ['success' => false, 'message' => __('A tarefa não está excluída', 'taskplus')];
+        }
+        if (($row['plugin_taskplus_routines_id'] ?? null) !== null) {
+            return ['success' => false, 'message' => __('Ocorrência de rotina não pode ser restaurada', 'taskplus')];
+        }
+
+        $DB->update(
+            Occurrence::TABLE,
+            ['is_deleted' => 0, 'date_mod' => date('Y-m-d H:i:s')],
+            [Occurrence::TABLE . '.id' => (int) $row['id']]
+        );
+
+        return ['success' => true, 'message' => __('Tarefa restaurada', 'taskplus')];
     }
 }

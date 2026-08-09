@@ -4,8 +4,9 @@
  * Task+ — endpoint AJAX da tela Histórico (Etapa 6c-1).
  *
  * Contrato com o public/js/history.js:
- *  - só POST, com `action` (por ora só `list` — o `restore` do 6c-2
- *    entrará aqui) e `period_from`/`period_to` opcionais (mesmos nomes
+ *  - só POST, com `action` (`list` e, desde a 6c-2, `restore` com `id`
+ *    — posse e estado revalidados no History::restore a cada POST, T18)
+ *    e `period_from`/`period_to` opcionais (mesmos nomes
  *    do 5b-2 p2 — a régua do recorte é UMA só; bordas vazias caem no
  *    default de 30 dias do History::historyRange, que também aplica o
  *    teto de 180);
