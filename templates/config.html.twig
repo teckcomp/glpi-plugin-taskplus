@@ -52,6 +52,13 @@
                     </label>
 
                     <label class="taskplus-field">
+                        <span>{{ __('Horário do resumo matinal ao gestor', 'taskplus') }}</span>
+                        {# 7b-2 — mesmo mecanismo do fim de dia: HH:MM
+                           validado no Config::set (lixo é ignorado). #}
+                        <input type="time" name="email_digest_time" value="{{ email_digest_time }}" required>
+                    </label>
+
+                    <label class="taskplus-field">
                         <span>{{ __('Apagar tabelas, dados e direitos ao desinstalar', 'taskplus') }}</span>
                         <select name="purge_on_uninstall">
                             <option value="0" {{ not purge_on_uninstall ? 'selected' : '' }}>{{ __('No') }}</option>

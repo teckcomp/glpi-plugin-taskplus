@@ -498,6 +498,52 @@ class Install
             self::eodContentText(),
             self::eodContentHtml()
         );
+
+        // 7b-2: resumo matinal ao gestor. Destinatário = alvo CUSTOM
+        // TARGET_MANAGER (AUTHOR não serve — a âncora do evento é uma
+        // ocorrência de técnico; quem resolve o gestor é o
+        // addSpecificTargets do target, lendo as $options do raise).
+        self::ensureNotificationChain(
+            'Task+ resumo matinal',
+            Emails::EVENT_MORNING_DIGEST,
+            'Task+ — resumo matinal (e-mail ao gestor)',
+            Notification_NotificationTemplate::MODE_MAIL,
+            'Task+: resumo matinal ##taskplus.digest_date## — sua equipe',
+            self::digestContentText(),
+            self::digestContentHtml(),
+            Emails::TARGET_MANAGER
+        );
+    }
+
+    /**
+     * Texto puro do resumo matinal (7b-2): uma linha por técnico com o
+     * trio agregado — sem listar tarefas (decisão nº 22). Sem ##IF## de
+     * seção: "só envia se houver conteúdo" garante ao menos uma linha.
+     */
+    private static function digestContentText(): string
+    {
+        return "Resumo matinal ##taskplus.digest_date## — situação da sua equipe no Task+ "
+            . "(##taskplus.tech_count## técnico(s) com tarefas vivas).\n\n"
+            . "##FOREACHtechs##"
+            . " - ##digest.tech##: ##digest.open## aberta(s) hoje, "
+            . "##digest.overdue## atrasada(s), ##digest.pending## pendente(s)\n"
+            . "##ENDFOREACHtechs##\n"
+            . "Abrir a tela Equipe: ##taskplus.team_url##";
+    }
+
+    /**
+     * HTML do resumo matinal — gravado ESCAPADO (&lt;p&gt;…), formato do
+     * seed do core 11 (mesmo padrão das cadeias da 7a/7b-1).
+     */
+    private static function digestContentHtml(): string
+    {
+        return '&lt;p&gt;Resumo matinal &lt;strong&gt;##taskplus.digest_date##&lt;/strong&gt; '
+            . '— situação da sua equipe no Task+ '
+            . '(##taskplus.tech_count## técnico(s) com tarefas vivas).&lt;/p&gt;'
+            . '&lt;ul&gt;##FOREACHtechs##&lt;li&gt;&lt;strong&gt;##digest.tech##&lt;/strong&gt;: '
+            . '##digest.open## aberta(s) hoje, ##digest.overdue## atrasada(s), '
+            . '##digest.pending## pendente(s)&lt;/li&gt;##ENDFOREACHtechs##&lt;/ul&gt;'
+            . '&lt;p&gt;&lt;a href="##taskplus.team_url##"&gt;Abrir a tela Equipe&lt;/a&gt;&lt;/p&gt;';
     }
 
     /**
@@ -563,7 +609,8 @@ class Install
     /**
      * Semeia UMA cadeia completa: modelo (itemtype+nome) → tradução
      * default → notificação (itemtype+evento, entidade raiz recursiva)
-     * → modo → destinatário AUTHOR. Cada elo procurado antes de criado.
+     * → modo → destinatário ($targetItemsId; AUTHOR por padrão, alvo
+     * custom na cadeia do gestor). Cada elo procurado antes de criado.
      */
     private static function ensureNotificationChain(
         string $templateName,
@@ -572,7 +619,8 @@ class Install
         string $mode,
         string $subject,
         string $contentText,
-        string $contentHtml
+        string $contentHtml,
+        int $targetItemsId = Notification::AUTHOR
     ): void {
         $itemtype = OccurrenceAlert::class;
 
@@ -640,19 +688,21 @@ class Install
             ]);
         }
 
-        // 5) Destinatário: o responsável (users_id da linha âncora)
+        // 5) Destinatário: AUTHOR por padrão (users_id da linha âncora);
+        // a cadeia do resumo matinal (7b-2) usa o alvo CUSTOM
+        // Emails::TARGET_MANAGER, resolvido pelo addSpecificTargets.
         $target = new NotificationTarget();
         if (
             $target->find([
                 'notifications_id' => $notificationsId,
                 'type'             => Notification::USER_TYPE,
-                'items_id'         => Notification::AUTHOR,
+                'items_id'         => $targetItemsId,
             ]) === []
         ) {
             $target->add([
                 'notifications_id' => $notificationsId,
                 'type'             => Notification::USER_TYPE,
-                'items_id'         => Notification::AUTHOR,
+                'items_id'         => $targetItemsId,
             ]);
         }
     }

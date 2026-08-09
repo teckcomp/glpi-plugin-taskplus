@@ -17,6 +17,7 @@ class Config
     public const DEFAULTS = [
         'email_enabled'      => 1, // 1 = envia e-mail além do sino (7b)
         'email_eod_time'     => '18:00', // horário do e-mail de fim de dia (7b-1)
+        'email_digest_time'  => '08:00', // horário do resumo matinal ao gestor (7b-2)
         'purge_on_uninstall' => 0, // 1 = apaga tabelas/dados/direitos ao desinstalar
     ];
 
@@ -41,8 +42,9 @@ class Config
             }
             // Tipo pelo DEFAULT: chave de horário ('HH:MM') valida o
             // formato e IGNORA lixo (mantém o valor vigente); o resto
-            // continua inteiro >= 0. A trilha email_eod_last NÃO está
-            // aqui de propósito — quem a escreve é Emails::markEodSent.
+            // continua inteiro >= 0. As trilhas email_eod_last e
+            // email_digest_last NÃO estão aqui de propósito — quem as
+            // escreve é o domínio (Emails::markEodSent/markDigestSent).
             if (is_string($default)) {
                 $raw = trim((string) $values[$key]);
                 if (preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $raw)) {

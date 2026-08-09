@@ -11,11 +11,20 @@ use NotificationEvent;
  * Camada de DOMÍNIO dos e-mails do cron `taskplusalerts` (Cron.php só
  * orquestra e loga). Nesta etapa:
  *
- *  - 7b-1 (AQUI): fim de dia ao TÉCNICO — o que ficou aberto de hoje,
+ *  - 7b-1: fim de dia ao TÉCNICO — o que ficou aberto de hoje,
  *    atrasado de dias anteriores e pendente (adiado com motivo/data/hora),
  *    só do Task+ (nativas FORA — decisão nº 3, mesma régua do 7a) e
  *    concluídas FORA (o e-mail é chamada para ação, não diário de bordo);
- *  - 7b-2 (próximo bloco): resumo matinal ao GESTOR.
+ *  - 7b-2 (decisão nº 22): resumo matinal ao GESTOR — uma linha por
+ *    técnico dos grupos onde ele é `is_manager`, com o MESMO trio do fim
+ *    de dia agregado (abertas de hoje / atrasadas / pendentes), sem
+ *    listar tarefas. Técnico zerado SOME da linha; gestor com todos os
+ *    técnicos zerados não recebe nada; a linha do PRÓPRIO gestor entra
+ *    quando ele é membro do grupo e tem conteúdo (diferente do sino do
+ *    7a, que não se auto-avisa). Destinatário via alvo CUSTOM
+ *    (TARGET_MANAGER + addSpecificTargets no target — validado no fonte
+ *    do 11.0.6: items_id fora das constantes do core cai no default do
+ *    addForTarget, e as $options do raiseEvent chegam intactas lá).
  *
  * Regras travadas na abertura da 7b:
  *  - horário de disparo em chave da Config (`email_eod_time`, default
@@ -42,8 +51,24 @@ class Emails
     /** Evento nativo do e-mail de fim de dia (target do 7a). */
     public const EVENT_END_OF_DAY = 'end_of_day';
 
+    /** Evento nativo do resumo matinal ao gestor (7b-2). */
+    public const EVENT_MORNING_DIGEST = 'morning_digest';
+
+    /**
+     * Alvo CUSTOM "Gestor (resumo matinal)" (7b-2). O core roteia
+     * USER_TYPE por items_id: as constantes nativas vão de 1 a 34 e
+     * qualquer valor fora delas cai no default do addForTarget →
+     * addSpecificTargets do NOSSO target, que lê o gestor das $options
+     * do raiseEvent. Valor alto de propósito para nunca colidir com
+     * constante futura do core.
+     */
+    public const TARGET_MANAGER = 97531;
+
     /** Chave da trilha "já enviei hoje" no contexto de Config do plugin. */
     public const LAST_EOD_KEY = 'email_eod_last';
+
+    /** Trilha diária do resumo matinal (7b-2) — mesma mecânica. */
+    public const LAST_DIGEST_KEY = 'email_digest_last';
 
     // =====================================================================
     // Régua de disparo
@@ -96,6 +121,53 @@ class Emails
     public static function markEodSent(string $today): void
     {
         CoreConfig::setConfigurationValues(Config::CONTEXT, [self::LAST_EOD_KEY => $today]);
+    }
+
+    /**
+     * Horário configurado do resumo matinal ('HH:MM'), caindo no default
+     * quando a chave estiver ausente ou com lixo — espelho de eodTime.
+     */
+    public static function digestTime(array $config): string
+    {
+        $raw = (string) ($config['email_digest_time'] ?? '');
+        if (preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $raw)) {
+            return $raw;
+        }
+        return (string) Config::DEFAULTS['email_digest_time'];
+    }
+
+    /**
+     * É hora de enviar o resumo matinal? Mesma régua do fim de dia:
+     * e-mails ligados + relógio ≥ `email_digest_time` + trilha
+     * `email_digest_last` ≠ hoje. As duas réguas são independentes —
+     * o mesmo cron de 10 min atende as duas sem interferência.
+     */
+    public static function shouldSendDigest(array $config, ?string $now = null): bool
+    {
+        $now   = $now ?? date('Y-m-d H:i:s');
+        $today = substr($now, 0, 10);
+        $time  = substr($now, 11, 5);
+
+        if ((int) ($config['email_enabled'] ?? 0) !== 1) {
+            return false;
+        }
+        if ($time < self::digestTime($config)) {
+            return false;
+        }
+        if ((string) ($config[self::LAST_DIGEST_KEY] ?? '') === $today) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Carimba a trilha do dia do resumo matinal — mesma escrita direta
+     * no contexto de Config (não passa por Config::set).
+     */
+    public static function markDigestSent(string $today): void
+    {
+        CoreConfig::setConfigurationValues(Config::CONTEXT, [self::LAST_DIGEST_KEY => $today]);
     }
 
     // =====================================================================
@@ -364,5 +436,235 @@ class Emails
         }
 
         return (bool) NotificationEvent::raiseEvent(self::EVENT_END_OF_DAY, $item, ['eod' => $tags]);
+    }
+
+    // =====================================================================
+    // 7b-2 — resumo matinal ao gestor (decisão nº 22)
+    // =====================================================================
+
+    /**
+     * Mapa [gestor => [técnicos]] a cobrir hoje: régua INVERTIDA do
+     * managersByOwner do 7a — parte dos técnicos COM CONTEÚDO (eodUsers:
+     * qualquer ocorrência viva devida até hoje), sobe para os grupos
+     * deles e desce para os `is_manager` desses grupos.
+     *
+     * Diferença deliberada para o sino (decisão nº 22): aqui NÃO há
+     * exclusão do próprio — se o gestor é membro do grupo e tem
+     * conteúdo, a linha dele entra no resumo que ele mesmo recebe
+     * (é o painel matinal do setor, e ele faz parte do setor).
+     *
+     * Gestor sem nenhum técnico com conteúdo simplesmente não aparece
+     * no mapa — "só envia se houver conteúdo".
+     */
+    public static function digestPairs(?string $today = null): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $withContent = self::eodUsers($today);
+        if ($withContent === []) {
+            return [];
+        }
+
+        // 1) grupos dos técnicos com conteúdo
+        $groupsByTech = [];
+        $allGroups    = [];
+        foreach ($DB->request([
+            'FROM'  => 'glpi_groups_users',
+            'WHERE' => ['glpi_groups_users.users_id' => $withContent ?: [0]],
+        ]) as $row) {
+            $uid = (int) ($row['users_id'] ?? 0);
+            $gid = (int) ($row['groups_id'] ?? 0);
+            if ($uid > 0 && $gid > 0) {
+                $groupsByTech[$uid][$gid] = true;
+                $allGroups[$gid] = true;
+            }
+        }
+        if ($allGroups === []) {
+            return [];
+        }
+
+        // 2) gestores desses grupos
+        $managersByGroup = [];
+        foreach ($DB->request([
+            'FROM'  => 'glpi_groups_users',
+            'WHERE' => [
+                'glpi_groups_users.groups_id'  => array_keys($allGroups) ?: [0],
+                'glpi_groups_users.is_manager' => 1,
+            ],
+        ]) as $row) {
+            $gid = (int) ($row['groups_id'] ?? 0);
+            $mid = (int) ($row['users_id'] ?? 0);
+            if ($gid > 0 && $mid > 0) {
+                $managersByGroup[$gid][$mid] = true;
+            }
+        }
+
+        // 3) inversão gestor → técnicos (SEM tirar o próprio)
+        $out = [];
+        foreach ($groupsByTech as $uid => $gids) {
+            foreach (array_keys($gids) as $gid) {
+                foreach (array_keys($managersByGroup[$gid] ?? []) as $mid) {
+                    $out[$mid][$uid] = true;
+                }
+            }
+        }
+
+        ksort($out);
+        foreach ($out as $mid => $set) {
+            $ids = array_keys($set);
+            sort($ids);
+            $out[$mid] = $ids;
+        }
+
+        return $out;
+    }
+
+    /**
+     * As linhas do resumo de UM gestor: uma por técnico com conteúdo,
+     * com o trio agregado do fim de dia — reusa eodData, então a régua
+     * é IDÊNTICA à do e-mail do técnico (pendência ativa na terceira
+     * coluna; pendência expirada volta para aberta/atrasada; nativas
+     * fora). Técnico zerado SOME (decisão nº 22).
+     *
+     * `anchor` = id da primeira ocorrência encontrada (percorrendo os
+     * técnicos por id) — é o item em que o evento nativo é disparado;
+     * o destinatário NÃO sai dele (vai nas $options — TARGET_MANAGER).
+     * Linhas ordenadas por nome (desempate por id) para leitura.
+     */
+    public static function digestData(array $techIds, ?string $now = null): array
+    {
+        $now = $now ?? date('Y-m-d H:i:s');
+
+        $names = Alerts::ownerNames(array_map(
+            static fn ($id) => ['users_id' => (int) $id],
+            $techIds
+        ));
+
+        $rows   = [];
+        $anchor = 0;
+        foreach ($techIds as $techId) {
+            $techId = (int) $techId;
+            $data   = self::eodData($techId, $now);
+
+            $open    = count($data['open']);
+            $overdue = count($data['overdue']);
+            $pending = count($data['pending']);
+            if ($open + $overdue + $pending === 0) {
+                continue; // técnico zerado some da linha
+            }
+            if ($anchor <= 0 && $data['anchor'] > 0) {
+                $anchor = (int) $data['anchor'];
+            }
+
+            $rows[] = [
+                'users_id' => $techId,
+                'name'     => (string) ($names[$techId] ?? ('#' . $techId)),
+                'open'     => $open,
+                'overdue'  => $overdue,
+                'pending'  => $pending,
+            ];
+        }
+
+        usort($rows, static function (array $a, array $b): int {
+            return strcasecmp($a['name'], $b['name']) ?: ($a['users_id'] <=> $b['users_id']);
+        });
+
+        return ['rows' => $rows, 'anchor' => $anchor];
+    }
+
+    /**
+     * Converte digestData no pacote de tags do motor do core: escalares
+     * `##taskplus.digest_date##`/`##taskplus.tech_count##` + lista
+     * `techs` com tags de linha `##digest.*##`. Contagens como STRING
+     * (mesma razão da 7b-1) e texto PURO — o escape é do core (T28).
+     */
+    public static function templateRowsDigest(array $data, ?string $today = null): array
+    {
+        $today = $today ?? date('Y-m-d');
+
+        $techs = [];
+        foreach (($data['rows'] ?? []) as $row) {
+            $techs[] = [
+                '##digest.tech##'    => trim((string) ($row['name'] ?? '')),
+                '##digest.open##'    => (string) (int) ($row['open'] ?? 0),
+                '##digest.overdue##' => (string) (int) ($row['overdue'] ?? 0),
+                '##digest.pending##' => (string) (int) ($row['pending'] ?? 0),
+            ];
+        }
+
+        $niceDate = preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $today, $m)
+            ? ($m[3] . '/' . $m[2] . '/' . $m[1])
+            : $today;
+
+        return [
+            '##taskplus.digest_date##' => $niceDate,
+            '##taskplus.tech_count##'  => (string) count($techs),
+            'techs' => $techs,
+        ];
+    }
+
+    /**
+     * Rodada do resumo matinal: régua de horário → gestores com equipe
+     * com conteúdo → um evento nativo POR GESTOR → trilha do dia.
+     * Mesma filosofia do fim de dia: trilha carimbada SEMPRE que a
+     * rodada era devida, mesmo com envio falho (uma tentativa por dia).
+     *
+     * $raiser (harness) recebe (managerId, anchorId, tags) e devolve
+     * bool; NULL = raiseDigest real.
+     *
+     * Retorno: ['due' => bool, 'managers' => n, 'sent' => n].
+     */
+    public static function processDigest(?string $now = null, ?callable $raiser = null): array
+    {
+        $now    = $now ?? date('Y-m-d H:i:s');
+        $today  = substr($now, 0, 10);
+        $config = Config::get();
+
+        if (!self::shouldSendDigest($config, $now)) {
+            return ['due' => false, 'managers' => 0, 'sent' => 0];
+        }
+
+        $raiser = $raiser ?? static function (int $managerId, int $anchorId, array $tags): bool {
+            return self::raiseDigest($managerId, $anchorId, $tags);
+        };
+
+        $sent  = 0;
+        $pairs = self::digestPairs($today);
+        foreach ($pairs as $managerId => $techIds) {
+            $data = self::digestData($techIds, $now);
+            if ($data['rows'] === [] || $data['anchor'] <= 0) {
+                continue; // toda a equipe zerada — nada a enviar
+            }
+            $tags = self::templateRowsDigest($data, $today);
+            if ($raiser((int) $managerId, (int) $data['anchor'], $tags) === true) {
+                $sent++;
+            }
+        }
+
+        self::markDigestSent($today);
+
+        return ['due' => true, 'managers' => count($pairs), 'sent' => $sent];
+    }
+
+    /**
+     * Dispara o evento nativo do resumo. O item âncora só resolve o
+     * itemtype/template; o DESTINATÁRIO viaja em `digest_manager` nas
+     * $options e é lido pelo addSpecificTargets do target (alvo
+     * TARGET_MANAGER semeado pelo Install) — validado no fonte do core:
+     * raiseEvent → NotificationEventMailing::raise → addForTarget($alvo,
+     * $options) → default do switch → addSpecificTargets($alvo, $options).
+     */
+    public static function raiseDigest(int $managerId, int $anchorId, array $tags): bool
+    {
+        $item = new OccurrenceAlert();
+        if ($managerId <= 0 || $anchorId <= 0 || !$item->getFromDB($anchorId)) {
+            return false;
+        }
+
+        return (bool) NotificationEvent::raiseEvent(self::EVENT_MORNING_DIGEST, $item, [
+            'digest'         => $tags,
+            'digest_manager' => $managerId,
+        ]);
     }
 }

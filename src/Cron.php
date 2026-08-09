@@ -13,9 +13,9 @@ use CronTask;
  *                     duplica);
  *  - taskplusalerts → Etapa 7a (ENTREGUE): sino de horário-limite
  *                     estourado (régua e trilha em Alerts.php);
- *                     7b-1 (ENTREGUE): e-mail de fim de dia ao técnico
- *                     (régua e conteúdo em Emails.php); resumo matinal
- *                     ao gestor na 7b-2.
+ *                     7b-1 (ENTREGUE): e-mail de fim de dia ao técnico;
+ *                     7b-2 (ENTREGUE): resumo matinal ao gestor
+ *                     (réguas e conteúdo em Emails.php).
  */
 class Cron
 {
@@ -104,7 +104,19 @@ class Cron
             ));
         }
 
-        $volume = $result['candidates'] + $emails['sent'];
+        // 7b-2: resumo matinal ao gestor — mesma mecânica (régua de
+        // horário + trilha diária em Emails::processDigest; o envio real
+        // é a mesma fila assíncrona do fim de dia).
+        $digest = Emails::processDigest();
+        if ($digest['due']) {
+            $task->log(sprintf(
+                'Task+ resumo matinal: %d gestor(es) com equipe, %d e-mail(s) enfileirado(s).',
+                $digest['managers'],
+                $digest['sent']
+            ));
+        }
+
+        $volume = $result['candidates'] + $emails['sent'] + $digest['sent'];
         if ($volume > 0) {
             $task->addVolume($volume);
             return 1;
