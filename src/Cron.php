@@ -13,7 +13,9 @@ use CronTask;
  *                     duplica);
  *  - taskplusalerts → Etapa 7a (ENTREGUE): sino de horário-limite
  *                     estourado (régua e trilha em Alerts.php);
- *                     e-mail de fim de dia e resumo ao gestor na 7b.
+ *                     7b-1 (ENTREGUE): e-mail de fim de dia ao técnico
+ *                     (régua e conteúdo em Emails.php); resumo matinal
+ *                     ao gestor na 7b-2.
  */
 class Cron
 {
@@ -88,8 +90,23 @@ class Cron
             $result['raised']
         ));
 
-        if ($result['candidates'] > 0) {
-            $task->addVolume($result['candidates']);
+        // 7b-1: fim de dia ao técnico. A régua (horário configurado +
+        // trilha "já enviei hoje" + só com conteúdo) mora em
+        // Emails::processEod — aqui só o log. O envio real é ASSÍNCRONO:
+        // o raiseEvent enfileira em glpi_queuednotifications e o cron
+        // nativo `queuednotification` despacha.
+        $emails = Emails::processEod();
+        if ($emails['due']) {
+            $task->log(sprintf(
+                'Task+ fim de dia: %d tecnico(s) com tarefas vivas, %d e-mail(s) enfileirado(s).',
+                $emails['users'],
+                $emails['sent']
+            ));
+        }
+
+        $volume = $result['candidates'] + $emails['sent'];
+        if ($volume > 0) {
+            $task->addVolume($volume);
             return 1;
         }
 

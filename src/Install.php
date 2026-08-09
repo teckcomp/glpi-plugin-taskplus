@@ -446,29 +446,144 @@ class Install
     }
 
     /**
-     * Semeia a cadeia de notificação do 7a (modelo → tradução →
-     * notificação → modo sino → destinatário), tudo via objetos nativos
-     * (invariante do plugin: tabela nativa só se escreve pelo core) e
-     * idempotente: cada elo é procurado antes de criado — reexecutar o
-     * install (plugin:install --force) não duplica nada e PRESERVA
-     * edições do admin (modelo alterado, notificação desativada etc.).
+     * Semeia as cadeias de notificação do plugin (modelo → tradução →
+     * notificação → modo → destinatário), tudo via objetos nativos
+     * (invariante: tabela nativa só se escreve pelo core) e idempotente:
+     * cada elo é procurado antes de criado — reexecutar o install
+     * (plugin:install --force) não duplica nada e PRESERVA edições do
+     * admin (modelo alterado, notificação desativada etc.).
      *
-     * Liga/desliga fica na rota nativa (decisão da abertura do 7a):
-     * Administração → Notificações (o evento) e as preferências de
-     * notificação do próprio usuário — nenhuma tela nova no plugin.
+     * Cadeias:
+     *  - 7a: time_limit  → modo AJAX ("navegador", pop-up do SO);
+     *  - 7b-1: end_of_day → modo MAILING (e-mail; o core enfileira em
+     *    glpi_queuednotifications e o cron nativo `queuednotification`
+     *    despacha — validado contra o fonte do 11.0.6: a constante é
+     *    MODE_MAIL = 'mailing', e o gate de envio é o e-mail ligado em
+     *    Configurar → Notificações).
+     *
+     * Liga/desliga fica na rota nativa: Administração → Notificações
+     * (o evento) e as preferências do próprio usuário (opt-out).
+     *
+     * ÂNCORAS da idempotência: a notificação é achada por itemtype +
+     * EVENTO (chave natural); o modelo por itemtype + NOME (com duas
+     * cadeias no mesmo itemtype, procurar só por itemtype ficaria
+     * ambíguo — aperto feito na 7b-1; os nomes batem com os semeados
+     * na 7a, então nada duplica em base existente).
      */
     private static function ensureNotifications(): void
     {
+        self::ensureNotificationChain(
+            'Task+ horario-limite',
+            Alerts::EVENT_TIME_LIMIT,
+            'Task+ — horário-limite estourado',
+            Notification_NotificationTemplate::MODE_AJAX,
+            'Task+: horário-limite estourado — ##taskplus.name##',
+            "A tarefa ##taskplus.name## tinha horário-limite ##taskplus.limit## "
+                . "de hoje (##taskplus.date##) e ainda está aberta.\n\n"
+                . "##taskplus.description##\n\n"
+                . "Abrir a tela Hoje: ##taskplus.url##",
+            '&lt;p&gt;A tarefa &lt;strong&gt;##taskplus.name##&lt;/strong&gt; tinha '
+                . 'horário-limite &lt;strong&gt;##taskplus.limit##&lt;/strong&gt; de hoje '
+                . '(##taskplus.date##) e ainda está aberta.&lt;/p&gt;'
+                . '&lt;p&gt;##taskplus.description##&lt;/p&gt;'
+                . '&lt;p&gt;&lt;a href="##taskplus.url##"&gt;Abrir a tela Hoje&lt;/a&gt;&lt;/p&gt;'
+        );
+
+        self::ensureNotificationChain(
+            'Task+ fim de dia',
+            Emails::EVENT_END_OF_DAY,
+            'Task+ — fim de dia (e-mail ao técnico)',
+            Notification_NotificationTemplate::MODE_MAIL,
+            'Task+: fim de dia ##taskplus.eod_date## — o que ficou para amanhã',
+            self::eodContentText(),
+            self::eodContentHtml()
+        );
+    }
+
+    /**
+     * Texto puro do e-mail de fim de dia. As seções usam ##IFtag## com a
+     * CONTAGEM (o motor do core trata '0' como falso — seção vazia some)
+     * e ##FOREACHlista## para as linhas (tags ##eod.*## por linha).
+     */
+    private static function eodContentText(): string
+    {
+        return "Fim de dia ##taskplus.eod_date## — suas tarefas no Task+.\n\n"
+            . "##IFtaskplus.open_count##"
+            . "Abertas de hoje (##taskplus.open_count##):\n"
+            . "##FOREACHopen##"
+            . " - ##eod.name####IFeod.limit## (limite ##eod.limit##)##ENDIFeod.limit##"
+            . "##IFeod.origin## [##eod.origin##]##ENDIFeod.origin##\n"
+            . "##ENDFOREACHopen##\n"
+            . "##ENDIFtaskplus.open_count##"
+            . "##IFtaskplus.overdue_count##"
+            . "Atrasadas (##taskplus.overdue_count##):\n"
+            . "##FOREACHoverdue##"
+            . " - ##eod.name## (desde ##eod.date##)"
+            . "##IFeod.origin## [##eod.origin##]##ENDIFeod.origin##\n"
+            . "##ENDFOREACHoverdue##\n"
+            . "##ENDIFtaskplus.overdue_count##"
+            . "##IFtaskplus.pending_count##"
+            . "Pendentes (##taskplus.pending_count##):\n"
+            . "##FOREACHpending##"
+            . " - ##eod.name## — ##eod.pending##\n"
+            . "##ENDFOREACHpending##\n"
+            . "##ENDIFtaskplus.pending_count##"
+            . "Abrir a tela Hoje: ##taskplus.url##";
+    }
+
+    /**
+     * HTML do e-mail de fim de dia — gravado ESCAPADO (&lt;p&gt;…),
+     * formato do seed do core 11 (mesmo padrão validado na 7a).
+     */
+    private static function eodContentHtml(): string
+    {
+        return '&lt;p&gt;Fim de dia &lt;strong&gt;##taskplus.eod_date##&lt;/strong&gt; '
+            . '— suas tarefas no Task+.&lt;/p&gt;'
+            . '##IFtaskplus.open_count##'
+            . '&lt;p&gt;&lt;strong&gt;Abertas de hoje (##taskplus.open_count##):&lt;/strong&gt;&lt;/p&gt;'
+            . '&lt;ul&gt;##FOREACHopen##&lt;li&gt;##eod.name##'
+            . '##IFeod.limit## (limite ##eod.limit##)##ENDIFeod.limit##'
+            . '##IFeod.origin## &lt;em&gt;[##eod.origin##]&lt;/em&gt;##ENDIFeod.origin##'
+            . '&lt;/li&gt;##ENDFOREACHopen##&lt;/ul&gt;'
+            . '##ENDIFtaskplus.open_count##'
+            . '##IFtaskplus.overdue_count##'
+            . '&lt;p&gt;&lt;strong&gt;Atrasadas (##taskplus.overdue_count##):&lt;/strong&gt;&lt;/p&gt;'
+            . '&lt;ul&gt;##FOREACHoverdue##&lt;li&gt;##eod.name## (desde ##eod.date##)'
+            . '##IFeod.origin## &lt;em&gt;[##eod.origin##]&lt;/em&gt;##ENDIFeod.origin##'
+            . '&lt;/li&gt;##ENDFOREACHoverdue##&lt;/ul&gt;'
+            . '##ENDIFtaskplus.overdue_count##'
+            . '##IFtaskplus.pending_count##'
+            . '&lt;p&gt;&lt;strong&gt;Pendentes (##taskplus.pending_count##):&lt;/strong&gt;&lt;/p&gt;'
+            . '&lt;ul&gt;##FOREACHpending##&lt;li&gt;##eod.name## — ##eod.pending##'
+            . '&lt;/li&gt;##ENDFOREACHpending##&lt;/ul&gt;'
+            . '##ENDIFtaskplus.pending_count##'
+            . '&lt;p&gt;&lt;a href="##taskplus.url##"&gt;Abrir a tela Hoje&lt;/a&gt;&lt;/p&gt;';
+    }
+
+    /**
+     * Semeia UMA cadeia completa: modelo (itemtype+nome) → tradução
+     * default → notificação (itemtype+evento, entidade raiz recursiva)
+     * → modo → destinatário AUTHOR. Cada elo procurado antes de criado.
+     */
+    private static function ensureNotificationChain(
+        string $templateName,
+        string $event,
+        string $notificationName,
+        string $mode,
+        string $subject,
+        string $contentText,
+        string $contentHtml
+    ): void {
         $itemtype = OccurrenceAlert::class;
 
-        // 1) Modelo
+        // 1) Modelo (itemtype + NOME — ver docblock de ensureNotifications)
         $template    = new NotificationTemplate();
-        $templateRow = $template->find(['itemtype' => $itemtype]);
+        $templateRow = $template->find(['itemtype' => $itemtype, 'name' => $templateName]);
         if ($templateRow !== []) {
             $templatesId = (int) reset($templateRow)['id'];
         } else {
             $templatesId = (int) $template->add([
-                'name'     => 'Task+ horario-limite',
+                'name'     => $templateName,
                 'itemtype' => $itemtype,
             ]);
         }
@@ -482,36 +597,27 @@ class Install
             $translation->add([
                 'notificationtemplates_id' => $templatesId,
                 'language'                 => '',
-                'subject'                  => 'Task+: horário-limite estourado — ##taskplus.name##',
-                'content_text'             =>
-                    "A tarefa ##taskplus.name## tinha horário-limite ##taskplus.limit## "
-                    . "de hoje (##taskplus.date##) e ainda está aberta.\n\n"
-                    . "##taskplus.description##\n\n"
-                    . "Abrir a tela Hoje: ##taskplus.url##",
-                'content_html'             =>
-                    '&lt;p&gt;A tarefa &lt;strong&gt;##taskplus.name##&lt;/strong&gt; tinha '
-                    . 'horário-limite &lt;strong&gt;##taskplus.limit##&lt;/strong&gt; de hoje '
-                    . '(##taskplus.date##) e ainda está aberta.&lt;/p&gt;'
-                    . '&lt;p&gt;##taskplus.description##&lt;/p&gt;'
-                    . '&lt;p&gt;&lt;a href="##taskplus.url##"&gt;Abrir a tela Hoje&lt;/a&gt;&lt;/p&gt;',
+                'subject'                  => $subject,
+                'content_text'             => $contentText,
+                'content_html'             => $contentHtml,
             ]);
         }
 
-        // 3) Notificação do evento time_limit (entidade raiz, recursiva)
+        // 3) Notificação do evento (entidade raiz, recursiva)
         $notification    = new Notification();
         $notificationRow = $notification->find([
             'itemtype' => $itemtype,
-            'event'    => Alerts::EVENT_TIME_LIMIT,
+            'event'    => $event,
         ]);
         if ($notificationRow !== []) {
             $notificationsId = (int) reset($notificationRow)['id'];
         } else {
             $notificationsId = (int) $notification->add([
-                'name'         => 'Task+ — horário-limite estourado',
+                'name'         => $notificationName,
                 'entities_id'  => 0,
                 'is_recursive' => 1,
                 'itemtype'     => $itemtype,
-                'event'        => Alerts::EVENT_TIME_LIMIT,
+                'event'        => $event,
                 'is_active'    => 1,
             ]);
         }
@@ -519,22 +625,22 @@ class Install
             return;
         }
 
-        // 4) Canal: sino (modo ajax — "Notificações do navegador")
-        $mode = new Notification_NotificationTemplate();
+        // 4) Canal (ajax = sino/navegador; mailing = fila de e-mail)
+        $modeLink = new Notification_NotificationTemplate();
         if (
-            $mode->find([
+            $modeLink->find([
                 'notifications_id' => $notificationsId,
-                'mode'             => Notification_NotificationTemplate::MODE_AJAX,
+                'mode'             => $mode,
             ]) === []
         ) {
-            $mode->add([
+            $modeLink->add([
                 'notifications_id'         => $notificationsId,
-                'mode'                     => Notification_NotificationTemplate::MODE_AJAX,
+                'mode'                     => $mode,
                 'notificationtemplates_id' => $templatesId,
             ]);
         }
 
-        // 5) Destinatário: o responsável (users_id da ocorrência)
+        // 5) Destinatário: o responsável (users_id da linha âncora)
         $target = new NotificationTarget();
         if (
             $target->find([

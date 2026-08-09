@@ -45,6 +45,13 @@
                     </label>
 
                     <label class="taskplus-field">
+                        <span>{{ __('Horário do e-mail de fim de dia', 'taskplus') }}</span>
+                        {# type=time nativo — o valor viaja como HH:MM e o
+                           Config::set valida o formato (lixo é ignorado). #}
+                        <input type="time" name="email_eod_time" value="{{ email_eod_time }}" required>
+                    </label>
+
+                    <label class="taskplus-field">
                         <span>{{ __('Apagar tabelas, dados e direitos ao desinstalar', 'taskplus') }}</span>
                         <select name="purge_on_uninstall">
                             <option value="0" {{ not purge_on_uninstall ? 'selected' : '' }}>{{ __('No') }}</option>

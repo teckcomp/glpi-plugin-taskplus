@@ -60,6 +60,7 @@ TemplateRenderer::getInstance()->display(
         'form_csrf'          => Session::getNewCSRFToken(),
         'csrf_token'         => Session::getNewCSRFToken(),
         'email_enabled'      => (int) $config['email_enabled'],
+        'email_eod_time'     => (string) $config['email_eod_time'],
         'purge_on_uninstall' => (int) $config['purge_on_uninstall'],
         'payload_json'       => json_encode(
             Phase::payload($isAdmin, $managed),

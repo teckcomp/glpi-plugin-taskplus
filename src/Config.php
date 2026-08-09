@@ -15,7 +15,8 @@ class Config
     public const CONTEXT = 'plugin:taskplus';
 
     public const DEFAULTS = [
-        'email_enabled'      => 1, // 1 = envia e-mail além do sino (Etapa 6)
+        'email_enabled'      => 1, // 1 = envia e-mail além do sino (7b)
+        'email_eod_time'     => '18:00', // horário do e-mail de fim de dia (7b-1)
         'purge_on_uninstall' => 0, // 1 = apaga tabelas/dados/direitos ao desinstalar
     ];
 
@@ -35,7 +36,19 @@ class Config
     {
         $clean = [];
         foreach (self::DEFAULTS as $key => $default) {
-            if (isset($values[$key])) {
+            if (!isset($values[$key])) {
+                continue;
+            }
+            // Tipo pelo DEFAULT: chave de horário ('HH:MM') valida o
+            // formato e IGNORA lixo (mantém o valor vigente); o resto
+            // continua inteiro >= 0. A trilha email_eod_last NÃO está
+            // aqui de propósito — quem a escreve é Emails::markEodSent.
+            if (is_string($default)) {
+                $raw = trim((string) $values[$key]);
+                if (preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $raw)) {
+                    $clean[$key] = $raw;
+                }
+            } else {
                 $clean[$key] = max(0, (int) $values[$key]);
             }
         }
