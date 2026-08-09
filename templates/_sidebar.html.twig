@@ -33,8 +33,8 @@
                 <a href="{{ plugin_web_dir }}/front/week.php"><i class="ti ti-calendar-week"></i>{{ __('Semana', 'taskplus') }}</a>
             </li>
             {% endif %}
-            {# Telas das próximas etapas: entradas desabilitadas de propósito
-               (link morto daria 404). Viram <a> quando cada etapa fechar. #}
+            {# 6c-1: o Histórico era a última entrada desabilitada — com
+               ele no ar, todas as telas do hub viraram links. #}
             {% if nav.team %}
             <li class="taskplus-sidebar__item{{ active == 'team' ? ' taskplus-sidebar__item--active' : '' }}">
                 <a href="{{ plugin_web_dir }}/front/team.php"><i class="ti ti-users"></i>{{ __('Equipe', 'taskplus') }}</a>
@@ -46,8 +46,8 @@
             </li>
             {% endif %}
             {% if nav.history %}
-            <li class="taskplus-sidebar__item taskplus-sidebar__item--disabled" title="{{ __('Em breve (Etapa 6)', 'taskplus') }}">
-                <span><i class="ti ti-history"></i>{{ __('Histórico', 'taskplus') }}</span>
+            <li class="taskplus-sidebar__item{{ active == 'history' ? ' taskplus-sidebar__item--active' : '' }}">
+                <a href="{{ plugin_web_dir }}/front/history.php"><i class="ti ti-history"></i>{{ __('Histórico', 'taskplus') }}</a>
             </li>
             {% endif %}
             {% if nav.config %}

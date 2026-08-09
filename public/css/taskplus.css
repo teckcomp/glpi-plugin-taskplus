@@ -655,3 +655,64 @@
 .taskplus-rtable__fill { display: block; height: 100%; background: #2f9e44; border-radius: 4px; }
 .taskplus-rtable__ratetext { font-size: 0.8rem; color: #4a5560; vertical-align: middle; }
 .taskplus-rtable__more { font-size: 0.78rem; color: #7a8894; padding-top: 8px; }
+
+/* ==========================================================================
+   Etapa 6c-1 — tela Histórico (trilha auditável, leitura)
+   ========================================================================== */
+
+/* Contadores: .taskplus-kpis é FLEX com wrap — para os 6 cartões
+   dividirem a linha por igual, cada um cresce a partir de uma base
+   estreita (em tela apertada eles quebram sozinhos). */
+.taskplus-kpis--history .taskplus-kpi { flex: 1 1 110px; min-width: 110px; }
+
+.taskplus-hist { display: flex; flex-direction: column; gap: 14px; }
+.taskplus-hist__empty {
+    background: #fff; border: 1px dashed #ccd6df; border-radius: 8px;
+    padding: 22px; text-align: center; color: #7a8894; font-size: 0.9rem;
+}
+
+/* Seção de um dia: cabeçalho + lista de itens */
+.taskplus-hday {
+    background: #fff; border: 1px solid #dde5ec; border-radius: 8px;
+    padding: 10px 12px;
+}
+.taskplus-hday--today { border-color: #9ec5e8; }
+.taskplus-hday__head {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+}
+.taskplus-hday__label {
+    font-size: 0.85rem; font-weight: 600; color: #2c3844;
+}
+.taskplus-hday--today .taskplus-hday__label { color: #2a76a8; }
+.taskplus-hday__list { display: flex; flex-direction: column; gap: 6px; }
+
+/* Linha de um item da trilha (leitura: sem ações no 6c-1) */
+.taskplus-hcard {
+    border: 1px solid #e6ecf1; border-radius: 6px; padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 4px; overflow: hidden;
+}
+.taskplus-hcard__name { font-size: 0.88rem; color: #2c3844; overflow-wrap: anywhere; }
+.taskplus-hcard__desc {
+    font-size: 0.78rem; color: #7a8894; overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+.taskplus-hcard .taskplus-badge {
+    white-space: normal; overflow-wrap: anywhere; max-width: 100%;
+    line-height: 1.35;
+}
+
+/* Cor do filete = estado (mesma paleta dos cards da Semana) */
+.taskplus-hcard--late { border-left: 3px solid #d9480f; }
+.taskplus-hcard--pending { border-left: 3px solid #e8a13c; }
+.taskplus-hcard--done { border-left: 3px solid #2f9e44; }
+.taskplus-hcard--done .taskplus-hcard__name { opacity: 0.75; }
+.taskplus-hcard--skipped { border-left: 3px solid #8a97a3; }
+.taskplus-hcard--skipped .taskplus-hcard__name { opacity: 0.75; }
+.taskplus-hcard--deleted { border-left: 3px solid #b0b9c2; background: #fafbfc; }
+.taskplus-hcard--deleted .taskplus-hcard__name {
+    opacity: 0.6; text-decoration: line-through;
+}
+
+/* Badges de estado próprios da trilha */
+.taskplus-badge--hskipped { background: #eef2f6; color: #5a7684; font-weight: 600; }
+.taskplus-badge--hdeleted { background: #f1f3f5; color: #6b7681; font-weight: 600; }

@@ -1,0 +1,78 @@
+{# Task+ — tela "Histórico" (Etapa 6c-1: trilha auditável, leitura) #}
+
+<link rel="stylesheet" href="{{ plugin_web_dir }}/css/taskplus.css">
+
+<div class="taskplus-app" id="taskplus-history"
+     data-csrf="{{ csrf_token }}"
+     data-user-id="{{ current_user_id }}"
+     data-ajax-url="{{ plugin_web_dir }}/ajax/history.php">
+
+    {# ================= COLUNA ESQUERDA: título + sidebar ================= #}
+    {% include '@taskplus/_sidebar.html.twig' with {'active': 'history'} %}
+
+    {# ================= ÁREA PRINCIPAL ================= #}
+    <div class="taskplus-main">
+
+        {# Período (de–até, padrão 5b-2 p2, default de 30 dias) + busca
+           local. O aviso do recorte é do JS, a partir do payload. #}
+        <div class="taskplus-toolbar2">
+            <label class="taskplus-toolbar2__label">{{ __('De', 'taskplus') }}
+                <input type="date" id="tp-h-from">
+            </label>
+            <label class="taskplus-toolbar2__label">{{ __('Até', 'taskplus') }}
+                <input type="date" id="tp-h-to">
+            </label>
+            <button type="button" class="btn btn-primary btn-sm" id="tp-h-apply">{{ __('Aplicar', 'taskplus') }}</button>
+            <button type="button" class="btn btn-ghost-secondary btn-sm" id="tp-h-clear">{{ __('Últimos 30 dias', 'taskplus') }}</button>
+            <input type="search" id="tp-h-search" class="taskplus-toolbar2__search"
+                   placeholder="{{ __('Buscar por título, descrição ou categoria', 'taskplus') }}"
+                   aria-label="{{ __('Buscar', 'taskplus') }}">
+            <div class="taskplus-toolbar2__note" id="tp-h-note" hidden></div>
+        </div>
+
+        {# Contadores do período — TODOS os estados, inclusive puladas e
+           excluídas (é a razão de ser da tela — decisão nº 9). #}
+        <div class="taskplus-kpis taskplus-kpis--history">
+            <div class="taskplus-kpi">
+                <span class="taskplus-kpi__value" id="tp-hk-all">0</span>
+                <span class="taskplus-kpi__label">{{ __('No período', 'taskplus') }}</span>
+            </div>
+            <div class="taskplus-kpi taskplus-kpi--done">
+                <span class="taskplus-kpi__value" id="tp-hk-done">0</span>
+                <span class="taskplus-kpi__label">{{ __('Concluídas', 'taskplus') }}</span>
+            </div>
+            <div class="taskplus-kpi taskplus-kpi--pending">
+                <span class="taskplus-kpi__value" id="tp-hk-pending">0</span>
+                <span class="taskplus-kpi__label">{{ __('Pendentes', 'taskplus') }}</span>
+            </div>
+            <div class="taskplus-kpi taskplus-kpi--late">
+                <span class="taskplus-kpi__value" id="tp-hk-late">0</span>
+                <span class="taskplus-kpi__label">{{ __('Atrasadas', 'taskplus') }}</span>
+            </div>
+            <div class="taskplus-kpi">
+                <span class="taskplus-kpi__value" id="tp-hk-skipped">0</span>
+                <span class="taskplus-kpi__label">{{ __('Puladas', 'taskplus') }}</span>
+            </div>
+            <div class="taskplus-kpi">
+                <span class="taskplus-kpi__value" id="tp-hk-deleted">0</span>
+                <span class="taskplus-kpi__label">{{ __('Excluídas', 'taskplus') }}</span>
+            </div>
+        </div>
+
+        {# Aviso fixo (decisão nº 3): as origens do GLPI são estado atual,
+           sem trilha por dia — ficam fora do Histórico. #}
+        <div class="taskplus-weeknote">
+            <i class="ti ti-info-circle"></i>
+            <span>{{ __('O Histórico mostra a trilha das suas tarefas do Task+ (rotinas e avulsas), inclusive puladas e excluídas. As origens do GLPI — chamados e projetos — não têm trilha por dia e ficam de fora.', 'taskplus') }}</span>
+        </div>
+
+        {# Lista agrupada por dia (mais recentes primeiro), do JS #}
+        <div class="taskplus-hist" id="tp-h-list"></div>
+    </div>
+</div>
+
+{# Estado inicial da tela. O front gera este JSON com JSON_HEX_TAG & cia,
+   então um "</script>" em nome de tarefa NÃO quebra a página — por isso
+   (e só por isso) o |raw é seguro aqui. #}
+<script type="application/json" id="taskplus-history-data">{{ payload_json|raw }}</script>
+<script src="{{ plugin_web_dir }}/js/history.js?v={{ plugin_version }}"></script>
