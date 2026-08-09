@@ -31,6 +31,8 @@
         // Modais do 5b-2: {item, tech} em edição / pendência
         editCtx: null,
         pendCtx: null,
+        // Modal de criação do 5c-1: {tech} de destino
+        createCtx: null,
         // 5b-2 p2: busca local + período (viaja em todo POST)
         search: '',
         period: { from: '', to: '' },
@@ -118,6 +120,8 @@
             // o próprio técnico
             done_by: (typeof i.done_by === 'string') ? i.done_by : '',
             pending_by: (typeof i.pending_by === 'string') ? i.pending_by : '',
+            // 5c-1: quem criou, quando não foi o próprio técnico
+            created_by: (typeof i.created_by === 'string') ? i.created_by : '',
             is_native: !!i.is_native,
             source: (typeof i.source === 'string') ? i.source : '',
             url: (typeof i.url === 'string') ? i.url : ''
@@ -483,6 +487,21 @@
         chev.className = 'ti taskplus-team__chevron ti-chevron-'
             + (isOpen ? 'down' : 'right');
 
+        // 5c-1: criar AVULSA para o técnico. O botão vive no corpo
+        // expandido — a tela inteira já é só de quem passou pelo gate
+        // canTeam(), e o escopo real é revalidado no POST (T18).
+        var createRow = el('div', 'taskplus-team__create');
+        var createBtn = el('button',
+            'taskplus-team__act taskplus-team__act--create',
+            '+ Nova tarefa para ' + tech.label);
+        createBtn.type = 'button';
+        createBtn.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            openCreateModal(tech);
+        });
+        createRow.appendChild(createBtn);
+        body.appendChild(createRow);
+
         if (items.length === 0) {
             body.appendChild(el('p', 'taskplus-empty',
                 periodActive() ? 'Nada no período.' : 'Nada para hoje.'));
@@ -550,6 +569,12 @@
         if (item.status === 'pending' && item.pending_by) {
             row.appendChild(el('span', 'taskplus-badge taskplus-badge--manager',
                 'pelo gestor ' + item.pending_by));
+        }
+        // 5c-1: a tarefa foi CRIADA por um gestor (vale em qualquer
+        // status — a autoria da criação não muda com o andamento)
+        if (item.created_by) {
+            row.appendChild(el('span', 'taskplus-badge taskplus-badge--manager',
+                'criada pelo gestor ' + item.created_by));
         }
 
         if (item.detail) {
@@ -706,6 +731,167 @@
         }, closePendModal);
     }
 
+    // ------------------------------------------------------------------
+    // Modal de criação (5c-1) — mesmos campos do "Nova tarefa" da tela
+    // Hoje; o dono é o TÉCNICO e o autor é o gestor (badge de autoria)
+    // ------------------------------------------------------------------
+
+    function openCreateModal(tech) {
+        state.createCtx = { tech: tech };
+        $('tp-t-c-tech').textContent = tech.label;
+        $('tp-t-c-name').value = '';
+        // Sugestão: hoje (vazio no servidor também vira hoje — a
+        // sugestão só deixa a regra visível para o gestor)
+        $('tp-t-c-date').value = state.data.date || '';
+        $('tp-t-c-time').value = '';
+        $('tp-t-c-category').value = '';
+        $('tp-t-c-description').value = '';
+        // 5c-2: estado inicial da recorrência — sempre volta a Avulsa
+        setCreateKind('avulsa');
+        $('tp-t-c-frequency').value = 'daily';
+        $('tp-t-c-only-workdays').checked = false;
+        weekdayBoxes().forEach(function (b) { b.checked = false; });
+        setMonthlyMode('day');
+        $('tp-t-c-monthday').value = '';
+        $('tp-t-c-monthweek').value = '1';
+        $('tp-t-c-monthweekday').value = '1';
+        $('tp-t-c-begin').value = state.data.date || '';
+        $('tp-t-c-end').value = '';
+        syncCreateKind();
+        syncCreateFreq();
+        syncMonthlyMode();
+        $('tp-t-create-modal').hidden = false;
+        $('tp-t-c-name').focus();
+    }
+
+    // ---- helpers do tipo/recorrência (5c-2) ----
+
+    function createKind() {
+        var checked = document.querySelector('input[name="tp-t-c-kind"]:checked');
+        return checked ? checked.value : 'avulsa';
+    }
+
+    function setCreateKind(kind) {
+        var radios = document.querySelectorAll('input[name="tp-t-c-kind"]');
+        Array.prototype.forEach.call(radios, function (r) {
+            r.checked = (r.value === kind);
+        });
+    }
+
+    function monthlyMode() {
+        var checked = document.querySelector('input[name="tp-t-c-monthly-mode"]:checked');
+        return checked ? checked.value : 'day';
+    }
+
+    function setMonthlyMode(mode) {
+        var radios = document.querySelectorAll('input[name="tp-t-c-monthly-mode"]');
+        Array.prototype.forEach.call(radios, function (r) {
+            r.checked = (r.value === mode);
+        });
+    }
+
+    function weekdayBoxes() {
+        return Array.prototype.slice.call(
+            document.querySelectorAll('#tp-t-c-weekdays input[type="checkbox"]'));
+    }
+
+    /** Avulsa mostra Data+Categoria; Rotina mostra o bloco de recorrência. */
+    function syncCreateKind() {
+        var routine = createKind() === 'rotina';
+        $('tp-t-c-date-wrap').hidden = routine;
+        $('tp-t-c-cat-wrap').hidden = routine;
+        $('tp-t-c-routine-block').hidden = !routine;
+        // Na rotina, a descrição vira as INSTRUÇÕES (é o que o cron
+        // copia para a descrição de cada dia gerado)
+        $('tp-t-c-desc-label').textContent = routine
+            ? 'Instruções (como fazer)' : 'Descrição';
+    }
+
+    function syncCreateFreq() {
+        var f = $('tp-t-c-frequency').value;
+        $('tp-t-c-block-daily').hidden = (f !== 'daily');
+        $('tp-t-c-block-weekly').hidden = (f !== 'weekly');
+        $('tp-t-c-block-monthly').hidden = (f !== 'monthly');
+    }
+
+    function syncMonthlyMode() {
+        var pos = monthlyMode() === 'pos';
+        $('tp-t-c-monthly-day-row').hidden = pos;
+        $('tp-t-c-monthly-pos-row').hidden = !pos;
+    }
+
+    function closeCreateModal() {
+        $('tp-t-create-modal').hidden = true;
+        state.createCtx = null;
+    }
+
+    function saveCreateModal() {
+        var ctx = state.createCtx;
+        if (!ctx) {
+            return;
+        }
+        var name = $('tp-t-c-name').value.trim();
+        if (name === '') {
+            toast('Informe o título da tarefa', true);
+            $('tp-t-c-name').focus();
+            return;
+        }
+
+        if (createKind() !== 'rotina') {
+            post({
+                action: 'create',
+                tech_id: String(ctx.tech.id),
+                name: name,
+                date: $('tp-t-c-date').value,
+                time_limit: $('tp-t-c-time').value,
+                category: $('tp-t-c-category').value.trim(),
+                description: $('tp-t-c-description').value.trim()
+            }, closeCreateModal);
+            return;
+        }
+
+        // 5c-2: rotina para o técnico. Checagens locais só das duas
+        // ausências óbvias (mesmas mensagens do servidor); o resto —
+        // XOR do mensal, datas — é o cleanFields da Routine, e o erro
+        // dele volta em toast COM o modal aberto para corrigir.
+        var frequency = $('tp-t-c-frequency').value;
+        var weekdays = weekdayBoxes()
+            .filter(function (b) { return b.checked; })
+            .map(function (b) { return b.value; })
+            .join(',');
+        if (frequency === 'weekly' && weekdays === '') {
+            toast('Selecione ao menos um dia da semana', true);
+            return;
+        }
+        var mode = monthlyMode();
+        if (frequency === 'monthly' && mode === 'day'
+                && $('tp-t-c-monthday').value.trim() === '') {
+            toast('Informe o dia do mês', true);
+            $('tp-t-c-monthday').focus();
+            return;
+        }
+
+        post({
+            action: 'create_routine',
+            tech_id: String(ctx.tech.id),
+            name: name,
+            instructions: $('tp-t-c-description').value.trim(),
+            frequency: frequency,
+            only_workdays: $('tp-t-c-only-workdays').checked ? '1' : '0',
+            weekdays: weekdays,
+            // XOR do mensal: só o modo escolhido viaja preenchido
+            monthday: (frequency === 'monthly' && mode === 'day')
+                ? $('tp-t-c-monthday').value.trim() : '',
+            monthweek: (frequency === 'monthly' && mode === 'pos')
+                ? $('tp-t-c-monthweek').value : '',
+            monthweekday: (frequency === 'monthly' && mode === 'pos')
+                ? $('tp-t-c-monthweekday').value : '',
+            time_limit: $('tp-t-c-time').value,
+            date_begin: $('tp-t-c-begin').value,
+            date_end: $('tp-t-c-end').value
+        }, closeCreateModal);
+    }
+
     /**
      * Liga os botões dos modais UMA vez. Os elementos podem não existir
      * (template antigo em cache) — cada listener é opcional.
@@ -715,7 +901,9 @@
             'tp-t-e-cancel': closeEditModal,
             'tp-t-e-save': saveEditModal,
             'tp-t-p-cancel': closePendModal,
-            'tp-t-p-save': savePendModal
+            'tp-t-p-save': savePendModal,
+            'tp-t-c-cancel': closeCreateModal,
+            'tp-t-c-save': saveCreateModal
         };
         Object.keys(map).forEach(function (id) {
             var node = $(id);
@@ -723,6 +911,19 @@
                 node.addEventListener('click', map[id]);
             }
         });
+
+        // 5c-2: sincronia dos blocos do modal de criação. Elementos
+        // podem faltar (template antigo em cache) — tudo opcional.
+        Array.prototype.forEach.call(
+            document.querySelectorAll('input[name="tp-t-c-kind"]'),
+            function (r) { r.addEventListener('change', syncCreateKind); });
+        var freq = $('tp-t-c-frequency');
+        if (freq) {
+            freq.addEventListener('change', syncCreateFreq);
+        }
+        Array.prototype.forEach.call(
+            document.querySelectorAll('input[name="tp-t-c-monthly-mode"]'),
+            function (r) { r.addEventListener('change', syncMonthlyMode); });
     }
 
     // ------------------------------------------------------------------

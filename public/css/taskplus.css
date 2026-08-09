@@ -474,6 +474,10 @@
 .taskplus-team__act--pend { border-color: #d9822b; color: #d9822b; }
 .taskplus-team__act--pend:hover { background: #d9822b; color: #fff; }
 
+/* 5c-1: botão "Nova tarefa para o técnico" no corpo expandido */
+.taskplus-team__create { padding: 6px 12px 2px; }
+.taskplus-team__act--create { border-style: dashed; }
+
 /* ===== 5b-2 pacote 2 — busca + período (Hoje · Quadro · Equipe) ===== */
 .taskplus-toolbar2 {
     display: flex; flex-wrap: wrap; align-items: center; gap: 8px;

@@ -175,6 +175,12 @@
         if (item.is_paused) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--late', 'pausada'));
         }
+        // 5c-2: a rotina foi CRIADA por um gestor pela tela Equipe — o
+        // técnico vê quem criou. Chaves novas do payload; antigo = falsy.
+        if (item.created_by_other && item.created_by_label) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--manager',
+                'criada pelo gestor ' + item.created_by_label));
+        }
         if (badges.childNodes.length > 0) {
             body.appendChild(badges);
         }

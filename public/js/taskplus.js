@@ -645,6 +645,14 @@
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--manager',
                 'pelo gestor ' + item.done_by_label));
         }
+        // 5c-1: a tarefa foi CRIADA pelo gestor na tela Equipe — o
+        // técnico vê quem criou, em qualquer status. Chaves novas do
+        // payload (created_by_other/created_by_label); payload antigo
+        // cai no falsy.
+        if (item.created_by_other && item.created_by_label) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--manager',
+                'criada pelo gestor ' + item.created_by_label));
+        }
         if (badges.childNodes.length > 0) {
             body.appendChild(badges);
         }

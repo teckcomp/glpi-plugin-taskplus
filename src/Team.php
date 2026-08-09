@@ -130,6 +130,10 @@ class Team
                 return self::pendingTech($input, $usersId);
             case 'unpending':
                 return self::unpendingTech($input, $usersId);
+            case 'create':
+                return self::createTech($input, $usersId);
+            case 'create_routine':
+                return self::createRoutineTech($input, $usersId);
             case 'list':
                 return ['success' => true, 'message' => ''];
             default:
@@ -255,6 +259,50 @@ class Team
         $result = Occurrence::clearPendingFor($input, $tech['tech_id']);
         if ($result['success']) {
             $result['message'] = sprintf(__('Pendência de %s encerrada', 'taskplus'), $tech['label']);
+        }
+        return $result;
+    }
+
+    /**
+     * Criar AVULSA para o técnico (5c-1). O escopo é o mesmo de toda
+     * ação da Equipe (managedTech, revalidado a cada POST — T18); os
+     * CAMPOS passam pelo cleanFields de sempre dentro da Occurrence. A
+     * tarefa nasce DO TÉCNICO (users_id) com o gestor como AUTOR
+     * (users_id_creator) — badge "criada pelo gestor" nas duas pontas.
+     * Rotina para o técnico fica para o 5c-2.
+     */
+    private static function createTech(array $input, int $usersId): array
+    {
+        $tech = self::managedTech($input, $usersId);
+        if (is_string($tech)) {
+            return ['success' => false, 'message' => $tech];
+        }
+
+        $result = Occurrence::addFor($input, $tech['tech_id'], $usersId);
+        if ($result['success']) {
+            $result['message'] = sprintf(__('Tarefa criada para %s', 'taskplus'), $tech['label']);
+        }
+        return $result;
+    }
+
+    /**
+     * Criar ROTINA para o técnico (5c-2). Mesmo escopo do create
+     * (managedTech a cada POST — T18); campos validados pelo
+     * cleanFields da Routine (frequência, dias, XOR do mensal). A
+     * rotina nasce DO TÉCNICO com controle total dele (decisão da
+     * abertura); o gestor fica na autoria — badge na tela Rotinas e,
+     * via generateForDate, em cada ocorrência gerada.
+     */
+    private static function createRoutineTech(array $input, int $usersId): array
+    {
+        $tech = self::managedTech($input, $usersId);
+        if (is_string($tech)) {
+            return ['success' => false, 'message' => $tech];
+        }
+
+        $result = Routine::addFor($input, $tech['tech_id'], $usersId);
+        if ($result['success']) {
+            $result['message'] = sprintf(__('Rotina criada para %s', 'taskplus'), $tech['label']);
         }
         return $result;
     }
@@ -413,6 +461,11 @@ class Team
                 : '',
             'pending_by'  => (!empty($item['pending_by_other']))
                 ? (string) ($item['pending_by_label'] ?? '')
+                : '',
+            // 5c-1: quem CRIOU a tarefa, quando não foi o próprio
+            // técnico (gestor pela Equipe) — vira badge no JS
+            'created_by'  => (!empty($item['created_by_other']))
+                ? (string) ($item['created_by_label'] ?? '')
                 : '',
             'is_native'   => $isNative,
             // 'ticket' | 'project' | '' (própria)

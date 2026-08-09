@@ -77,10 +77,59 @@ class Routine
             $rows[] = self::format($row);
         }
 
+        // 5c-2: nome de quem criou a rotina, quando não foi o próprio
+        // dono (gestor pela Equipe) — mesmo padrão do fillActorLabels
+        // da Occurrence: uma consulta para todos os ids.
+        $rows = self::fillCreatorLabels($rows);
+
         return [
             'today'    => date('Y-m-d'),
             'routines' => $rows,
         ];
+    }
+
+    /**
+     * Preenche `created_by_label` nas rotinas criadas por OUTRO usuário.
+     * Autor excluído do GLPI deixa o label vazio — o front simplesmente
+     * não mostra o badge.
+     */
+    private static function fillCreatorLabels(array $rows): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $ids = [];
+        foreach ($rows as $item) {
+            if (!empty($item['created_by_other']) && (int) ($item['created_by_id'] ?? 0) > 0) {
+                $ids[(int) $item['created_by_id']] = true;
+            }
+        }
+        if ($ids === []) {
+            return $rows;
+        }
+
+        $labels = [];
+        foreach ($DB->request([
+            'FROM'  => 'glpi_users',
+            'WHERE' => ['glpi_users.id' => array_keys($ids) ?: [0]],
+        ]) as $row) {
+            $label = trim(
+                (string) ($row['firstname'] ?? '') . ' ' . (string) ($row['realname'] ?? '')
+            );
+            if ($label === '') {
+                $label = (string) ($row['name'] ?? '');
+            }
+            $labels[(int) ($row['id'] ?? 0)] = $label;
+        }
+
+        foreach ($rows as &$item) {
+            if (!empty($item['created_by_other'])) {
+                $item['created_by_label'] = $labels[(int) ($item['created_by_id'] ?? 0)] ?? '';
+            }
+        }
+        unset($item);
+
+        return $rows;
     }
 
     /**
@@ -106,6 +155,12 @@ class Routine
             'is_paused'        => ((int) ($row['is_paused'] ?? 0)) === 1,
             'date_begin'       => (!empty($row['date_begin'])) ? (string) $row['date_begin'] : null,
             'date_end'         => (!empty($row['date_end'])) ? (string) $row['date_end'] : null,
+            // Autoria da criação (5c-2): rotina criada por OUTRO usuário
+            // (gestor pela Equipe). Nome resolvido em lote no payload.
+            'created_by_other' => ((int) ($row['users_id_creator'] ?? 0)) > 0
+                && ((int) ($row['users_id_creator'] ?? 0)) !== ((int) ($row['users_id'] ?? 0)),
+            'created_by_id'    => (int) ($row['users_id_creator'] ?? 0),
+            'created_by_label' => '',
         ];
     }
 
@@ -199,6 +254,22 @@ class Routine
 
     private static function add(array $input, int $usersId): array
     {
+        // Dono criando para si: dono = criador
+        return self::addFor($input, $usersId, $usersId);
+    }
+
+    /**
+     * Cria uma ROTINA para o dono $ownerId com $creatorId como AUTOR
+     * (5c-2: gestor pela tela Equipe). A rotina é DO TÉCNICO — aparece
+     * na tela Rotinas dele com controle total (editar/pausar/excluir,
+     * decisão da abertura do 5c-2); a autoria vira badge "criada pelo
+     * gestor". O generateForDate propaga users_id_creator para cada
+     * ocorrência gerada, então o badge da tela Hoje/Equipe sai de
+     * graça, sem mudança no cron. Escopo já validado no Team::handle;
+     * os CAMPOS passam pelo cleanFields de sempre.
+     */
+    public static function addFor(array $input, int $ownerId, int $creatorId): array
+    {
         /** @var \DBmysql $DB */
         global $DB;
 
@@ -210,13 +281,20 @@ class Routine
         $now = date('Y-m-d H:i:s');
 
         $DB->insert(self::TABLE, $fields + [
-            'users_id'         => $usersId,
-            'users_id_creator' => $usersId,
+            'users_id'         => $ownerId,
+            'users_id_creator' => $creatorId,
             'is_paused'        => 0,
             'is_deleted'       => 0,
             'date_creation'    => $now,
             'date_mod'         => $now,
         ]);
+
+        // Rotina devida HOJE gera a ocorrência do dia NA HORA: sem isso,
+        // "criei e não apareceu" — o cron só passaria em até 30 min
+        // (aresta achada na homologação do 5c-2). generateForDate é
+        // idempotente (occurrenceExists), então a passada extra é segura
+        // e cobre também quem cria rotina para si na tela Rotinas.
+        self::generateForDate();
 
         return ['success' => true, 'message' => __('Rotina criada', 'taskplus')];
     }

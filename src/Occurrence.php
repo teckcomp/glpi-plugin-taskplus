@@ -321,6 +321,9 @@ class Occurrence
             if (!empty($item['pending_by_other']) && (int) ($item['pending_by_id'] ?? 0) > 0) {
                 $ids[(int) $item['pending_by_id']] = true;
             }
+            if (!empty($item['created_by_other']) && (int) ($item['created_by_id'] ?? 0) > 0) {
+                $ids[(int) $item['created_by_id']] = true;
+            }
         }
         if ($ids === []) {
             return $rows;
@@ -346,6 +349,9 @@ class Occurrence
             }
             if (!empty($item['pending_by_other'])) {
                 $item['pending_by_label'] = $labels[(int) ($item['pending_by_id'] ?? 0)] ?? '';
+            }
+            if (!empty($item['created_by_other'])) {
+                $item['created_by_label'] = $labels[(int) ($item['created_by_id'] ?? 0)] ?? '';
             }
         }
         unset($item);
@@ -423,6 +429,7 @@ class Occurrence
                 self::TABLE . '.plugin_taskplus_routines_id',
                 self::TABLE . '.users_id',
                 self::TABLE . '.users_id_done',
+                self::TABLE . '.users_id_creator',
                 self::TABLE . '.name',
                 self::TABLE . '.description',
                 self::TABLE . '.category',
@@ -503,6 +510,17 @@ class Occurrence
                 && ((int) ($row['users_id_done'] ?? 0)) !== ((int) ($row['users_id'] ?? 0)),
             'done_by_id'    => (int) ($row['users_id_done'] ?? 0),
             'done_by_label' => '',
+            // Autoria da CRIAÇÃO (5c-1): tarefa criada por OUTRO usuário
+            // (gestor pela tela Equipe). `users_id_creator` existe desde
+            // a Etapa 1 e até o 5c era sempre = dono — usar como autoria
+            // é só mudança de leitura, sem schema. Ocorrência de rotina
+            // herda o criador da rotina no generateForDate, então rotina
+            // criada pelo gestor (5c-2) ganhará o badge de graça. O nome
+            // é resolvido em lote por fillActorLabels — aqui fica vazio.
+            'created_by_other' => ((int) ($row['users_id_creator'] ?? 0)) > 0
+                && ((int) ($row['users_id_creator'] ?? 0)) !== ((int) ($row['users_id'] ?? 0)),
+            'created_by_id'    => (int) ($row['users_id_creator'] ?? 0),
+            'created_by_label' => '',
             'is_late'     => $isLate,
             // Setada como true só na consulta "concluída hoje, de dia
             // anterior" (4d-2); presente em todo item pela mesma higiene
@@ -581,6 +599,21 @@ class Occurrence
 
     private static function add(array $input, int $usersId): array
     {
+        // Dono criando para si: dono = criador
+        return self::addFor($input, $usersId, $usersId);
+    }
+
+    /**
+     * Cria uma AVULSA para o dono $ownerId com $creatorId como AUTOR
+     * (5c-1: gestor pela tela Equipe). A tarefa é DO TÉCNICO — aparece
+     * na tela Hoje dele, com badge "criada pelo gestor" quando o
+     * criador difere do dono (mesmo padrão de auditoria do 5b). A
+     * validação de escopo (técnico de setor gerido) já foi feita no
+     * Team::handle; os CAMPOS são validados aqui pelo mesmo
+     * cleanFields do caminho próprio.
+     */
+    public static function addFor(array $input, int $ownerId, int $creatorId): array
+    {
         /** @var \DBmysql $DB */
         global $DB;
 
@@ -594,8 +627,8 @@ class Occurrence
         // plugin_taskplus_routines_id fica FORA de propósito: o DEFAULT
         // NULL da coluna é o que marca a tarefa como avulsa.
         $DB->insert(self::TABLE, $fields + [
-            'users_id'         => $usersId,
-            'users_id_creator' => $usersId,
+            'users_id'         => $ownerId,
+            'users_id_creator' => $creatorId,
             'is_done'          => 0,
             'is_skipped'       => 0,
             'is_deleted'       => 0,
