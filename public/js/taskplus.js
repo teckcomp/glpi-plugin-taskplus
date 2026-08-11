@@ -139,6 +139,18 @@
                     syncToolbar();
                 }
                 if (!res || !res.success) {
+                    // 8d — duplicada: aviso com confirmação. Confirmando,
+                    // reenvia o MESMO pedido com force_duplicate (o CSRF
+                    // já foi rotacionado acima). Cancelando, o modal fica
+                    // aberto para o usuário ajustar o título ou desistir.
+                    if (res && res.duplicate) {
+                        render();
+                        if (window.confirm(res.message + '\n\nCriar mesmo assim?')) {
+                            fields.force_duplicate = '1';
+                            post(fields, onSuccess);
+                        }
+                        return;
+                    }
                     toast((res && res.message) ? res.message : 'Erro ao processar a ação', true);
                     render();
                     return;

@@ -626,6 +626,25 @@ class Occurrence
             return ['success' => false, 'message' => $fields];
         }
 
+        // 8d — trava de duplicadas (aviso com confirmação, não bloqueio):
+        // vale SÓ para a criação própria (tela Hoje). A criação pelo
+        // gestor (5c) fica fora de propósito — o destino "todos do
+        // setor" dispararia N confirmações e travaria o fluxo. Com
+        // `force_duplicate` no POST (o JS reenvia após o confirm), a
+        // criação segue. A chave `duplicate` na resposta é o que o JS
+        // usa para distinguir do erro comum.
+        if (
+            $ownerId === $creatorId
+            && empty($input['force_duplicate'])
+            && self::duplicateExists($ownerId, $fields['name'], $fields['date'])
+        ) {
+            return [
+                'success'   => false,
+                'duplicate' => true,
+                'message'   => __('Já existe uma tarefa aberta igual nesta data', 'taskplus'),
+            ];
+        }
+
         $now = date('Y-m-d H:i:s');
 
         // plugin_taskplus_routines_id fica FORA de propósito: o DEFAULT
@@ -888,6 +907,63 @@ class Occurrence
      * Devolve o array pronto para insert/update, ou a MENSAGEM de erro
      * (string) quando algo inválido chegou.
      */
+    /**
+     * 8d — existe avulsa VIVA (não excluída, não concluída, não pulada)
+     * do dono nesta data com o mesmo título normalizado? Concluídas e
+     * excluídas ficam de fora de propósito: refazer uma tarefa já
+     * fechada no mesmo dia é legítimo. A comparação normalizada roda em
+     * PHP sobre as poucas linhas do dono no dia — colapsar espaços e
+     * tirar acento não tem equivalente simples no SQL.
+     */
+    public static function duplicateExists(int $ownerId, string $name, string $date): bool
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $needle = self::normTitle($name);
+        if ($needle === '') {
+            return false;
+        }
+
+        $rows = $DB->request([
+            'SELECT' => [self::TABLE . '.name'],
+            'FROM'   => self::TABLE,
+            'WHERE'  => [
+                self::TABLE . '.users_id'   => $ownerId,
+                self::TABLE . '.date'       => $date,
+                self::TABLE . '.is_deleted' => 0,
+                self::TABLE . '.is_done'    => 0,
+                self::TABLE . '.is_skipped' => 0,
+            ],
+        ]);
+
+        foreach ($rows as $row) {
+            if (self::normTitle((string) $row['name']) === $needle) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Título normalizado para comparação de duplicada: minúsculas, sem
+     * acentos (mapa pt-BR explícito — não depende da extensão intl) e
+     * espaços internos colapsados. Espelha o norm() do JS da busca.
+     */
+    public static function normTitle(string $s): string
+    {
+        $s = mb_strtolower(trim($s));
+        $s = strtr($s, [
+            'á' => 'a', 'à' => 'a', 'â' => 'a', 'ã' => 'a', 'ä' => 'a',
+            'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
+            'í' => 'i', 'ì' => 'i', 'î' => 'i', 'ï' => 'i',
+            'ó' => 'o', 'ò' => 'o', 'ô' => 'o', 'õ' => 'o', 'ö' => 'o',
+            'ú' => 'u', 'ù' => 'u', 'û' => 'u', 'ü' => 'u',
+            'ç' => 'c', 'ñ' => 'n',
+        ]);
+        return preg_replace('/\s+/u', ' ', $s) ?? $s;
+    }
+
     private static function cleanFields(array $input): array|string
     {
         $name = trim((string) ($input['name'] ?? ''));
