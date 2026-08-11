@@ -26,6 +26,8 @@ class Access
     public const RIGHTS = [
         'task'   => 'plugin_taskplus_task',
         'manage' => 'plugin_taskplus_manage',
+        // 8b: página inicial por perfil (redirect do central.php)
+        'home'   => 'plugin_taskplus_home',
     ];
 
     /**
@@ -76,6 +78,10 @@ class Access
         return [
             'today'    => $task,
             'board'    => $task,
+            // 8b-2: link "Visão Geral" na sidebar — só faz sentido para
+            // quem tem a página inicial trocada (para os demais, a Visão
+            // Geral JÁ é a entrada do GLPI e o link seria redundante).
+            'home'     => self::can('home'),
             'routines' => $task,
             'week'     => $task,
             // 5a: mesma régua de Configurações — admin sempre; gestor

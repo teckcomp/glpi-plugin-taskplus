@@ -244,6 +244,9 @@
     .taskplus-columns { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* 8b-2: item "Visão Geral" — separado do bloco de telas do hub */
+.taskplus-sidebar__item--exit { margin-top: 10px; border-top: 1px solid #e4e9ee; padding-top: 10px; }
+
 /* Badges do card de chamado (8a) */
 .taskplus-badge--status { background: #e7f5ef; color: #1e7a4f; }
 .taskplus-badge--prio-high { background: #fdebe3; color: #d9480f; font-weight: 600; }

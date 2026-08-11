@@ -78,6 +78,17 @@
                 <a href="{{ plugin_web_dir }}/front/config.form.php"><i class="ti ti-settings"></i>{{ __('Configurações', 'taskplus') }}</a>
             </li>
             {% endif %}
+            {# 8b-2: porta de volta para a Visão Geral nativa, SÓ para
+               quem tem a página inicial trocada pelo direito da home. O
+               marcador taskplus_home=0 abre a exceção na régua do
+               redirect (Home::shouldRedirect) — vale por clique. A raiz
+               do GLPI é o plugin_web_dir sem o sufixo do plugin. #}
+            {% if nav.home %}
+            <li class="taskplus-sidebar__item taskplus-sidebar__item--exit">
+                <a href="{{ plugin_web_dir|replace({'/plugins/taskplus': ''}) }}/front/central.php?taskplus_home=0">
+                    <i class="ti ti-layout-dashboard"></i>{{ __('Visão Geral', 'taskplus') }}</a>
+            </li>
+            {% endif %}
         </ul>
     </nav>
 </div>

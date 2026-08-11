@@ -76,6 +76,13 @@ class Profile extends CoreProfile
                 'label'  => __('Gestão de equipe (tela Equipe e fases dos setores — exige "Gerente" no grupo)', 'taskplus'),
                 'field'  => 'plugin_taskplus_manage',
             ],
+            // 8b: página inicial por perfil (decisão nº 10) — vale no
+            // PRÓXIMO login (T19: a sessão guarda os direitos do perfil).
+            [
+                'rights' => [READ => __('Habilitado', 'taskplus')],
+                'label'  => __('Página inicial: entrar direto na tela Hoje do Task+ (no lugar da Visão Geral)', 'taskplus'),
+                'field'  => 'plugin_taskplus_home',
+            ],
         ];
     }
 

@@ -13,6 +13,7 @@
  */
 
 use Glpi\Plugin\Hooks;
+use GlpiPlugin\Taskplus\Home;
 use GlpiPlugin\Taskplus\Today;
 
 define('PLUGIN_TASKPLUS_VERSION', '0.1.0-dev');
@@ -71,6 +72,44 @@ function plugin_init_taskplus(): void
     // todas as páginas, mas a guarda do bell.js o torna inerte fora das
     // telas do plugin (o markup do sino só existe na sidebar do Task+).
     $PLUGIN_HOOKS[Hooks::ADD_JAVASCRIPT]['taskplus'] = 'js/bell.js';
+
+    // 8b: página inicial por perfil — roda a cada request, decide em
+    // GlpiPlugin\Taskplus\Home::shouldRedirect() (pura, testada) e só
+    // age em GET de /front/central.php de usuário com o direito.
+    $PLUGIN_HOOKS[Hooks::POST_INIT]['taskplus'] = 'plugin_taskplus_post_init';
+}
+
+/**
+ * Hook post_init (8b): perfis com `plugin_taskplus_home` aterrissam na
+ * tela Hoje no lugar da Visão Geral.
+ *
+ * `header()+exit` de propósito, NÃO `Html::redirect()`: o POST_INIT roda
+ * no Kernel::boot(), antes do ciclo que converte a RedirectException em
+ * resposta (validado no fonte do 11.0.6 — sessão 23). No boot nada foi
+ * emitido, então o header clássico é seguro.
+ */
+function plugin_taskplus_post_init(): void
+{
+    /** @var array $CFG_GLPI */
+    global $CFG_GLPI;
+
+    $loggedIn = (int) Session::getLoginUserID() > 0;
+    $hasRight = $loggedIn && Session::haveRight(Home::RIGHT, READ);
+
+    $should = Home::shouldRedirect(
+        PHP_SAPI === 'cli',
+        (string) ($_SERVER['REQUEST_METHOD'] ?? ''),
+        $loggedIn,
+        (bool) $hasRight,
+        $_SERVER['REQUEST_URI'] ?? null,
+        (string) ($CFG_GLPI['root_doc'] ?? ''),
+        headers_sent()
+    );
+
+    if ($should) {
+        header('Location: ' . Home::target(), true, 302);
+        exit;
+    }
 }
 
 /**

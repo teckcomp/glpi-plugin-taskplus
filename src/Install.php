@@ -55,6 +55,9 @@ class Install
     public const RIGHTS = [
         'plugin_taskplus_task',
         'plugin_taskplus_manage',
+        // 8b: página inicial por perfil — quem o tem cai na tela Hoje do
+        // Task+ no lugar da Visão Geral (hook post_init).
+        'plugin_taskplus_home',
     ];
 
     /**
@@ -387,6 +390,14 @@ class Install
 
         $migration->addRight('plugin_taskplus_task', $crudBits, ['config' => UPDATE]);
         $migration->addRight('plugin_taskplus_manage', $crudBits, ['config' => UPDATE]);
+
+        // 8b: página inicial. NASCE 0 PARA TODOS — inclusive super-admin:
+        // trocar a página de entrada sem ninguém pedir seria surpresa, não
+        // recurso. Detalhe do core validado no fonte (11.0.6): com
+        // $requiredrights = [] o addRight daria o VALOR CHEIO a todos os
+        // perfis ($reqmet = true) — por isso o valor pedido aqui é 0 e o
+        // ajuste é feito perfil a perfil na aba Task+.
+        $migration->addRight('plugin_taskplus_home', 0, []);
 
         // ------------------------------------------------------------------
         // Crons (registro apenas — a lógica chega nas Etapas 2 e 6).
