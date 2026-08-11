@@ -27,7 +27,7 @@ if (!Access::canTeam()) {
 }
 
 Html::header(
-    __('Task+ — Equipe', 'taskplus'),
+    __('Tarefas — Equipe', 'taskplus'),
     '', // Html::header ignora o 2º argumento no GLPI 11 (lição do PP, Bloco 4a)
     'tools',
     Today::class

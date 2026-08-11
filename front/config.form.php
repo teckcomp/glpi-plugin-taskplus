@@ -41,7 +41,7 @@ if (isset($_POST['update'])) {
 
 // 2º argumento vazio: o Html::header do GLPI 11 ignora o parâmetro $url —
 // quem posiciona o menu são os argumentos 3 e 4 ($sector e $item).
-Html::header(__('Task+ — Configurações', 'taskplus'), '', 'config', 'plugins');
+Html::header(__('Tarefas — Configurações', 'taskplus'), '', 'config', 'plugins');
 
 $config = PluginConfig::get();
 

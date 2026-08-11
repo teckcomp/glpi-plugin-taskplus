@@ -42,7 +42,7 @@ class Profile extends CoreProfile
     public function getTabNameForItem(CommonGLPI $item, $withtemplate = 0)
     {
         if ($item instanceof CoreProfile) {
-            return self::createTabEntry(__('Task+', 'taskplus'), 0, $item::getType(), 'ti ti-checkbox');
+            return self::createTabEntry(__('Tarefas', 'taskplus'), 0, $item::getType(), 'ti ti-checklist');
         }
         return '';
     }
@@ -68,7 +68,7 @@ class Profile extends CoreProfile
         return [
             [
                 'rights' => [READ => __('Habilitado', 'taskplus')],
-                'label'  => __('Usar o Task+ (tarefas próprias: Hoje, Quadro, Rotinas)', 'taskplus'),
+                'label'  => __('Usar o plugin Tarefas (tarefas próprias: Hoje, Quadro, Rotinas)', 'taskplus'),
                 'field'  => 'plugin_taskplus_task',
             ],
             [
@@ -80,7 +80,7 @@ class Profile extends CoreProfile
             // PRÓXIMO login (T19: a sessão guarda os direitos do perfil).
             [
                 'rights' => [READ => __('Habilitado', 'taskplus')],
-                'label'  => __('Página inicial: entrar direto na tela Hoje do Task+ (no lugar da Visão Geral)', 'taskplus'),
+                'label'  => __('Página inicial: entrar direto na tela Hoje do plugin (no lugar da Visão Geral)', 'taskplus'),
                 'field'  => 'plugin_taskplus_home',
             ],
         ];
@@ -107,7 +107,7 @@ class Profile extends CoreProfile
 
         $profile->displayRightsChoiceMatrix(self::rightsMatrix(), [
             'canedit' => $canedit,
-            'title'   => __('Task+', 'taskplus'),
+            'title'   => __('Tarefas', 'taskplus'),
         ]);
 
         if ($canedit) {

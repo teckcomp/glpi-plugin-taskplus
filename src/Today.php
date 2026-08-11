@@ -16,12 +16,12 @@ class Today extends CommonGLPI
 
     public static function getTypeName($nb = 0)
     {
-        return __('Task+', 'taskplus');
+        return __('Tarefas', 'taskplus');
     }
 
     public static function getMenuName()
     {
-        return __('Task+', 'taskplus');
+        return __('Tarefas', 'taskplus');
     }
 
     public static function getMenuContent()
@@ -29,7 +29,7 @@ class Today extends CommonGLPI
         return [
             'title' => self::getMenuName(),
             'page'  => Url::to('front/today.php'),
-            'icon'  => 'ti ti-checkbox',
+            'icon'  => 'ti ti-checklist',
         ];
     }
 }

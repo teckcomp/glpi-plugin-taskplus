@@ -21,7 +21,7 @@ include('../../../inc/includes.php');
 Access::require('task');
 
 Html::header(
-    __('Task+ — Histórico', 'taskplus'),
+    __('Tarefas — Histórico', 'taskplus'),
     '', // Html::header ignora o 2º argumento no GLPI 11 (lição do PP, Bloco 4a)
     'tools',
     Today::class

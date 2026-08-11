@@ -23,10 +23,10 @@ class Cron
     {
         return match ($name) {
             'taskplusgen' => [
-                'description' => __('Task+: gera as ocorrências do dia (rotinas)', 'taskplus'),
+                'description' => __('Tarefas: gera as ocorrências do dia (rotinas)', 'taskplus'),
             ],
             'taskplusalerts' => [
-                'description' => __('Task+: alertas de horário-limite e pendências', 'taskplus'),
+                'description' => __('Tarefas: alertas de horário-limite e pendências', 'taskplus'),
             ],
             default => [],
         };

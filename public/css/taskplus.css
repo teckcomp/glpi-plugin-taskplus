@@ -12,8 +12,8 @@
 .taskplus-pagetitle { margin-bottom: 14px; }
 .taskplus-pagetitle span { color: #8a97a5; font-size: 0.85rem; }
 .taskplus-brand { display: flex; align-items: center; gap: 8px; }
-.taskplus-brand__mark { width: 28px; height: 28px; }
-.taskplus-brand h2 { margin: 0; font-size: 1.25rem; }
+.taskplus-brand__mark { width: 44px; height: 44px; }
+.taskplus-brand h2 { margin: 0; font-size: 1.7rem; font-weight: 700; }
 
 /* Sidebar */
 .taskplus-sidebar ul { list-style: none; margin: 0; padding: 0; }

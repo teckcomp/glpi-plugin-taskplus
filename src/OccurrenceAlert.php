@@ -34,6 +34,6 @@ class OccurrenceAlert extends CommonDBTM
 
     public static function getTypeName($nb = 0)
     {
-        return __('Tarefa do Task+', 'taskplus');
+        return __('Tarefa do plugin Tarefas', 'taskplus');
     }
 }

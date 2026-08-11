@@ -40,9 +40,9 @@ class NotificationTargetOccurrenceAlert extends NotificationTarget
     public function getEvents()
     {
         return [
-            Alerts::EVENT_TIME_LIMIT      => __('Task+: horário-limite estourado', 'taskplus'),
-            Emails::EVENT_END_OF_DAY      => __('Task+: fim de dia (e-mail ao técnico)', 'taskplus'),
-            Emails::EVENT_MORNING_DIGEST  => __('Task+: resumo matinal (e-mail ao gestor)', 'taskplus'),
+            Alerts::EVENT_TIME_LIMIT      => __('Tarefas: horário-limite estourado', 'taskplus'),
+            Emails::EVENT_END_OF_DAY      => __('Tarefas: fim de dia (e-mail ao técnico)', 'taskplus'),
+            Emails::EVENT_MORNING_DIGEST  => __('Tarefas: resumo matinal (e-mail ao gestor)', 'taskplus'),
         ];
     }
 

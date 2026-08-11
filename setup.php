@@ -118,7 +118,7 @@ function plugin_taskplus_post_init(): void
 function plugin_version_taskplus(): array
 {
     return [
-        'name'         => 'Task+',
+        'name'         => 'Tarefas',
         'version'      => PLUGIN_TASKPLUS_VERSION,
         'author'       => 'Teckcomp I.T. Services',
         'license'      => 'GPL-2.0-or-later',
