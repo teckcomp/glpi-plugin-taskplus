@@ -18,6 +18,7 @@
 
 use GlpiPlugin\Taskplus\Access;
 use GlpiPlugin\Taskplus\Occurrence;
+use GlpiPlugin\Taskplus\Tickets;
 
 include('../../../inc/includes.php');
 
@@ -45,6 +46,15 @@ $pt = isset($_POST['period_to']) ? (string) $_POST['period_to'] : null;
 // Token novo para o JS rotacionar + estado atualizado para re-render
 $result['csrf'] = Session::getNewCSRFToken();
 $result['data'] = Occurrence::payload($usersId, $pf, $pt);
+
+// Etapa 8a: a coluna Chamados acompanha todo re-render da tela Hoje.
+// Mesma chave e mesmo guarda do front/today.php.
+$result['data']['tickets'] = [];
+try {
+    $result['data']['tickets'] = Tickets::forUser($usersId);
+} catch (\Throwable $e) {
+    // origem indisponível: re-render segue sem a coluna preenchida
+}
 
 header('Content-Type: application/json; charset=UTF-8');
 echo json_encode($result, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);

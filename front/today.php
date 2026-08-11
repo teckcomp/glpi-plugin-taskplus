@@ -11,6 +11,7 @@
 use Glpi\Application\View\TemplateRenderer;
 use GlpiPlugin\Taskplus\Access;
 use GlpiPlugin\Taskplus\Occurrence;
+use GlpiPlugin\Taskplus\Tickets;
 use GlpiPlugin\Taskplus\Today;
 use GlpiPlugin\Taskplus\Url;
 
@@ -26,6 +27,17 @@ Html::header(
 );
 
 $payload = Occurrence::payload((int) Session::getLoginUserID());
+
+// Etapa 8a: coluna 1 — chamados do usuário (atribuído/observador/
+// requerente). Chave própria, FORA do Occurrence::payload de propósito:
+// Team/Board/Week o reusam e não podem pagar esta consulta por técnico.
+// Falha de leitura não derruba a tela (mesma filosofia das nativas).
+$payload['tickets'] = [];
+try {
+    $payload['tickets'] = Tickets::forUser((int) Session::getLoginUserID());
+} catch (\Throwable $e) {
+    // origem indisponível: a tela segue sem a coluna preenchida
+}
 
 // Twig do GLPI é strict: TODA variável usada no template TEM que estar
 // aqui, e `nav` traz TODAS as chaves sempre (Access::sidebar()).

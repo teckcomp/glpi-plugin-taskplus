@@ -1,5 +1,6 @@
 /**
- * Task+ — tela "Hoje" (Etapa 1; grupos na 2b; nativas na 3; dois blocos na 4a).
+ * Task+ — tela "Hoje" (Etapa 1; grupos na 2b; nativas na 3; 3 colunas
+ * na 8a, com a coluna do meio renomeada para "Tarefas do Sistema").
  *
  * Contrato com o servidor:
  *  - estado inicial embutido em <script type="application/json" id="taskplus-data">
@@ -36,6 +37,8 @@
             kpis: { today: 0, done: 0, late: 0 },
             today: [],
             overdue: [],
+            // 8a: coluna 1 — chamados do usuário (leitura, ordem por SLA)
+            tickets: [],
             period: { from: '', to: '', active: false }
         }
     };
@@ -74,6 +77,8 @@
             },
             today: Array.isArray(d.today) ? d.today : [],
             overdue: Array.isArray(d.overdue) ? d.overdue : [],
+            // 8a: payload antigo (sem a chave) vira lista vazia
+            tickets: Array.isArray(d.tickets) ? d.tickets : [],
             // 5b-2 p2: eco do período (o servidor normaliza as datas)
             period: {
                 from: (typeof p.from === 'string') ? p.from : '',
@@ -170,7 +175,10 @@
         var q = norm(state.search);
         return norm(item.name).indexOf(q) !== -1
             || norm(item.description).indexOf(q) !== -1
-            || norm(item.category).indexOf(q) !== -1;
+            || norm(item.category).indexOf(q) !== -1
+            // 8a: "#123" acha o chamado pelo numero (vale tambem para
+            // as tarefas de chamado do bloco Tarefas do GLPI)
+            || norm(item.ticket_label).indexOf(q) !== -1;
     }
 
     function periodActive() {
@@ -290,9 +298,14 @@
         var note = $('tp-flt-note');
         if (note) {
             note.hidden = !p.active;
+            // 8a-2: na tela Minhas Tarefas não há chamados nem tarefas do
+            // sistema — a ressalva só aparece onde esses blocos existem.
+            var hasSystemCols = !!$('tp-list-native') || !!$('tp-list-tickets');
             note.textContent = p.active
-                ? 'Período ativo ' + periodLabel()
-                    + ' — KPIs e "Minhas tarefas" sobre o período; as origens do GLPI seguem no estado atual.'
+                ? ('Período ativo ' + periodLabel()
+                    + (hasSystemCols
+                        ? ' — KPIs e "Minhas tarefas" sobre o período; chamados e tarefas do sistema seguem no estado atual.'
+                        : ' — KPIs e tarefas sobre o período.'))
                 : '';
         }
     }
@@ -348,6 +361,7 @@
 
         renderOwn();
         renderNative();
+        renderTickets();
     }
 
     /**
@@ -360,6 +374,9 @@
      */
     function renderOwn() {
         var list = $('tp-list-own');
+        if (!list) {
+            return; // tela sem o bloco não quebra
+        }
         list.textContent = '';
 
         var todayItems = state.data.today.filter(function (item) {
@@ -424,6 +441,9 @@
      */
     function renderNative() {
         var list = $('tp-list-native');
+        if (!list) {
+            return; // template sem o bloco não quebra
+        }
         list.textContent = '';
 
         // Premissa 3 da decisão nº 14: o período NÃO recorta as origens
@@ -433,7 +453,7 @@
             var warn = el('div', 'taskplus-native-warn');
             warn.appendChild(el('i', 'ti ti-info-circle'));
             warn.appendChild(el('span', null,
-                'O período não se aplica às origens do GLPI — abaixo está o estado atual.'));
+                'O período não se aplica às tarefas do sistema — abaixo está o estado atual.'));
             list.appendChild(warn);
         }
 
@@ -459,6 +479,121 @@
                 list.appendChild(section(group[1], ofGroup, false));
             }
         });
+    }
+
+    /**
+     * Coluna 1 — CHAMADOS do usuário (Etapa 8a, decisão nº 10).
+     *
+     * Somente leitura: a única ação é abrir a página nativa do chamado.
+     * A lista já chega ordenada do servidor pelo prazo de SLA mais
+     * próximo (estourado primeiro; sem SLA no fim, por prioridade).
+     * Fora dos KPIs e fora do recorte por período — no modo-período o
+     * aviso local deixa isso claro (mesmo padrão do bloco nativo).
+     */
+    function renderTickets() {
+        var list = $('tp-list-tickets');
+        if (!list) {
+            return; // template antigo sem a coluna não quebra
+        }
+        list.textContent = '';
+
+        if (periodActive()) {
+            var warn = el('div', 'taskplus-native-warn');
+            warn.appendChild(el('i', 'ti ti-info-circle'));
+            warn.appendChild(el('span', null,
+                'O período não se aplica aos chamados — abaixo está o estado atual.'));
+            list.appendChild(warn);
+        }
+
+        var items = state.data.tickets.filter(matchesSearch);
+
+        if (items.length === 0) {
+            list.appendChild(emptyTickets());
+            return;
+        }
+
+        list.appendChild(section('Em aberto', items, false));
+    }
+
+    /** Card de chamado (leitura). */
+    function ticketCard(item) {
+        var c = el('div', 'taskplus-card taskplus-card--native'
+            + (item.is_sla_late ? ' taskplus-card--late' : ''));
+
+        // Marca da origem no lugar do check (não existe conclusão aqui:
+        // chamado se resolve na tela dele, nunca pelo Task+).
+        var mark = el('span', 'taskplus-check taskplus-check--native');
+        mark.title = 'Chamado — abrir no GLPI';
+        mark.setAttribute('aria-label', mark.title);
+        mark.appendChild(el('i', 'ti ti-ticket'));
+        c.appendChild(mark);
+
+        var body = el('div', 'taskplus-card__body');
+        body.appendChild(el('div', 'taskplus-card__name', item.name || '(sem título)'));
+        if (item.description) {
+            body.appendChild(el('div', 'taskplus-card__desc', item.description));
+        }
+
+        var badges = el('div', 'taskplus-card__badges');
+        if (item.ticket_label) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--ticket', item.ticket_label));
+        }
+        if (item.status_label) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--status', item.status_label));
+        }
+        if (item.priority_label) {
+            badges.appendChild(el('span',
+                'taskplus-badge' + (item.is_high ? ' taskplus-badge--prio-high' : ''),
+                item.priority_label));
+        }
+        // Prazo de SLA — o critério de ordenação da coluna, sempre visível
+        if (item.sla_label) {
+            badges.appendChild(el('span',
+                'taskplus-badge ' + (item.is_sla_late ? 'taskplus-badge--late' : 'taskplus-badge--limit'),
+                item.is_sla_late ? ('SLA estourado ' + item.sla_label) : ('SLA até ' + item.sla_label)));
+        } else {
+            badges.appendChild(el('span', 'taskplus-badge', 'sem SLA'));
+        }
+        if (item.roles_label) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--role', item.roles_label));
+        }
+        if (item.entity_name) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--category', item.entity_name));
+        }
+        if (badges.childNodes.length > 0) {
+            body.appendChild(badges);
+        }
+        c.appendChild(body);
+
+        var actions = el('div', 'taskplus-card__actions');
+        if (item.url) {
+            var open = el('a', 'taskplus-iconbtn');
+            open.href = item.url;
+            open.title = 'Abrir o chamado';
+            open.setAttribute('aria-label', open.title);
+            open.appendChild(el('i', 'ti ti-external-link'));
+            actions.appendChild(open);
+        }
+        c.appendChild(actions);
+
+        return c;
+    }
+
+    /** Estado vazio da coluna Chamados. */
+    function emptyTickets() {
+        if (state.search !== '') {
+            var sbox = el('div', 'taskplus-empty taskplus-empty--sm');
+            sbox.appendChild(el('i', 'ti ti-zoom-cancel taskplus-empty__icon'));
+            sbox.appendChild(el('h3', null, 'Nada encontrado'));
+            sbox.appendChild(el('p', null, 'Nenhum chamado casa com a busca.'));
+            return sbox;
+        }
+        var box = el('div', 'taskplus-empty taskplus-empty--sm');
+        box.appendChild(el('i', 'ti ti-ticket taskplus-empty__icon'));
+        box.appendChild(el('h3', null, 'Sem chamados abertos'));
+        box.appendChild(el('p', null,
+            'Chamados em que você é atribuído, observador ou requerente aparecem aqui.'));
+        return box;
     }
 
     /** Estado vazio do bloco 1 (tarefas próprias). */
@@ -513,7 +648,7 @@
         box.appendChild(el('i', 'ti ' + (filtering ? 'ti-filter-off' : 'ti-inbox') + ' taskplus-empty__icon'));
         box.appendChild(el('h3', null, filtering
             ? 'Nada nesta origem'
-            : 'Nada vindo do GLPI'));
+            : 'Nada vindo do sistema'));
         box.appendChild(el('p', null, filtering
             ? 'Volte para "Todas" para ver as demais.'
             : 'Tarefas de chamado e de projeto atribuídas a você aparecem aqui.'));
@@ -527,7 +662,10 @@
         head.appendChild(el('span', 'taskplus-section__count', String(items.length)));
         sec.appendChild(head);
         items.forEach(function (item) {
-            sec.appendChild(card(item, isOverdue));
+            // 8a: chamado tem card próprio (leitura pura, badges de SLA)
+            sec.appendChild(groupOf(item) === 'glpi_ticket'
+                ? ticketCard(item)
+                : card(item, isOverdue));
         });
         return sec;
     }
