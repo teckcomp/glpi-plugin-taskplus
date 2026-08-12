@@ -796,3 +796,16 @@
     background: #f7f9fa; border-bottom: 1px solid #f0f2f5;
     font-weight: 600; padding: 6px 12px;
 }
+
+/* ===== Diálogo da tarefa (Etapa 8e-1) ===== */
+.taskplus-dialog { margin-top: 12px; border-top: 1px solid #e4e9ee; padding-top: 10px; }
+.taskplus-dialog h4 { margin: 0 0 8px; font-size: 0.95rem; color: #3d4f5c; }
+.taskplus-dialog__list { list-style: none; margin: 0 0 8px; padding: 0; max-height: 180px; overflow-y: auto; }
+.taskplus-dialog__item { padding: 6px 8px; border-radius: 6px; background: #f4f7fa; margin-bottom: 6px; }
+.taskplus-dialog__meta { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: #8a97a5; }
+.taskplus-dialog__meta strong { color: #3d4f5c; }
+.taskplus-dialog__del { margin-left: auto; border: none; background: none; color: #c0392b; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 4px; }
+.taskplus-dialog__text { margin-top: 2px; font-size: 0.9rem; white-space: pre-wrap; word-break: break-word; }
+.taskplus-dialog__empty { color: #8a97a5; font-size: 0.85rem; margin: 0 0 8px; }
+.taskplus-dialog__composer { display: flex; gap: 8px; align-items: flex-end; }
+.taskplus-dialog__composer textarea { flex: 1; resize: vertical; }

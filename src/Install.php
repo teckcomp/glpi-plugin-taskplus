@@ -36,6 +36,7 @@ class Install
         'glpi_plugin_taskplus_phases',
         'glpi_plugin_taskplus_pendings',
         'glpi_plugin_taskplus_alerts',
+        'glpi_plugin_taskplus_comments',
     ];
 
     /**
@@ -358,6 +359,29 @@ class Install
                     KEY `user_unread` (`users_id`, `is_read`),
                     KEY `item` (`itemtype`, `items_id`),
                     UNIQUE KEY `dedup` (`users_id`, `itemtype`, `items_id`, `kind`)
+                ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collation}
+            ");
+        }
+
+        // ------------------------------------------------------------------
+        // 6) Diálogo das tarefas (Etapa 8e-1).
+        //
+        //    Comentários por ocorrência (avulsa ou dia de rotina). Quem
+        //    interage = dono + criador quando distinto (decisão nº 28);
+        //    a régua é validada no domínio (Comment.php), não aqui.
+        //    Exclusão soft, como tudo no plugin.
+        // ------------------------------------------------------------------
+        if (!$DB->tableExists('glpi_plugin_taskplus_comments')) {
+            $DB->doQuery("
+                CREATE TABLE `glpi_plugin_taskplus_comments` (
+                    `id`            INT {$sign} NOT NULL AUTO_INCREMENT,
+                    `plugin_taskplus_occurrences_id` INT {$sign} NOT NULL DEFAULT 0,
+                    `users_id`      INT {$sign} NOT NULL DEFAULT 0 COMMENT 'autor',
+                    `content`       TEXT,
+                    `is_deleted`    TINYINT NOT NULL DEFAULT 0,
+                    `date_creation` TIMESTAMP NULL DEFAULT NULL,
+                    PRIMARY KEY (`id`),
+                    KEY `occ_alive` (`plugin_taskplus_occurrences_id`, `is_deleted`)
                 ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collation}
             ");
         }

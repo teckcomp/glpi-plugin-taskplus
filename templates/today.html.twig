@@ -5,7 +5,8 @@
 <div class="taskplus-app" id="taskplus-today"
      data-csrf="{{ csrf_token }}"
      data-user-id="{{ current_user_id }}"
-     data-ajax-url="{{ plugin_web_dir }}/ajax/occurrence.php">
+     data-ajax-url="{{ plugin_web_dir }}/ajax/occurrence.php"
+     data-comments-url="{{ plugin_web_dir }}/ajax/comment.php">
 
     {# ================= COLUNA ESQUERDA: título + sidebar =================
        Extraída para partial na Etapa 2a (deixou de ser a única tela). #}
@@ -115,6 +116,19 @@
             <span>{{ __('Descrição', 'taskplus') }}</span>
             <textarea id="tp-f-description" rows="3"></textarea>
         </label>
+        {# 8e-1: diálogo da tarefa — só na EDIÇÃO (tarefa nova não tem
+           id). A thread é renderizada pelo JS (textContent sempre);
+           quem participa = dono + criador (decisão nº 28). #}
+        <div class="taskplus-dialog" id="tp-dialog" hidden>
+            <h4>{{ __('Diálogo', 'taskplus') }}</h4>
+            <ul class="taskplus-dialog__list" id="tp-d-list"></ul>
+            <p class="taskplus-dialog__empty" id="tp-d-empty" hidden>{{ __('Nenhum comentário ainda.', 'taskplus') }}</p>
+            <div class="taskplus-dialog__composer">
+                <textarea id="tp-d-text" rows="2" maxlength="2000"
+                          placeholder="{{ __('Escreva um comentário…', 'taskplus') }}"></textarea>
+                <button type="button" class="btn btn-primary" id="tp-d-send">{{ __('Enviar', 'taskplus') }}</button>
+            </div>
+        </div>
         <div class="taskplus-modal__actions">
             <button type="button" class="btn btn-ghost-secondary" id="tp-btn-cancel">{{ __('Cancelar', 'taskplus') }}</button>
             <button type="button" class="btn btn-primary" id="tp-btn-save">{{ __('Salvar', 'taskplus') }}</button>

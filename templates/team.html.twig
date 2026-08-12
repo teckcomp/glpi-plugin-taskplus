@@ -88,6 +88,29 @@
     </div>
 </div>
 
+{# ================= MODAL de diálogo (8e-2): o gestor lê a conversa da
+   tarefa do técnico; ESCREVE só se for o criador (decisão nº 28) — o
+   `can_write` da resposta esconde o compositor para os demais. ====== #}
+<div class="taskplus-modal" id="tp-t-dialog-modal" hidden>
+    <div class="taskplus-modal__box">
+        <h3>{{ __('Diálogo', 'taskplus') }}</h3>
+        <p class="taskplus-modal__subject" id="tp-t-d-title"></p>
+        <div class="taskplus-dialog">
+            <ul class="taskplus-dialog__list" id="tp-t-d-list"></ul>
+            <p class="taskplus-dialog__empty" id="tp-t-d-empty" hidden>{{ __('Nenhum comentário ainda.', 'taskplus') }}</p>
+            <div class="taskplus-dialog__composer" id="tp-t-d-composer">
+                <textarea id="tp-t-d-text" rows="2" maxlength="2000"
+                          placeholder="{{ __('Escreva um comentário…', 'taskplus') }}"></textarea>
+                <button type="button" class="btn btn-primary" id="tp-t-d-send">{{ __('Enviar', 'taskplus') }}</button>
+            </div>
+            <p class="taskplus-dialog__empty" id="tp-t-d-readonly" hidden>{{ __('Você acompanha como leitor — escrevem o dono e o criador da tarefa.', 'taskplus') }}</p>
+        </div>
+        <div class="taskplus-modal__actions">
+            <button type="button" class="btn btn-ghost-secondary" id="tp-t-d-close">{{ __('Fechar', 'taskplus') }}</button>
+        </div>
+    </div>
+</div>
+
 {# ================= MODAL de criação (5c-1 avulsa · 5c-2 rotina · 5c-3
    destino "todos do setor": gestor cria para o técnico OU para todos os
    membros de um setor administrado — uma cópia por membro) =========== #}

@@ -31,6 +31,8 @@
         pendingItem: null,
         skipItem: null,
         editingId: null,
+        dialogOccId: null,
+        commentsUrl: '',
         busy: false,
         data: {
             date: '',
@@ -889,6 +891,21 @@
         $('tp-f-time').value = (item && item.time_limit) ? item.time_limit : '';
         $('tp-f-category').value = item ? item.category : '';
         $('tp-f-description').value = item ? item.description : '';
+        // 8e-1: diálogo só na EDIÇÃO — tarefa nova não tem id ainda.
+        // Elementos podem faltar (template antigo em cache): tudo opcional.
+        state.dialogOccId = item ? item.id : null;
+        var dlg = $('tp-dialog');
+        if (dlg) {
+            dlg.hidden = !item;
+            renderDialog([]);
+            var dTxt = $('tp-d-text');
+            if (dTxt) {
+                dTxt.value = '';
+            }
+            if (item) {
+                postComment({ action: 'list' });
+            }
+        }
         $('tp-modal').hidden = false;
         $('tp-f-name').focus();
     }
@@ -896,6 +913,104 @@
     function closeModal() {
         $('tp-modal').hidden = true;
         state.editingId = null;
+        state.dialogOccId = null;
+    }
+
+    // ------------------------------------------------------------------
+    // Diálogo da tarefa (Etapa 8e-1)
+    // ------------------------------------------------------------------
+
+    /**
+     * POST ao endpoint do diálogo. Mesmo token e mesma trava de busy do
+     * post() principal — as respostas rotacionam o MESMO state.csrf, e
+     * serializar os envios evita corrida entre os dois endpoints.
+     */
+    function postComment(fields) {
+        if (state.busy || !state.dialogOccId) {
+            return;
+        }
+        state.busy = true;
+
+        var fd = new FormData();
+        Object.keys(fields).forEach(function (key) {
+            fd.append(key, fields[key]);
+        });
+        fd.append('occurrences_id', String(state.dialogOccId));
+        fd.append('_glpi_csrf_token', state.csrf);
+
+        fetch(state.commentsUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (resp) { return resp.json(); })
+            .then(function (res) {
+                state.busy = false;
+                if (res && typeof res.csrf === 'string' && res.csrf !== '') {
+                    state.csrf = res.csrf;
+                }
+                if (!res || !res.success) {
+                    toast((res && res.message) ? res.message : 'Erro no diálogo', true);
+                }
+                renderDialog((res && Array.isArray(res.comments)) ? res.comments : []);
+            })
+            .catch(function () {
+                state.busy = false;
+                toast('Falha de comunicação com o servidor', true);
+            });
+    }
+
+    /** Thread do modal — textContent SEMPRE (nada de HTML do usuário). */
+    function renderDialog(comments) {
+        var list = $('tp-d-list');
+        var empty = $('tp-d-empty');
+        if (!list || !empty) {
+            return;
+        }
+        list.textContent = '';
+        empty.hidden = comments.length > 0;
+        comments.forEach(function (c) {
+            var li = document.createElement('li');
+            li.className = 'taskplus-dialog__item';
+
+            var head = document.createElement('div');
+            head.className = 'taskplus-dialog__meta';
+            var who = document.createElement('strong');
+            who.textContent = c.author || '(usuário removido)';
+            head.appendChild(who);
+            var when = document.createElement('span');
+            when.textContent = c.date || '';
+            head.appendChild(when);
+            if (c.own) {
+                var del = document.createElement('button');
+                del.type = 'button';
+                del.className = 'taskplus-dialog__del';
+                del.title = 'Excluir comentário';
+                del.textContent = '×';
+                del.addEventListener('click', function () {
+                    if (window.confirm('Excluir este comentário?')) {
+                        postComment({ action: 'delete', id: String(c.id) });
+                    }
+                });
+                head.appendChild(del);
+            }
+            li.appendChild(head);
+
+            var body = document.createElement('div');
+            body.className = 'taskplus-dialog__text';
+            body.textContent = c.content || '';
+            li.appendChild(body);
+
+            list.appendChild(li);
+        });
+        list.scrollTop = list.scrollHeight;
+    }
+
+    function sendComment() {
+        var text = $('tp-d-text').value.trim();
+        if (text === '') {
+            toast('Escreva o comentário', true);
+            $('tp-d-text').focus();
+            return;
+        }
+        $('tp-d-text').value = '';
+        postComment({ action: 'add', content: text });
     }
 
     function saveModal() {
@@ -1015,6 +1130,7 @@
         }
         state.csrf = state.root.getAttribute('data-csrf') || '';
         state.ajaxUrl = state.root.getAttribute('data-ajax-url') || '';
+        state.commentsUrl = state.root.getAttribute('data-comments-url') || '';
 
         var raw = null;
         var dataEl = $('taskplus-data');
@@ -1036,6 +1152,12 @@
         });
         $('tp-btn-cancel').addEventListener('click', closeModal);
         $('tp-btn-save').addEventListener('click', saveModal);
+        // 8e-1: elementos do diálogo podem FALTAR (template antigo em
+        // cache) — listener opcional, mesma regra do bindModals da Equipe.
+        var dSend = $('tp-d-send');
+        if (dSend) {
+            dSend.addEventListener('click', sendComment);
+        }
         $('tp-show-done').addEventListener('change', function (ev) {
             state.showDone = !!ev.target.checked;
             render();

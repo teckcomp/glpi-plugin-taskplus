@@ -142,6 +142,10 @@ class Team
                 return self::createGroup($input, $usersId);
             case 'create_group_routine':
                 return self::createGroupRoutine($input, $usersId);
+            case 'comment_list':
+            case 'comment_add':
+            case 'comment_delete':
+                return self::commentTech(substr($action, 8), $input, $usersId);
             case 'list':
                 return ['success' => true, 'message' => ''];
             default:
@@ -179,6 +183,39 @@ class Team
         }
 
         return ['tech_id' => $techId, 'label' => $members[$techId]['label']];
+    }
+
+    /**
+     * Diálogo da tarefa do técnico pela tela Equipe (Etapa 8e-2).
+     *
+     * Escopo revalidado a cada POST (T18): técnico gerido (managedTech)
+     * E ocorrência VIVA pertencente a ELE (occRowOwned — nativas fora
+     * por construção). Leitura: qualquer gestor do setor acompanha
+     * (`$managerRead`). ESCRITA: a régua da decisão nº 28 fica dentro
+     * do Comment::handle — só dono e criador; gestor que não criou lê
+     * mas não escreve (a resposta traz `can_write` para o front
+     * esconder o compositor). Excluir: só o autor, também no domínio.
+     */
+    private static function commentTech(string $sub, array $input, int $usersId): array
+    {
+        $tech = self::managedTech($input, $usersId);
+        if (is_string($tech)) {
+            return ['success' => false, 'message' => $tech];
+        }
+
+        $occ = Comment::occRowOwned((int) ($input['occurrences_id'] ?? 0), $tech['tech_id']);
+        if ($occ === null) {
+            return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
+        }
+
+        $result = ['success' => true, 'message' => ''];
+        if ($sub === 'add' || $sub === 'delete') {
+            $result = Comment::handle($sub, $input, $usersId);
+        }
+
+        $result['comments']  = Comment::listFor((int) $occ['id'], $usersId, true);
+        $result['can_write'] = Comment::canInteract($occ, $usersId);
+        return $result;
     }
 
     /**

@@ -33,6 +33,8 @@
         pendCtx: null,
         // Modal de criação do 5c-1: {tech} de destino
         createCtx: null,
+        // 8e-2: {item, tech} do diálogo aberto
+        dialogCtx: null,
         // 5b-2 p2: busca local + período (viaja em todo POST)
         search: '',
         period: { from: '', to: '' },
@@ -635,6 +637,15 @@
             });
         }
 
+        // 8e-2: diálogo — todo item do PLUGIN (nativa fica fora: o
+        // diálogo dela vive no objeto do GLPI). Leitura para qualquer
+        // gestor do setor; escrita decidida pelo servidor (can_write).
+        if (!item.is_native) {
+            actBtn('Diálogo', 'taskplus-team__act--dialog', function () {
+                openDialogModal(item, tech);
+            });
+        }
+
         if (acts.childNodes.length > 0) {
             row.appendChild(acts);
         }
@@ -981,6 +992,117 @@
         post(dest, closeCreateModal);
     }
 
+    // ------------------------------------------------------------------
+    // Diálogo da tarefa do técnico (8e-2)
+    // ------------------------------------------------------------------
+
+    function openDialogModal(item, tech) {
+        state.dialogCtx = { item: item, tech: tech };
+        $('tp-t-d-title').textContent = item.name + ' — ' + tech.label;
+        renderTeamDialog([], false);
+        var txt = $('tp-t-d-text');
+        if (txt) { txt.value = ''; }
+        $('tp-t-dialog-modal').hidden = false;
+        postDialog({ action: 'comment_list' });
+    }
+
+    function closeDialogModal() {
+        $('tp-t-dialog-modal').hidden = true;
+        state.dialogCtx = null;
+    }
+
+    /**
+     * POST das ações do diálogo — mesmo endpoint, token e trava de busy
+     * do post() principal; a resposta traz a thread (`comments`) e a
+     * permissão de escrita (`can_write`) recalculadas pelo servidor.
+     */
+    function postDialog(fields) {
+        if (state.busy || !state.dialogCtx) {
+            return;
+        }
+        state.busy = true;
+
+        var fd = new FormData();
+        Object.keys(fields).forEach(function (key) {
+            fd.append(key, fields[key]);
+        });
+        fd.append('occurrences_id', String(state.dialogCtx.item.id));
+        fd.append('tech_id', String(state.dialogCtx.tech.id));
+        fd.append('_glpi_csrf_token', state.csrf);
+
+        fetch(state.ajaxUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (resp) { return resp.json(); })
+            .then(function (res) {
+                state.busy = false;
+                if (res && typeof res.csrf === 'string' && res.csrf !== '') {
+                    state.csrf = res.csrf;
+                }
+                if (!res || !res.success) {
+                    toast((res && res.message) ? res.message : 'Erro no diálogo', true);
+                }
+                renderTeamDialog(
+                    (res && Array.isArray(res.comments)) ? res.comments : [],
+                    !!(res && res.can_write)
+                );
+            })
+            .catch(function () {
+                state.busy = false;
+                toast('Falha de comunicação com o servidor', true);
+            });
+    }
+
+    /** Thread do modal — textContent SEMPRE (nada de HTML do usuário). */
+    function renderTeamDialog(comments, canWrite) {
+        var list = $('tp-t-d-list');
+        if (!list) {
+            return;
+        }
+        list.textContent = '';
+        $('tp-t-d-empty').hidden = comments.length > 0;
+        $('tp-t-d-composer').hidden = !canWrite;
+        $('tp-t-d-readonly').hidden = canWrite;
+        comments.forEach(function (c) {
+            var li = el('li', 'taskplus-dialog__item');
+
+            var head = el('div', 'taskplus-dialog__meta');
+            var who = document.createElement('strong');
+            who.textContent = c.author || '(usuário removido)';
+            head.appendChild(who);
+            head.appendChild(el('span', '', c.date || ''));
+            if (c.own) {
+                var del = document.createElement('button');
+                del.type = 'button';
+                del.className = 'taskplus-dialog__del';
+                del.title = 'Excluir comentário';
+                del.textContent = '×';
+                del.addEventListener('click', function () {
+                    if (window.confirm('Excluir este comentário?')) {
+                        postDialog({ action: 'comment_delete', id: String(c.id) });
+                    }
+                });
+                head.appendChild(del);
+            }
+            li.appendChild(head);
+
+            var body = el('div', 'taskplus-dialog__text', c.content || '');
+            li.appendChild(body);
+            list.appendChild(li);
+        });
+        list.scrollTop = list.scrollHeight;
+    }
+
+    function sendTeamComment() {
+        var txt = $('tp-t-d-text');
+        var text = txt ? txt.value.trim() : '';
+        if (text === '') {
+            toast('Escreva o comentário', true);
+            if (txt) { txt.focus(); }
+            return;
+        }
+        if (txt) { txt.value = ''; }
+        postDialog({ action: 'comment_add', content: text });
+    }
+
     /**
      * Liga os botões dos modais UMA vez. Os elementos podem não existir
      * (template antigo em cache) — cada listener é opcional.
@@ -992,7 +1114,9 @@
             'tp-t-p-cancel': closePendModal,
             'tp-t-p-save': savePendModal,
             'tp-t-c-cancel': closeCreateModal,
-            'tp-t-c-save': saveCreateModal
+            'tp-t-c-save': saveCreateModal,
+            'tp-t-d-close': closeDialogModal,
+            'tp-t-d-send': sendTeamComment
         };
         Object.keys(map).forEach(function (id) {
             var node = $(id);
