@@ -25,6 +25,14 @@ class Comment
 {
     public const TABLE = 'glpi_plugin_taskplus_comments';
 
+    /**
+     * 9a-1 — marca de leitura da thread: uma linha por (ocorrência,
+     * leitor). O "não lido" NÃO é estado do comentário (cada thread tem
+     * vários leitores possíveis: dono, criador e, pela Equipe, os
+     * gestores do setor) — é estado do PAR.
+     */
+    public const TABLE_READS = 'glpi_plugin_taskplus_comment_reads';
+
     public const MAX_LENGTH = 2000;
 
     /**
@@ -184,6 +192,191 @@ class Comment
             ];
         }
         return $out;
+    }
+
+    // ------------------------------------------------------------------
+    // Não lidos (Etapa 9a-1)
+    // ------------------------------------------------------------------
+
+    /**
+     * Quantos comentários NÃO LIDOS cada ocorrência tem para este leitor.
+     *
+     * Régua (decisão nº 30): conta comentário VIVO de OUTRO autor criado
+     * DEPOIS da última abertura da thread pelo leitor. Nunca conta o que
+     * o próprio leitor escreveu — quem escreveu já leu.
+     *
+     * Devolve SEMPRE uma chave por ocorrência pedida (0 quando não há
+     * nada novo), para o chamador nunca precisar de `??`.
+     *
+     * Duas consultas simples e junção em PHP, de propósito: COUNT com
+     * GROUPBY no iterator do GLPI 11 descarta os campos do SELECT.
+     */
+    public static function unreadFor(array $occIds, int $viewerId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $ids = [];
+        foreach ($occIds as $raw) {
+            $id = (int) $raw;
+            if ($id > 0) {
+                $ids[$id] = true;
+            }
+        }
+
+        $out = [];
+        foreach (array_keys($ids) as $id) {
+            $out[$id] = 0;
+        }
+        if ($out === [] || $viewerId <= 0) {
+            return $out;
+        }
+
+        // Última leitura do viewer em cada ocorrência (pode não existir:
+        // nunca abriu → tudo que houver é novo).
+        $reads = [];
+        foreach ($DB->request([
+            'FROM'  => self::TABLE_READS,
+            'WHERE' => [
+                self::TABLE_READS . '.plugin_taskplus_occurrences_id' => array_keys($ids),
+                self::TABLE_READS . '.users_id'                       => $viewerId,
+            ],
+        ]) as $row) {
+            $reads[(int) $row['plugin_taskplus_occurrences_id']] = (string) ($row['date_read'] ?? '');
+        }
+
+        foreach ($DB->request([
+            'FROM'  => self::TABLE,
+            'WHERE' => [
+                self::TABLE . '.plugin_taskplus_occurrences_id' => array_keys($ids),
+                self::TABLE . '.is_deleted'                     => 0,
+            ],
+        ]) as $row) {
+            // Autor filtrado em PHP: uma restrição a menos no WHERE e o
+            // mesmo resultado (a lista já é a da própria ocorrência).
+            if ((int) ($row['users_id'] ?? 0) === $viewerId) {
+                continue;
+            }
+            $occId = (int) ($row['plugin_taskplus_occurrences_id'] ?? 0);
+            if (!isset($out[$occId])) {
+                continue;
+            }
+            $when = (string) ($row['date_creation'] ?? '');
+            $read = $reads[$occId] ?? '';
+            // 'Y-m-d H:i:s' compara direito como string (ordem
+            // lexicográfica = ordem cronológica).
+            if ($read === '' || $when > $read) {
+                $out[$occId]++;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Registra que o leitor acabou de ver a thread desta ocorrência.
+     * Upsert manual (o iterator do GLPI não tem ON DUPLICATE KEY): a
+     * UNIQUE `occ_user` é a rede de segurança contra corrida.
+     */
+    public static function markRead(int $occId, int $viewerId): void
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        if ($occId <= 0 || $viewerId <= 0) {
+            return;
+        }
+
+        $now      = date('Y-m-d H:i:s');
+        $existing = 0;
+        foreach ($DB->request([
+            'FROM'  => self::TABLE_READS,
+            'WHERE' => [
+                self::TABLE_READS . '.plugin_taskplus_occurrences_id' => $occId,
+                self::TABLE_READS . '.users_id'                       => $viewerId,
+            ],
+        ]) as $row) {
+            $existing = (int) ($row['id'] ?? 0);
+        }
+
+        if ($existing > 0) {
+            $DB->update(
+                self::TABLE_READS,
+                ['date_read' => $now],
+                [self::TABLE_READS . '.id' => $existing]
+            );
+            return;
+        }
+
+        $DB->insert(self::TABLE_READS, [
+            'plugin_taskplus_occurrences_id' => $occId,
+            'users_id'                       => $viewerId,
+            'date_read'                      => $now,
+        ]);
+    }
+
+    /**
+     * Marca leitura SÓ se o leitor de fato alcança a thread pela régua
+     * da decisão nº 28 (dono ou criador). É o caminho da tela Hoje: o
+     * endpoint não pode gravar leitura de quem não veria nada.
+     *
+     * A Equipe NÃO usa este método — lá o escopo (gestor → técnico
+     * gerido → ocorrência do técnico) já foi revalidado no POST pelo
+     * Team::commentTech, e o gestor leitor não é participante.
+     */
+    public static function markReadIfVisible(int $occId, int $viewerId): bool
+    {
+        $occ = self::occRow($occId);
+        if ($occ === null || !self::canInteract($occ, $viewerId)) {
+            return false;
+        }
+        self::markRead($occId, $viewerId);
+        return true;
+    }
+
+    /**
+     * Injeta `unread` (int) em cada item das listas `today`/`overdue` de
+     * um payload da tela Hoje, do ponto de vista do LEITOR informado.
+     *
+     * Fica FORA do Occurrence::payload de propósito (T32): o payload é
+     * compartilhado com Quadro, Semana e Equipe, e na Equipe o leitor é
+     * o GESTOR, não o dono das tarefas — contar lá dentro daria o número
+     * errado para a tela errada. Cada consumidor decora com o seu leitor.
+     *
+     * Item nativo recebe 0 sempre (o diálogo dele vive no objeto do
+     * GLPI — decisão nº 28).
+     */
+    public static function withUnread(array $payload, int $viewerId): array
+    {
+        $keys = ['today', 'overdue'];
+
+        $ids = [];
+        foreach ($keys as $key) {
+            foreach ((array) ($payload[$key] ?? []) as $item) {
+                if (is_array($item) && empty($item['is_native']) && (int) ($item['id'] ?? 0) > 0) {
+                    $ids[] = (int) $item['id'];
+                }
+            }
+        }
+
+        $counts = ($ids === []) ? [] : self::unreadFor($ids, $viewerId);
+
+        foreach ($keys as $key) {
+            if (!is_array($payload[$key] ?? null)) {
+                continue;
+            }
+            foreach ($payload[$key] as $i => $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $id = (int) ($item['id'] ?? 0);
+                $payload[$key][$i]['unread'] = (empty($item['is_native']) && $id > 0)
+                    ? (int) ($counts[$id] ?? 0)
+                    : 0;
+            }
+        }
+
+        return $payload;
     }
 
     // ------------------------------------------------------------------

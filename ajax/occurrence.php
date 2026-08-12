@@ -17,6 +17,7 @@
  */
 
 use GlpiPlugin\Taskplus\Access;
+use GlpiPlugin\Taskplus\Comment;
 use GlpiPlugin\Taskplus\Occurrence;
 use GlpiPlugin\Taskplus\Tickets;
 
@@ -54,6 +55,14 @@ try {
     $result['data']['tickets'] = Tickets::forUser($usersId);
 } catch (\Throwable $e) {
     // origem indisponível: re-render segue sem a coluna preenchida
+}
+
+// Etapa 9a-1: o contador de não lidos acompanha TODO re-render (mesma
+// decoração do front/today.php, mesmo leitor).
+try {
+    $result['data'] = Comment::withUnread($result['data'], $usersId);
+} catch (\Throwable $e) {
+    // contagem indisponível: re-render segue sem os badges
 }
 
 header('Content-Type: application/json; charset=UTF-8');

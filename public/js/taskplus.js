@@ -806,6 +806,24 @@
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--manager',
                 'criada pelo gestor ' + item.created_by_label));
         }
+        // 9a-1: comentário não lido. Badge CLICÁVEL — o diálogo mora no
+        // modal de edição, então o atalho leva direto a ele (um clique a
+        // menos que caçar o lápis). Nativa nunca tem (payload manda 0);
+        // payload antigo, sem a chave, cai no NaN e some.
+        var unread = Number(item.unread) || 0;
+        if (!isNative && unread > 0) {
+            var ub = el('button', 'taskplus-badge taskplus-badge--unread',
+                '\uD83D\uDCAC ' + (unread > 9 ? '9+' : String(unread)));
+            ub.type = 'button';
+            ub.title = (unread === 1)
+                ? '1 comentário não lido — abrir diálogo'
+                : unread + ' comentários não lidos — abrir diálogo';
+            ub.setAttribute('aria-label', ub.title);
+            ub.addEventListener('click', function () {
+                openModal(item);
+            });
+            badges.appendChild(ub);
+        }
         if (badges.childNodes.length > 0) {
             body.appendChild(badges);
         }
@@ -935,6 +953,9 @@
             return;
         }
         state.busy = true;
+        // Fixado ANTES do fetch: o modal pode ter fechado (dialogOccId
+        // vira null) quando a resposta chegar.
+        var occId = state.dialogOccId;
 
         var fd = new FormData();
         Object.keys(fields).forEach(function (key) {
@@ -958,11 +979,40 @@
                     toast((res && res.message) ? res.message : 'Erro no diálogo', true);
                 }
                 renderDialog((res && Array.isArray(res.comments)) ? res.comments : []);
+                // 9a-1: o servidor acabou de marcar a leitura — o card
+                // atrás do modal tem que perder o badge na hora, sem
+                // esperar o próximo re-render do payload.
+                if (res && res.success) {
+                    clearUnread(occId);
+                }
             })
             .catch(function () {
                 state.busy = false;
                 toast('Falha de comunicação com o servidor', true);
             });
+    }
+
+    /**
+     * 9a-1 — zera o não lido desta ocorrência no estado local e
+     * re-renderiza as listas. Só re-renderiza se algo mudou de fato:
+     * abrir o diálogo de uma tarefa já lida não deve repintar a tela.
+     * O modal fica intacto (vive fora dos containers das listas).
+     */
+    function clearUnread(occId) {
+        var changed = false;
+        ['today', 'overdue'].forEach(function (key) {
+            var list = Array.isArray(state.data[key]) ? state.data[key] : [];
+            list.forEach(function (it) {
+                if (it && !it.is_native && Number(it.id) === Number(occId)
+                    && (Number(it.unread) || 0) > 0) {
+                    it.unread = 0;
+                    changed = true;
+                }
+            });
+        });
+        if (changed) {
+            render();
+        }
     }
 
     /** Thread do modal — textContent SEMPRE (nada de HTML do usuário). */

@@ -37,6 +37,7 @@ class Install
         'glpi_plugin_taskplus_pendings',
         'glpi_plugin_taskplus_alerts',
         'glpi_plugin_taskplus_comments',
+        'glpi_plugin_taskplus_comment_reads',
     ];
 
     /**
@@ -80,6 +81,13 @@ class Install
         'glpi_plugin_taskplus_comments' => [
             // 8e-3: anexo do comentário via Document NATIVO do core
             'documents_id' => 'INT %SIGN% NOT NULL DEFAULT 0',
+        ],
+        // 9a-1: marca de leitura do diálogo, uma linha por (ocorrência,
+        // leitor). A UNIQUE fica só no CREATE TABLE (regra do topo).
+        'glpi_plugin_taskplus_comment_reads' => [
+            'plugin_taskplus_occurrences_id' => 'INT %SIGN% NOT NULL DEFAULT 0',
+            'users_id'                       => 'INT %SIGN% NOT NULL DEFAULT 0',
+            'date_read'                      => 'TIMESTAMP NULL DEFAULT NULL',
         ],
         'glpi_plugin_taskplus_routines' => [
             'name'             => "VARCHAR(255) NOT NULL DEFAULT ''",
@@ -387,6 +395,33 @@ class Install
                     `date_creation` TIMESTAMP NULL DEFAULT NULL,
                     PRIMARY KEY (`id`),
                     KEY `occ_alive` (`plugin_taskplus_occurrences_id`, `is_deleted`)
+                ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collation}
+            ");
+        }
+
+        // ------------------------------------------------------------------
+        // 7) Marca de leitura do diálogo (Etapa 9a-1).
+        //
+        //    UMA linha por (ocorrência, leitor) com o instante da última
+        //    vez que aquele leitor abriu a thread. O não lido é derivado
+        //    daqui: comentário VIVO de OUTRO autor com date_creation
+        //    posterior ao date_read (ou sem linha nenhuma = nunca abriu).
+        //
+        //    Tabela própria, e não coluna no comments: o mesmo comentário
+        //    tem leitores diferentes (dono, criador e — pela Equipe —
+        //    qualquer gestor do setor), então o estado é do PAR, nunca do
+        //    comentário. A UNIQUE `occ_user` é o que torna a marcação um
+        //    upsert seguro mesmo com dois cliques simultâneos.
+        // ------------------------------------------------------------------
+        if (!$DB->tableExists('glpi_plugin_taskplus_comment_reads')) {
+            $DB->doQuery("
+                CREATE TABLE `glpi_plugin_taskplus_comment_reads` (
+                    `id`            INT {$sign} NOT NULL AUTO_INCREMENT,
+                    `plugin_taskplus_occurrences_id` INT {$sign} NOT NULL DEFAULT 0,
+                    `users_id`      INT {$sign} NOT NULL DEFAULT 0 COMMENT 'leitor',
+                    `date_read`     TIMESTAMP NULL DEFAULT NULL COMMENT 'ultima abertura da thread',
+                    PRIMARY KEY (`id`),
+                    UNIQUE KEY `occ_user` (`plugin_taskplus_occurrences_id`, `users_id`)
                 ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collation}
             ");
         }

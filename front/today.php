@@ -10,6 +10,7 @@
 
 use Glpi\Application\View\TemplateRenderer;
 use GlpiPlugin\Taskplus\Access;
+use GlpiPlugin\Taskplus\Comment;
 use GlpiPlugin\Taskplus\Occurrence;
 use GlpiPlugin\Taskplus\Tickets;
 use GlpiPlugin\Taskplus\Today;
@@ -37,6 +38,17 @@ try {
     $payload['tickets'] = Tickets::forUser((int) Session::getLoginUserID());
 } catch (\Throwable $e) {
     // origem indisponível: a tela segue sem a coluna preenchida
+}
+
+// Etapa 9a-1: contador de comentário não lido por tarefa, do ponto de
+// vista de QUEM está na tela. Decoração no consumidor, nunca dentro do
+// Occurrence::payload (T32) — a Equipe reusa o mesmo payload com outro
+// leitor. Falha aqui não pode derrubar a tela: sem `unread`, o JS só
+// deixa de mostrar o badge.
+try {
+    $payload = Comment::withUnread($payload, (int) Session::getLoginUserID());
+} catch (\Throwable $e) {
+    // contagem indisponível: a tela segue sem os badges
 }
 
 // Twig do GLPI é strict: TODA variável usada no template TEM que estar

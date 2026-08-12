@@ -36,6 +36,12 @@ if (isset($_FILES['file']) && is_array($_FILES['file'])) {
 
 $result = Comment::handle($action, $input, $usersId);
 
+// 9a-1: qualquer ação sobre a thread significa que o usuário está
+// OLHANDO para ela agora (o modal exibe a lista logo em seguida) —
+// então zera o não lido. markReadIfVisible revalida a participação:
+// quem não alcança a thread não grava leitura.
+Comment::markReadIfVisible((int) ($_POST['occurrences_id'] ?? 0), $usersId);
+
 // Token novo para rotação + thread atualizada (o gate de leitura é o
 // mesmo da escrita — quem não participa recebe lista vazia).
 $result['csrf']     = Session::getNewCSRFToken();
