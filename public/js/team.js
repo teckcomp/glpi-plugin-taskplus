@@ -35,6 +35,7 @@
         createCtx: null,
         // 8e-2: {item, tech} do diálogo aberto
         dialogCtx: null,
+        attachUrl: '',
         // 5b-2 p2: busca local + período (viaja em todo POST)
         search: '',
         period: { from: '', to: '' },
@@ -1002,6 +1003,8 @@
         renderTeamDialog([], false);
         var txt = $('tp-t-d-text');
         if (txt) { txt.value = ''; }
+        var fi = $('tp-t-d-file');
+        if (fi) { fi.value = ''; }
         $('tp-t-dialog-modal').hidden = false;
         postDialog({ action: 'comment_list' });
     }
@@ -1016,7 +1019,7 @@
      * do post() principal; a resposta traz a thread (`comments`) e a
      * permissão de escrita (`can_write`) recalculadas pelo servidor.
      */
-    function postDialog(fields) {
+    function postDialog(fields, file) {
         if (state.busy || !state.dialogCtx) {
             return;
         }
@@ -1026,6 +1029,10 @@
         Object.keys(fields).forEach(function (key) {
             fd.append(key, fields[key]);
         });
+        // 8e-3: anexo opcional — valida tipo/tamanho o SERVIDOR
+        if (file) {
+            fd.append('file', file);
+        }
         fd.append('occurrences_id', String(state.dialogCtx.item.id));
         fd.append('tech_id', String(state.dialogCtx.tech.id));
         fd.append('_glpi_csrf_token', state.csrf);
@@ -1086,6 +1093,17 @@
 
             var body = el('div', 'taskplus-dialog__text', c.content || '');
             li.appendChild(body);
+
+            // 8e-3: anexo — download servido pelo plugin (gate próprio)
+            if (c.file_name) {
+                var fl = document.createElement('a');
+                fl.className = 'taskplus-dialog__attach';
+                fl.href = state.attachUrl + '?comment=' + encodeURIComponent(String(c.id));
+                fl.target = '_blank';
+                fl.rel = 'noopener';
+                fl.textContent = '\uD83D\uDCCE ' + c.file_name;
+                li.appendChild(fl);
+            }
             list.appendChild(li);
         });
         list.scrollTop = list.scrollHeight;
@@ -1094,13 +1112,17 @@
     function sendTeamComment() {
         var txt = $('tp-t-d-text');
         var text = txt ? txt.value.trim() : '';
-        if (text === '') {
-            toast('Escreva o comentário', true);
+        var fileInput = $('tp-t-d-file');
+        var file = (fileInput && fileInput.files && fileInput.files.length > 0)
+            ? fileInput.files[0] : null;
+        if (text === '' && !file) {
+            toast('Escreva o comentário ou anexe um arquivo', true);
             if (txt) { txt.focus(); }
             return;
         }
         if (txt) { txt.value = ''; }
-        postDialog({ action: 'comment_add', content: text });
+        postDialog({ action: 'comment_add', content: text }, file);
+        if (fileInput) { fileInput.value = ''; }
     }
 
     /**
@@ -1155,6 +1177,7 @@
 
         state.csrf = state.root.getAttribute('data-csrf') || '';
         state.ajaxUrl = state.root.getAttribute('data-ajax-url') || '';
+        state.attachUrl = state.root.getAttribute('data-attachments-url') || '';
 
         var raw = {};
         var holder = $('taskplus-team-data');

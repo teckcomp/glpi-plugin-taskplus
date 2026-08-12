@@ -7,7 +7,8 @@
 <div class="taskplus-app" id="taskplus-team"
      data-user-id="{{ current_user_id }}"
      data-csrf="{{ csrf_token }}"
-     data-ajax-url="{{ plugin_web_dir }}/ajax/team.php">
+     data-ajax-url="{{ plugin_web_dir }}/ajax/team.php"
+     data-attachments-url="{{ plugin_web_dir }}/ajax/attachment.php">
 
     {# ================= COLUNA ESQUERDA: título + sidebar ================= #}
     {% include '@taskplus/_sidebar.html.twig' with {'active': 'team'} %}
@@ -101,6 +102,10 @@
             <div class="taskplus-dialog__composer" id="tp-t-d-composer">
                 <textarea id="tp-t-d-text" rows="2" maxlength="2000"
                           placeholder="{{ __('Escreva um comentário…', 'taskplus') }}"></textarea>
+                {# 8e-3b: anexo NUMA SEGUNDA LINHA (flex-wrap) — dentro do
+                   composer o leitor não vê; fora da linha do texto o
+                   campo não colapsa #}
+                <input type="file" id="tp-t-d-file" class="taskplus-dialog__file">
                 <button type="button" class="btn btn-primary" id="tp-t-d-send">{{ __('Enviar', 'taskplus') }}</button>
             </div>
             <p class="taskplus-dialog__empty" id="tp-t-d-readonly" hidden>{{ __('Você acompanha como leitor — escrevem o dono e o criador da tarefa.', 'taskplus') }}</p>

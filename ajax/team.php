@@ -44,7 +44,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 $usersId = (int) Session::getLoginUserID();
 $action  = (string) ($_POST['action'] ?? '');
 
-$result = Team::handle($action, $_POST, $usersId);
+// 8e-3: upload do anexo viaja no multipart — repassado ao domínio
+$input = $_POST;
+if (isset($_FILES['file']) && is_array($_FILES['file'])) {
+    $input['_file'] = $_FILES['file'];
+}
+
+$result = Team::handle($action, $input, $usersId);
 
 // 5b-2 p2: período ativo viaja em todo POST — o payload de resposta
 // devolve o mesmo recorte (normalização em Occurrence::periodRange,

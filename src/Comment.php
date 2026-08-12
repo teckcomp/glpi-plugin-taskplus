@@ -27,6 +27,14 @@ class Comment
 
     public const MAX_LENGTH = 2000;
 
+    /**
+     * 8e-3 — fábrica do Document do anexo, INJETÁVEL para o harness
+     * (mesmo padrão do $raiser do Emails). null = implementação real
+     * (createDocument). A de teste devolve int (id) ou string (erro).
+     * @var null|callable(array):(int|string)
+     */
+    public static $documentFactory = null;
+
     // ------------------------------------------------------------------
     // Régua de participação
     // ------------------------------------------------------------------
@@ -143,16 +151,36 @@ class Comment
             $labels[(int) ($u['id'] ?? 0)] = $label;
         }
 
+        // 8e-3: nomes dos anexos em UMA consulta (glpi_documents)
+        $docIds = [];
+        foreach ($rows as $row) {
+            $did = (int) ($row['documents_id'] ?? 0);
+            if ($did > 0) {
+                $docIds[$did] = true;
+            }
+        }
+        $docNames = [];
+        if ($docIds !== []) {
+            foreach ($DB->request([
+                'FROM'  => 'glpi_documents',
+                'WHERE' => ['glpi_documents.id' => array_keys($docIds) ?: [0]],
+            ]) as $d) {
+                $docNames[(int) ($d['id'] ?? 0)] = (string) ($d['filename'] ?? '');
+            }
+        }
+
         $out = [];
         foreach ($rows as $row) {
             $authorId = (int) $row['users_id'];
             $when     = (string) ($row['date_creation'] ?? '');
+            $did      = (int) ($row['documents_id'] ?? 0);
             $out[] = [
-                'id'      => (int) $row['id'],
-                'author'  => $labels[$authorId] ?? '',
-                'own'     => $authorId === $viewerId,
-                'date'    => $when !== '' ? date('d/m H:i', strtotime($when)) : '',
-                'content' => (string) ($row['content'] ?? ''),
+                'id'        => (int) $row['id'],
+                'author'    => $labels[$authorId] ?? '',
+                'own'       => $authorId === $viewerId,
+                'date'      => $when !== '' ? date('d/m H:i', strtotime($when)) : '',
+                'content'   => (string) ($row['content'] ?? ''),
+                'file_name' => $did > 0 ? ($docNames[$did] ?? '') : '',
             ];
         }
         return $out;
@@ -191,19 +219,85 @@ class Comment
         }
 
         $content = trim((string) ($input['content'] ?? ''));
-        if ($content === '') {
-            return ['success' => false, 'message' => __('Escreva o comentário', 'taskplus')];
+        $file    = (isset($input['_file']) && is_array($input['_file'])) ? $input['_file'] : null;
+
+        // 8e-3: comentário precisa de TEXTO ou ANEXO (ou ambos)
+        if ($content === '' && $file === null) {
+            return ['success' => false, 'message' => __('Escreva o comentário ou anexe um arquivo', 'taskplus')];
+        }
+
+        $documentsId = 0;
+        if ($file !== null) {
+            $made = self::$documentFactory !== null
+                ? (self::$documentFactory)($file)
+                : self::createDocument($file);
+            if (is_string($made)) {
+                return ['success' => false, 'message' => $made];
+            }
+            $documentsId = (int) $made;
         }
 
         $DB->insert(self::TABLE, [
             'plugin_taskplus_occurrences_id' => $occId,
             'users_id'                       => $usersId,
             'content'                        => mb_substr($content, 0, self::MAX_LENGTH),
+            'documents_id'                   => $documentsId,
             'is_deleted'                     => 0,
             'date_creation'                  => date('Y-m-d H:i:s'),
         ]);
 
         return ['success' => true, 'message' => __('Comentário enviado', 'taskplus')];
+    }
+
+    /**
+     * 8e-3 — cria o Document NATIVO a partir do upload ($_FILES do
+     * endpoint). Caminho validado contra o fonte do core 11.0.6:
+     * Document->add() com `_filename`/`_prefix_filename` move o arquivo
+     * de GLPI_TMP_DIR, valida a extensão em glpi_documenttypes
+     * (isValidDoc) e deduplica o conteúdo por sha1 — armazenamento,
+     * tipo e higiene ficam TODOS com o core. Devolve o id (int) ou a
+     * MENSAGEM de erro (string), padrão cleanFields da casa.
+     */
+    private static function createDocument(array $file): int|string
+    {
+        /** @var array $CFG_GLPI */
+        global $CFG_GLPI;
+
+        $name = basename((string) ($file['name'] ?? ''));
+        if ($name === '' || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return __('Falha no envio do arquivo', 'taskplus');
+        }
+
+        $maxMb = (int) ($CFG_GLPI['document_max_size'] ?? 20);
+        if ((int) ($file['size'] ?? 0) > $maxMb * 1024 * 1024) {
+            return sprintf(__('Arquivo maior que o limite de %d MB', 'taskplus'), $maxMb);
+        }
+
+        // Prefixo único no padrão do fileupload do core: o Document
+        // remove o prefixo e guarda o nome original.
+        $prefix  = uniqid('tpc', false) . '_';
+        $tmpPath = GLPI_TMP_DIR . '/' . $prefix . $name;
+        $moved   = is_uploaded_file((string) ($file['tmp_name'] ?? ''))
+            ? move_uploaded_file($file['tmp_name'], $tmpPath)
+            : @rename((string) ($file['tmp_name'] ?? ''), $tmpPath);
+        if (!$moved) {
+            return __('Falha ao gravar o arquivo temporário', 'taskplus');
+        }
+
+        $doc = new \Document();
+        $id  = $doc->add([
+            'name'                    => $name,
+            'entities_id'             => (int) ($_SESSION['glpiactive_entity'] ?? 0),
+            'is_recursive'            => 1,
+            '_filename'               => [$prefix . $name],
+            '_prefix_filename'        => [$prefix],
+            '_only_if_upload_succeed' => 1,
+        ]);
+        if (!$id) {
+            @unlink($tmpPath);
+            return __('Tipo de arquivo não permitido (Configurar → Tipos de documento)', 'taskplus');
+        }
+        return (int) $id;
     }
 
     private static function delete(array $input, int $usersId): array

@@ -33,6 +33,7 @@
         editingId: null,
         dialogOccId: null,
         commentsUrl: '',
+        attachUrl: '',
         busy: false,
         data: {
             date: '',
@@ -902,6 +903,10 @@
             if (dTxt) {
                 dTxt.value = '';
             }
+            var dFile = $('tp-d-file');
+            if (dFile) {
+                dFile.value = '';
+            }
             if (item) {
                 postComment({ action: 'list' });
             }
@@ -925,7 +930,7 @@
      * post() principal — as respostas rotacionam o MESMO state.csrf, e
      * serializar os envios evita corrida entre os dois endpoints.
      */
-    function postComment(fields) {
+    function postComment(fields, file) {
         if (state.busy || !state.dialogOccId) {
             return;
         }
@@ -935,6 +940,10 @@
         Object.keys(fields).forEach(function (key) {
             fd.append(key, fields[key]);
         });
+        // 8e-3: anexo opcional — valida tipo/tamanho o SERVIDOR
+        if (file) {
+            fd.append('file', file);
+        }
         fd.append('occurrences_id', String(state.dialogOccId));
         fd.append('_glpi_csrf_token', state.csrf);
 
@@ -997,6 +1006,18 @@
             body.textContent = c.content || '';
             li.appendChild(body);
 
+            // 8e-3: anexo — link de download servido pelo plugin (gate
+            // próprio no ajax/attachment.php)
+            if (c.file_name) {
+                var fl = document.createElement('a');
+                fl.className = 'taskplus-dialog__attach';
+                fl.href = state.attachUrl + '?comment=' + encodeURIComponent(String(c.id));
+                fl.target = '_blank';
+                fl.rel = 'noopener';
+                fl.textContent = '\uD83D\uDCCE ' + c.file_name;
+                li.appendChild(fl);
+            }
+
             list.appendChild(li);
         });
         list.scrollTop = list.scrollHeight;
@@ -1004,13 +1025,19 @@
 
     function sendComment() {
         var text = $('tp-d-text').value.trim();
-        if (text === '') {
-            toast('Escreva o comentário', true);
+        var fileInput = $('tp-d-file');
+        var file = (fileInput && fileInput.files && fileInput.files.length > 0)
+            ? fileInput.files[0] : null;
+        if (text === '' && !file) {
+            toast('Escreva o comentário ou anexe um arquivo', true);
             $('tp-d-text').focus();
             return;
         }
         $('tp-d-text').value = '';
-        postComment({ action: 'add', content: text });
+        postComment({ action: 'add', content: text }, file);
+        if (fileInput) {
+            fileInput.value = '';
+        }
     }
 
     function saveModal() {
@@ -1131,6 +1158,7 @@
         state.csrf = state.root.getAttribute('data-csrf') || '';
         state.ajaxUrl = state.root.getAttribute('data-ajax-url') || '';
         state.commentsUrl = state.root.getAttribute('data-comments-url') || '';
+        state.attachUrl = state.root.getAttribute('data-attachments-url') || '';
 
         var raw = null;
         var dataEl = $('taskplus-data');

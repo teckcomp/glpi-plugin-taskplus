@@ -28,7 +28,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 $usersId = (int) Session::getLoginUserID();
 $action  = (string) ($_POST['action'] ?? '');
 
-$result = Comment::handle($action, $_POST, $usersId);
+// 8e-3: upload do anexo viaja no multipart — repassado ao domínio
+$input = $_POST;
+if (isset($_FILES['file']) && is_array($_FILES['file'])) {
+    $input['_file'] = $_FILES['file'];
+}
+
+$result = Comment::handle($action, $input, $usersId);
 
 // Token novo para rotação + thread atualizada (o gate de leitura é o
 // mesmo da escrita — quem não participa recebe lista vazia).

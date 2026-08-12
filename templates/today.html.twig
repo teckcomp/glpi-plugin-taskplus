@@ -6,7 +6,8 @@
      data-csrf="{{ csrf_token }}"
      data-user-id="{{ current_user_id }}"
      data-ajax-url="{{ plugin_web_dir }}/ajax/occurrence.php"
-     data-comments-url="{{ plugin_web_dir }}/ajax/comment.php">
+     data-comments-url="{{ plugin_web_dir }}/ajax/comment.php"
+     data-attachments-url="{{ plugin_web_dir }}/ajax/attachment.php">
 
     {# ================= COLUNA ESQUERDA: título + sidebar =================
        Extraída para partial na Etapa 2a (deixou de ser a única tela). #}
@@ -126,6 +127,8 @@
             <div class="taskplus-dialog__composer">
                 <textarea id="tp-d-text" rows="2" maxlength="2000"
                           placeholder="{{ __('Escreva um comentário…', 'taskplus') }}"></textarea>
+                {# 8e-3b: anexo na segunda linha do composer (flex-wrap) #}
+                <input type="file" id="tp-d-file" class="taskplus-dialog__file">
                 <button type="button" class="btn btn-primary" id="tp-d-send">{{ __('Enviar', 'taskplus') }}</button>
             </div>
         </div>

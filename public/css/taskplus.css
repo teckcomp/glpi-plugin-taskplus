@@ -807,5 +807,10 @@
 .taskplus-dialog__del { margin-left: auto; border: none; background: none; color: #c0392b; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 4px; }
 .taskplus-dialog__text { margin-top: 2px; font-size: 0.9rem; white-space: pre-wrap; word-break: break-word; }
 .taskplus-dialog__empty { color: #8a97a5; font-size: 0.85rem; margin: 0 0 8px; }
-.taskplus-dialog__composer { display: flex; gap: 8px; align-items: flex-end; }
-.taskplus-dialog__composer textarea { flex: 1; resize: vertical; }
+.taskplus-dialog__composer { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.taskplus-dialog__composer textarea { flex: 1 1 100%; min-height: 52px; resize: vertical; }
+
+/* ===== Anexos do diálogo (Etapa 8e-3) ===== */
+.taskplus-dialog__file { flex: 1; min-width: 0; font-size: 0.8rem; color: #8a97a5; }
+.taskplus-dialog__attach { display: inline-block; margin-top: 4px; font-size: 0.85rem; color: #2a76a8; text-decoration: none; }
+.taskplus-dialog__attach:hover { text-decoration: underline; }

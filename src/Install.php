@@ -77,6 +77,10 @@ class Install
      * UNIQUE em base com duplicata falha.
      */
     private const COLUMNS = [
+        'glpi_plugin_taskplus_comments' => [
+            // 8e-3: anexo do comentário via Document NATIVO do core
+            'documents_id' => 'INT %SIGN% NOT NULL DEFAULT 0',
+        ],
         'glpi_plugin_taskplus_routines' => [
             'name'             => "VARCHAR(255) NOT NULL DEFAULT ''",
             'instructions'     => 'TEXT',
@@ -378,6 +382,7 @@ class Install
                     `plugin_taskplus_occurrences_id` INT {$sign} NOT NULL DEFAULT 0,
                     `users_id`      INT {$sign} NOT NULL DEFAULT 0 COMMENT 'autor',
                     `content`       TEXT,
+                    `documents_id`  INT {$sign} NOT NULL DEFAULT 0 COMMENT 'anexo (Document nativo), 0 = sem',
                     `is_deleted`    TINYINT NOT NULL DEFAULT 0,
                     `date_creation` TIMESTAMP NULL DEFAULT NULL,
                     PRIMARY KEY (`id`),
