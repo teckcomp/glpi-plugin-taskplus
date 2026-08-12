@@ -1,65 +1,138 @@
-# Task+ — hub unificado de tarefas para GLPI 11
+# Tarefas (Task+) — hub unificado de tarefas para GLPI 11
 
-Rotinas recorrentes, tarefas avulsas, tarefas de projeto e tarefas de
-chamado numa tela só ("Hoje"), com conclusão em 1 clique, papéis de
-usuário e gestor, painel de indicadores e histórico auditável.
+Plugin para GLPI 11 que reúne, numa tela só, tudo o que um técnico tem
+para fazer no dia: chamados atribuídos, tarefas de chamado, tarefas de
+projeto, rotinas recorrentes e tarefas avulsas — com conclusão em 1
+clique, quadro kanban, papéis de usuário e gestor, alertas, e-mails
+automáticos, painel de indicadores e histórico auditável.
 
+Desenvolvido pela [Teckcomp I.T. Services](https://github.com/teckcomp).
 Derivado da base do [ProjectPlus](https://github.com/teckcomp/glpi-plugin-projectplus),
 sem os módulos de Projetos, Modelos, Orçamento, Custos e Relatórios.
 
-**Estado:** em desenvolvimento (Etapa 2 concluída — rotinas recorrentes).
-Ver `ROADMAP` no projeto para o plano completo.
+**Versão atual:** `0.1.0-beta` · **GLPI:** 11.0.x · **Licença:** GPL-2.0-or-later
 
-Já funciona:
+---
 
-- **Tarefas avulsas** com CRUD em modal, conclusão em 1 clique gravando
-  autor e hora, badges de horário-limite/atraso e KPIs do dia
-- **Rotinas recorrentes** (diária com opção "só dias úteis", semanal com
-  dias marcáveis, mensal por dia fixo ou por posição como "última sexta"),
-  com instruções, horário-limite, pausa/retomada e término opcional
-- **Geração automática** das ocorrências do dia pela ação automática
-  `taskplusgen`, idempotente (rodar N vezes ao dia não duplica)
-- Tela **Hoje** agrupada em Rotinas diárias / semanais / mensais / Avulsas,
-  com seção separada de atrasadas
-- Exclusão sempre **soft**, preservando a trilha para o histórico
+## As 5 origens de trabalho
 
-## Ações automáticas
+| # | Origem | Onde vive | O que dá para fazer |
+|---|--------|-----------|---------------------|
+| 1 | Rotina recorrente | tabelas do plugin | concluir em 1 clique, pendência, pular o dia, quadro |
+| 2 | Tarefa avulsa | tabelas do plugin | CRUD completo, concluir em 1 clique, pendência, quadro |
+| 3 | Tarefa de projeto | `glpi_projecttasks` | leitura + link; pendência e conclusão pelo quadro |
+| 4 | Tarefa de chamado | `glpi_tickettasks` | leitura + link; pendência e conclusão pelo quadro |
+| 5 | Chamado | `glpi_tickets` | card de leitura ordenado pelo prazo de SLA, link para o chamado |
 
-O plugin registra duas ações automáticas (Configurar → Ações automáticas):
+As origens nativas (3–5) são sempre lidas do GLPI — o plugin nunca as
+duplica. Escrita em tabela nativa acontece exclusivamente pelos objetos
+do core (ex.: concluir uma tarefa de chamado pelo quadro).
 
-| Nome | O que faz |
-|---|---|
-| `taskplusgen` | Materializa as ocorrências do dia a partir das rotinas ativas (de hora em hora) |
-| `taskplusalerts` | Alertas de horário-limite e pendências (chega na Etapa 6) |
+## A tela Hoje — 3 colunas
 
-Execução manual, para teste:
+1. **Chamados** — chamados onde o usuário é atribuído, observador ou
+   requerente (papéis somados no badge), todos os status exceto
+   Solucionado/Fechado, ordenados pelo **prazo de SLA mais próximo**
+   (TTO enquanto não assumido, senão TTR; estourado primeiro; sem SLA no
+   fim, por prioridade). Única ação: abrir o chamado.
+2. **Tarefas do Sistema** — tarefas de chamado e de projeto do usuário,
+   com filtro segmentado por origem.
+3. **Minhas tarefas** — rotinas do dia e avulsas, com conclusão em 1
+   clique, pendência, pular hoje e a trava de duplicadas.
 
-```bash
-sudo -u www-data php <glpi>/front/cron.php --force taskplusgen
-```
+Busca local (título, descrição, categoria e `#número` de chamado) e
+filtro por período cobrem a tela inteira.
 
-### Regras de calendário
+## As 8 telas
 
-- "Só dias úteis" = segunda a sexta; feriados não são considerados
-- Mensal por dia fixo em mês curto cai no **último dia** do mês (uma rotina
-  "dia 31" roda em 28/fev, 30/abr etc.)
-- Mensal por posição com "5ª" não gera em meses em que aquele dia da semana
-  só ocorre 4 vezes — para "a última", use a opção **Última**
+| Tela | O que faz |
+|------|-----------|
+| **Hoje** | as 3 colunas acima + KPIs (Atrasadas · Para hoje · Pendentes · Concluídas) |
+| **Quadro** | kanban com as 4 colunas de sistema + fases por setor, arrastar e soltar |
+| **Rotinas** | CRUD de rotinas (diária/só dias úteis, semanal, mensal por dia fixo ou posição) |
+| **Semana** | grade seg–dom somente leitura |
+| **Equipe** | (gestor) acompanhar técnicos, concluir/editar/pendenciar tarefas deles, criar avulsas e rotinas para técnico ou para todo o setor, dialogar nas tarefas |
+| **Painel** | indicadores pessoais: heatmap de conclusão, melhor dia da semana, taxa (feitas ÷ devidas) |
+| **Histórico** | trilha auditável por dia, com restauração de avulsa excluída (só o dono) |
+| **Configurações** | fases por setor, horários dos e-mails, opções gerais |
+
+Todas as telas trazem o **sino de alertas** no cabeçalho da sidebar.
+
+## Diálogo das tarefas (com anexos)
+
+Cada tarefa do plugin (avulsa ou dia de rotina) tem uma **conversa**:
+o técnico comenta pelo modal da tela Hoje; o gestor lê e responde pelo
+botão "Diálogo" no card do técnico na tela Equipe. Participam da
+escrita o **dono** e o **criador** da tarefa (quando distinto — caso
+das tarefas criadas pelo gestor); outros gestores do setor acompanham
+como leitores. Comentários aceitam **anexo** (armazenado como Document
+nativo do GLPI — tipos permitidos e limite de tamanho valem os do
+core), com download controlado pela mesma régua de participação.
+Excluir comentário: só o autor; exclusão soft, trilha preservada.
+Tarefas nativas (chamado/projeto) ficam fora — o acompanhamento delas
+vive no próprio GLPI.
+
+## Papéis e direitos (aba "Tarefas" do Perfil)
+
+| Direito | Quem | O que libera |
+|---------|------|--------------|
+| `plugin_taskplus_task` | usuário | tarefas próprias: Hoje, Quadro, Rotinas, Semana, Painel, Histórico; e-mail de fim de dia |
+| `plugin_taskplus_manage` | gestor (exige "Gerente" no grupo do GLPI) | tela Equipe, fases dos setores geridos, alerta no sino sobre a equipe, resumo matinal por e-mail |
+| `plugin_taskplus_home` | qualquer perfil | **página inicial**: o login cai direto na tela Hoje, no lugar da Visão Geral do GLPI (o link "Visão Geral" no fim da sidebar volta ao painel nativo por clique; dashboards embutidos não são afetados) |
+
+Os três direitos nascem **desmarcados** em todos os perfis; mudança de
+direito vale no próximo login.
+
+## Automação
+
+| Ação automática | Frequência | O que faz |
+|-----------------|------------|-----------|
+| `taskplusgen` | 30 min | materializa as ocorrências do dia das rotinas (idempotente) |
+| `taskplusalerts` | 10 min | alertas de horário-limite (sino + navegador), e-mail de fim de dia ao técnico e resumo matinal ao gestor |
+
+Os dois e-mails usam a **cadeia nativa de notificações** do GLPI (fila +
+cron `queuednotification`) e têm horário configurável (fim de dia 18:00,
+resumo matinal 08:00, por padrão). O alerta do sino tem canal de
+notificação do navegador opcional (opt-in do usuário).
 
 ## Requisitos
 
-- GLPI 11.0.x
-- PHP >= 8.2
+- GLPI **11.0.x** (desenvolvido e homologado no 11.0.6)
+- PHP 8.3, MySQL/MariaDB
+- Modo cron **externo** recomendado para as ações automáticas:
+  `* * * * * /usr/bin/php /var/www/html/glpi/front/cron.php >/dev/null 2>&1`
+  (crontab do usuário do webserver, ex. `www-data`)
+- Para os e-mails: em *Configurar → Notificações*, habilitar
+  acompanhamento **e** acompanhamento por e-mail, configurar o SMTP, e
+  garantir e-mail válido nos usuários. O envio é assíncrono — quem
+  despacha a fila é o cron `queuednotification`.
 
-## Instalação (desenvolvimento)
-
-Copie a pasta `taskplus/` para `<glpi>/plugins/` e rode:
+## Instalação
 
 ```bash
-php bin/console plugin:install taskplus
-php bin/console plugin:activate taskplus
+cd /var/www/html/glpi/plugins
+unzip taskplus.zip                      # cria plugins/taskplus
+chown -R www-data:www-data taskplus
+sudo -u www-data php ../bin/console plugin:install taskplus
+sudo -u www-data php ../bin/console plugin:activate taskplus
 ```
+
+Atualizando de uma versão anterior: sobrescreva os arquivos e rode
+`plugin:install --force taskplus` seguido de `plugin:activate taskplus`
+(o `--force` reexecuta a migração e **desativa** o plugin — a ativação
+na sequência é obrigatória).
+
+Depois da instalação: marque os direitos na aba **Tarefas** de cada
+perfil (Administração → Perfis) e saia/entre para o menu aparecer.
+
+## Estrutura
+
+- 6 tabelas próprias: `routines`, `occurrences`, `phases`, `pendings`,
+  `alerts`, `comments` (prefixo `glpi_plugin_taskplus_`)
+- Exclusão sempre **soft** — a trilha do Histórico é preservada
+- Twig + JavaScript puro (sem framework), CSRF rotacionado a cada
+  resposta, escrita nativa só via objetos do core
 
 ## Licença
 
-GPL-2.0-or-later — © Teckcomp I.T. Services
+GPL-2.0-or-later. Veja `LICENSE`.
