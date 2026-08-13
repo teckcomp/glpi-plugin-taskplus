@@ -72,6 +72,12 @@ class Team
             // e o JS mostra o aviso na linha dele.
             try {
                 $occ = Occurrence::payload($techId, $from, $to);
+                // 9a-2: o não lido é do LEITOR desta tela — o GESTOR,
+                // não o técnico dono das tarefas. Por isso a decoração
+                // vive aqui e não dentro do Occurrence::payload (T32):
+                // o mesmo payload alimenta a Hoje do técnico com outro
+                // leitor e o número tem que ser diferente.
+                $occ = Comment::withUnread($occ, $usersId);
                 $techs[] = self::techEntry($techId, $info['label'], $info['groups'], $occ);
             } catch (\Throwable $e) {
                 $entry               = self::techEntry($techId, $info['label'], $info['groups'], []);
@@ -215,6 +221,14 @@ class Team
 
         $result['comments']  = Comment::listFor((int) $occ['id'], $usersId, true);
         $result['can_write'] = Comment::canInteract($occ, $usersId);
+
+        // 9a-2: o gestor está OLHANDO a thread agora — zera o não lido
+        // dele nesta ocorrência. markRead direto (e não
+        // markReadIfVisible): aqui o leitor pode ser gestor NÃO
+        // participante, e o escopo já foi revalidado acima pelo
+        // managedTech + occRowOwned (T18).
+        Comment::markRead((int) $occ['id'], $usersId);
+
         return $result;
     }
 
@@ -682,6 +696,10 @@ class Team
                 ? (string) ($item['created_by_label'] ?? '')
                 : '',
             'is_native'   => $isNative,
+            // 9a-2: comentários não lidos PELO GESTOR nesta tarefa
+            // (injetado por Comment::withUnread no payload). Nativa
+            // nunca tem diálogo — 0 por construção.
+            'unread'      => $isOwn ? (int) ($item['unread'] ?? 0) : 0,
             // 'ticket' | 'project' | '' (própria)
             'source'    => (string) ($item['source'] ?? ''),
             // Link do item nativo (abre no GLPI); vazio nas próprias

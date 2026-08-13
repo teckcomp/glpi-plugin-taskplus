@@ -495,6 +495,13 @@
 .taskplus-team__act--pend { border-color: #d9822b; color: #d9822b; }
 .taskplus-team__act--pend:hover { background: #d9822b; color: #fff; }
 
+/* 9a-2: botão Diálogo COM não lido — preenchido, para saltar numa lista
+   densa. O botão sem novidade segue com o visual padrão da 8e-2. */
+.taskplus-team__act--unread {
+    border-color: #2a76a8; background: #2a76a8; color: #fff;
+}
+.taskplus-team__act--unread:hover { background: #1f5c85; border-color: #1f5c85; color: #fff; }
+
 /* 5c-1: botão "Nova tarefa para o técnico" no corpo expandido */
 .taskplus-team__create { padding: 6px 12px 2px; }
 .taskplus-team__act--create { border-style: dashed; }

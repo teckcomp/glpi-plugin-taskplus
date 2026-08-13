@@ -210,6 +210,12 @@ class Comment
      *
      * Duas consultas simples e junção em PHP, de propósito: COUNT com
      * GROUPBY no iterator do GLPI 11 descarta os campos do SELECT.
+     *
+     * Limite conhecido e aceito: `date_read` é TIMESTAMP (1 segundo) e a
+     * comparação é estrita, então comentário gravado no MESMO segundo em
+     * que o leitor abriu a thread não reacende o contador. A janela é
+     * mínima e o comentário seguinte volta a contar; eliminá-la exigiria
+     * guardar o id do último comentário lido, não a hora.
      */
     public static function unreadFor(array $occIds, int $viewerId): array
     {

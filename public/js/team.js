@@ -136,6 +136,8 @@
             // 5c-1: quem criou, quando não foi o próprio técnico
             created_by: (typeof i.created_by === 'string') ? i.created_by : '',
             is_native: !!i.is_native,
+            // 9a-2: não lidos DO GESTOR nesta tarefa (payload antigo = 0)
+            unread: (typeof i.unread === 'number') ? i.unread : 0,
             source: (typeof i.source === 'string') ? i.source : '',
             url: (typeof i.url === 'string') ? i.url : ''
         };
@@ -642,9 +644,18 @@
         // diálogo dela vive no objeto do GLPI). Leitura para qualquer
         // gestor do setor; escrita decidida pelo servidor (can_write).
         if (!item.is_native) {
-            actBtn('Diálogo', 'taskplus-team__act--dialog', function () {
-                openDialogModal(item, tech);
-            });
+            // 9a-2: contador de não lido no PRÓPRIO botão — a Equipe é
+            // uma lista densa, um badge solto se perderia entre os
+            // chips de status.
+            var unread = Number(item.unread) || 0;
+            var label = (unread > 0)
+                ? 'Diálogo (' + (unread > 9 ? '9+' : String(unread)) + ')'
+                : 'Diálogo';
+            actBtn(label,
+                'taskplus-team__act--dialog' + (unread > 0 ? ' taskplus-team__act--unread' : ''),
+                function () {
+                    openDialogModal(item, tech);
+                });
         }
 
         if (acts.childNodes.length > 0) {
@@ -1024,6 +1035,9 @@
             return;
         }
         state.busy = true;
+        // Fixado ANTES do fetch: o modal pode ter fechado (dialogCtx
+        // vira null) quando a resposta chegar.
+        var ctx = state.dialogCtx;
 
         var fd = new FormData();
         Object.keys(fields).forEach(function (key) {
@@ -1051,11 +1065,43 @@
                     (res && Array.isArray(res.comments)) ? res.comments : [],
                     !!(res && res.can_write)
                 );
+                // 9a-2: o servidor acabou de marcar a leitura do gestor —
+                // o botão atrás do modal perde o contador na hora.
+                if (res && res.success) {
+                    clearUnread(ctx);
+                }
             })
             .catch(function () {
                 state.busy = false;
                 toast('Falha de comunicação com o servidor', true);
             });
+    }
+
+    /**
+     * 9a-2 — zera o não lido desta tarefa no estado local e re-renderiza
+     * a lista. Só repinta se algo mudou de fato (abrir diálogo já lido
+     * não deve reconstruir a tela inteira da equipe, que é grande).
+     */
+    function clearUnread(ctx) {
+        if (!ctx || !ctx.item || !ctx.tech) {
+            return;
+        }
+        var changed = false;
+        (state.data.techs || []).forEach(function (t) {
+            if (Number(t.id) !== Number(ctx.tech.id)) {
+                return;
+            }
+            (t.items || []).forEach(function (it) {
+                if (it && !it.is_native && Number(it.id) === Number(ctx.item.id)
+                    && (Number(it.unread) || 0) > 0) {
+                    it.unread = 0;
+                    changed = true;
+                }
+            });
+        });
+        if (changed) {
+            render();
+        }
     }
 
     /** Thread do modal — textContent SEMPRE (nada de HTML do usuário). */
