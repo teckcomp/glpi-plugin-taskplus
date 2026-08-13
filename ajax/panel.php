@@ -44,21 +44,24 @@ $result = Panel::handle($action, $_POST, $usersId);
 $pf = isset($_POST['period_from']) ? (string) $_POST['period_from'] : null;
 $pt = isset($_POST['period_to']) ? (string) $_POST['period_to'] : null;
 
-// 6b-2 p1: alvo do "Ver painel de:" — 0/ausente = painel pessoal. O
-// escopo NÃO é do front: o Panel::payload revalida o id contra os
-// setores administrados a cada POST (T18) e, se não puder, devolve o
-// painel do próprio com `view.denied`.
+// 6b-2: alvo do "Ver painel de:" — tipo + id. 'self' (ou ausente) =
+// painel pessoal; 'user' + users_id = painel de um técnico; 'team' +
+// groups_id (0 = todos os setores) = agregado da equipe. O escopo NÃO é
+// do front: o Panel::payload revalida o par contra os setores
+// administrados a cada POST (T18) e, se não puder, devolve o painel do
+// próprio com `view.denied`.
+$vk = (string) ($_POST['view_kind'] ?? 'self');
 $vi = (int) ($_POST['view_id'] ?? 0);
 
 // Token novo para o JS rotacionar + estado atualizado para re-render
 $result['csrf'] = Session::getNewCSRFToken();
-$result['data'] = Panel::payload($usersId, $pf, $pt, $vi);
+$result['data'] = Panel::payload($usersId, $pf, $pt, $vk, $vi);
 
 // Alvo recusado: a resposta traz o painel pessoal, mas o gestor precisa
 // saber POR QUE a tela voltou para ele (mesma mensagem neutra da Equipe).
 if (!empty($result['data']['view']['denied'])) {
     $result['success'] = false;
-    $result['message'] = __('Técnico fora dos setores que você administra', 'taskplus');
+    $result['message'] = __('Alvo fora dos setores que você administra', 'taskplus');
 }
 
 header('Content-Type: application/json; charset=UTF-8');

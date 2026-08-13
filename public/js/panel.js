@@ -11,10 +11,11 @@
  *    token é de uso único) e `data` com o payload agregado do período
  *    pedido, para re-render. O servidor é a fonte da verdade do
  *    recorte: default de 90 dias, teto de 180 (flag `clamped`);
- *  - 6b-2 p1: o POST leva também `view_id` (0 = meu painel; id do
- *    técnico = leitura de gestor). O front NÃO decide escopo — manda o
- *    pedido e obedece ao `view` da resposta, que diz qual painel foi
- *    realmente lido e traz as opções permitidas;
+ *  - 6b-2: o POST leva também `view_kind` + `view_id` ('self' = meu
+ *    painel; 'user' + id = painel de um técnico; 'team' + groups_id,
+ *    0 = todos os setores = agregado da equipe). O front NÃO decide
+ *    escopo — manda o pedido e obedece ao `view` da resposta, que diz
+ *    qual painel foi realmente lido e traz as opções permitidas;
  *  - defesa de cliente: Array.isArray em toda lista vinda do servidor
  *    (variável ausente vira null → .map() quebraria a tela).
  *
@@ -30,9 +31,10 @@
         csrf: '',
         // Recorte exibido: '' + '' = default do servidor (últimos 90)
         period: { from: '', to: '' },
-        // 6b-2 p1: alvo pedido (0 = meu painel). Quem manda é a resposta
-        // do servidor — o syncView reescreve isto a cada render.
-        view: 0,
+        // 6b-2: alvo pedido, no formato "kind:id" ('self:0' = meu
+        // painel). Quem manda é a resposta do servidor — o syncView
+        // reescreve isto a cada render.
+        view: 'self:0',
         busy: false,
         data: emptyData()
     };
@@ -46,9 +48,13 @@
             weekdays: [],
             best_day: null,
             routines: { rows: [], more: 0 },
-            // 6b-2 p1: alvo exibido + opções do gestor (vazias para
-            // quem não administra setor — sem seletor na tela)
-            view: { id: 0, label: '', is_self: true, denied: false, options: [] }
+            owners: { rows: [] },
+            // 6b-2: alvo exibido + opções do gestor (vazias para quem
+            // não administra setor — sem seletor na tela)
+            view: {
+                kind: 'self', id: 0, label: '', group_id: 0, group_name: '',
+                techs: 0, failed: 0, is_self: true, denied: false, options: []
+            }
         };
     }
 
@@ -77,6 +83,7 @@
         var t = (d.totals && typeof d.totals === 'object') ? d.totals : {};
         var h = (d.heatmap && typeof d.heatmap === 'object') ? d.heatmap : {};
         var r = (d.routines && typeof d.routines === 'object') ? d.routines : {};
+        var o = (d.owners && typeof d.owners === 'object') ? d.owners : {};
         var b = (d.best_day && typeof d.best_day === 'object') ? d.best_day : null;
         return {
             date: (typeof d.date === 'string') ? d.date : '',
@@ -108,14 +115,35 @@
                 rows: Array.isArray(r.rows) ? r.rows.map(safeRoutine) : [],
                 more: Number(r.more) || 0
             },
+            owners: {
+                rows: Array.isArray(o.rows) ? o.rows.map(safeOwner) : []
+            },
             view: safeView(d.view)
+        };
+    }
+
+    function safeOwner(raw) {
+        var o = (raw && typeof raw === 'object') ? raw : {};
+        return {
+            id: Number(o.id) || 0,
+            name: (typeof o.name === 'string') ? o.name : '',
+            due: Number(o.due) || 0,
+            done: Number(o.done) || 0,
+            pending: Number(o.pending) || 0,
+            rate: (o.rate === null || o.rate === undefined) ? null : (Number(o.rate) || 0)
         };
     }
 
     function safeView(raw) {
         var v = (raw && typeof raw === 'object') ? raw : {};
+        var kind = (v.kind === 'user' || v.kind === 'team') ? v.kind : 'self';
         return {
+            kind: kind,
             id: Number(v.id) || 0,
+            group_id: Number(v.group_id) || 0,
+            group_name: (typeof v.group_name === 'string') ? v.group_name : '',
+            techs: Number(v.techs) || 0,
+            failed: Number(v.failed) || 0,
             label: (typeof v.label === 'string') ? v.label : '',
             // Ausente = pessoal: o modo "outro técnico" só existe se o
             // servidor disser explicitamente que não é o próprio.
@@ -128,6 +156,7 @@
     function safeViewOption(raw) {
         var o = (raw && typeof raw === 'object') ? raw : {};
         return {
+            kind: (o.kind === 'team') ? 'team' : 'user',
             id: Number(o.id) || 0,
             label: (typeof o.label === 'string') ? o.label : '',
             groups: (typeof o.groups === 'string') ? o.groups : ''
@@ -209,10 +238,12 @@
         // período que o usuário está vendo ('' + '' = default de 90).
         fd.append('period_from', state.period.from);
         fd.append('period_to', state.period.to);
-        // 6b-2 p1: o alvo viaja junto do recorte — trocar o período
-        // enquanto se lê outro técnico não pode devolver o painel
-        // próprio. 0 = meu painel. Quem valida é o servidor.
-        fd.append('view_id', String(state.view));
+        // 6b-2: o alvo viaja junto do recorte — trocar o período
+        // enquanto se lê a equipe não pode devolver o painel próprio.
+        // Quem valida o par kind+id é o servidor.
+        var target = splitView(state.view);
+        fd.append('view_kind', target.kind);
+        fd.append('view_id', String(target.id));
 
         fetch(state.ajaxUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(function (resp) { return resp.json(); })
@@ -261,6 +292,7 @@
         renderKpis();
         renderHeatmap();
         renderRoutines();
+        renderOwners();
     }
 
     /**
@@ -288,16 +320,16 @@
     }
 
     /**
-     * 6b-2 p1: seletor "Ver painel de:" + faixa de identificação.
+     * 6b-2: seletor "Ver painel de:" + faixa de identificação.
      *
-     * A RESPOSTA manda: `view.id` é o alvo que o servidor realmente
-     * leu. Se o pedido foi recusado (`denied`), o select volta sozinho
-     * para "Meu painel" — a tela nunca fica dizendo que mostra alguém
-     * que não está mostrando.
+     * A RESPOSTA manda: `view.kind` + id dizem o que o servidor
+     * realmente leu. Se o pedido foi recusado (`denied`), o select
+     * volta sozinho para "Meu painel" — a tela nunca fica dizendo que
+     * mostra algo que não está mostrando.
      */
     function syncView() {
         var v = state.data.view;
-        var selected = v.is_self ? 0 : v.id;
+        var selected = viewKey(v);
         state.view = selected;
 
         var box = $('tp-p-viewbox');
@@ -310,15 +342,11 @@
         if (select) {
             select.textContent = '';
             if (hasOptions) {
-                select.appendChild(makeOption('0', 'Meu painel'));
+                select.appendChild(makeOption('self:0', 'Meu painel'));
                 v.options.forEach(function (o) {
-                    var text = o.label || ('#' + o.id);
-                    if (o.groups) {
-                        text += ' (' + o.groups + ')';
-                    }
-                    select.appendChild(makeOption(String(o.id), text));
+                    select.appendChild(makeOption(o.kind + ':' + o.id, optionText(o)));
                 });
-                select.value = String(selected);
+                select.value = selected;
             }
         }
 
@@ -328,11 +356,63 @@
             note.hidden = v.is_self;
         }
         if (text) {
-            text.textContent = v.is_self
-                ? ''
-                : ('Painel de ' + (v.label || ('#' + v.id))
-                    + ' — leitura de gestor: os mesmos números que ele vê.');
+            text.textContent = v.is_self ? '' : viewNoteText(v);
         }
+
+        // Modo equipe troca a tabela de rotinas pela de responsáveis:
+        // a mesma rotina de vários técnicos viraria linhas homônimas.
+        var team = (v.kind === 'team');
+        var rBlock = $('tp-p-routines-block');
+        var oBlock = $('tp-p-owners-block');
+        if (rBlock) {
+            rBlock.hidden = team;
+        }
+        if (oBlock) {
+            oBlock.hidden = !team;
+        }
+    }
+
+    /** Chave "kind:id" do alvo exibido, na forma que o select usa. */
+    function viewKey(v) {
+        if (v.is_self || v.kind === 'self') {
+            return 'self:0';
+        }
+        return (v.kind === 'team')
+            ? ('team:' + v.group_id)
+            : ('user:' + v.id);
+    }
+
+    function splitView(key) {
+        var parts = String(key || 'self:0').split(':');
+        var kind = (parts[0] === 'user' || parts[0] === 'team') ? parts[0] : 'self';
+        return { kind: kind, id: Number(parts[1]) || 0 };
+    }
+
+    /** Rótulo da opção — o texto de interface é do front, não do domínio. */
+    function optionText(o) {
+        if (o.kind === 'team') {
+            return (o.id === 0)
+                ? 'Equipe (todos os setores)'
+                : ('Equipe — ' + (o.label || ('#' + o.id)));
+        }
+        var text = o.label || ('#' + o.id);
+        if (o.groups) {
+            text += ' (' + o.groups + ')';
+        }
+        return text;
+    }
+
+    function viewNoteText(v) {
+        if (v.kind !== 'team') {
+            return 'Painel de ' + (v.label || ('#' + v.id))
+                + ' — leitura de gestor: os mesmos números que ele vê.';
+        }
+        var who = v.group_name ? ('Equipe — ' + v.group_name) : 'Equipe (todos os setores)';
+        var text = 'Painel da ' + who + ': ' + v.techs + ' técnico(s) no recorte, você incluído.';
+        if (v.failed > 0) {
+            text += ' ' + v.failed + ' sem dados nesta leitura.';
+        }
+        return text;
     }
 
     function makeOption(value, text) {
@@ -344,7 +424,7 @@
 
     function changeView() {
         var select = $('tp-p-view');
-        state.view = select ? (Number(select.value) || 0) : 0;
+        state.view = select ? String(select.value || 'self:0') : 'self:0';
         post({ action: 'list' });
     }
 
@@ -507,6 +587,61 @@
             box.appendChild(el('div', 'taskplus-rtable__more',
                 'e mais ' + state.data.routines.more + ' rotina(s) com menos volume no período'));
         }
+    }
+
+    /**
+     * 6b-2 p2: taxa por responsável (modo equipe). Mesma anatomia da
+     * tabela de rotinas — barra + percentual —, sem teto de linhas:
+     * cortar responsável some com gente da conta.
+     */
+    function renderOwners() {
+        var box = $('tp-p-owners');
+        if (!box) {
+            return;
+        }
+        box.textContent = '';
+
+        var rows = state.data.owners.rows;
+        if (rows.length === 0) {
+            box.appendChild(el('div', 'taskplus-hm__empty',
+                'Nenhum técnico no recorte.'));
+            return;
+        }
+
+        var table = el('table', 'taskplus-rtable');
+        var thead = el('thead');
+        var hr = el('tr');
+        ['Responsável', 'Concluídas', 'Pendentes', 'Taxa'].forEach(function (h) {
+            hr.appendChild(el('th', null, h));
+        });
+        thead.appendChild(hr);
+        table.appendChild(thead);
+
+        var tbody = el('tbody');
+        rows.forEach(function (r) {
+            var tr = el('tr');
+            tr.appendChild(el('td', 'taskplus-rtable__name', r.name || ('#' + r.id)));
+            tr.appendChild(el('td', 'taskplus-rtable__num', r.done + ' / ' + r.due));
+            tr.appendChild(el('td', 'taskplus-rtable__num', String(r.pending)));
+
+            var td = el('td', 'taskplus-rtable__rate');
+            if (r.rate === null) {
+                // Sem nada devida no período: não há taxa a mostrar —
+                // "0%" mentiria sobre quem simplesmente não teve tarefa.
+                td.appendChild(el('span', 'taskplus-rtable__ratetext', '—'));
+            } else {
+                var bar = el('span', 'taskplus-rtable__bar');
+                var fill = el('span', 'taskplus-rtable__fill');
+                fill.style.width = r.rate + '%';
+                bar.appendChild(fill);
+                td.appendChild(bar);
+                td.appendChild(el('span', 'taskplus-rtable__ratetext', r.rate + '%'));
+            }
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        box.appendChild(table);
     }
 
     // ------------------------------------------------------------------

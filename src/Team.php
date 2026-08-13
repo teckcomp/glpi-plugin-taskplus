@@ -712,28 +712,41 @@ class Team
     // =====================================================================
 
     /**
-     * Escopo do gestor $usersId em UMA chamada: os técnicos ao alcance
-     * dele, no mesmo formato do members() —
-     * [users_id => ['label' => …, 'groups' => […]]].
+     * Escopo do gestor $usersId em UMA consulta de cada tabela:
+     *
+     *   ['groups' => [groups_id => nome], 'members' => [users_id => …]]
      *
      * Existe para o Painel (6b-2) NÃO reimplementar a régua de quem o
      * gestor enxerga: é a MESMA cadeia que monta a tela Equipe e que o
      * managedTech revalida a cada POST (isPhaseAdmin → managedGroups →
      * members). Régua duplicada é régua que diverge na próxima mudança.
      *
-     * Devolve [] quando o usuário não administra setor algum — o
+     * Os DOIS lados vêm juntos porque o modo "Equipe" do Painel (6b-2
+     * p2) precisa dos setores para montar as opções e dos membros para
+     * agregar — pedir separado rodaria managedGroups duas vezes.
+     *
+     * Ambos vazios quando o usuário não administra setor algum — o
      * chamador decide se isso é "sem opções" (Painel) ou erro de escopo
      * (ações da Equipe).
      */
-    public static function scopeMembers(int $usersId): array
+    public static function scope(int $usersId): array
     {
         $isAdmin = Access::isPhaseAdmin();
         $groups  = Access::managedGroups($usersId, $isAdmin);
         if ($groups === []) {
-            return [];
+            return ['groups' => [], 'members' => []];
         }
 
-        return self::members(array_keys($groups), $groups);
+        return [
+            'groups'  => $groups,
+            'members' => self::members(array_keys($groups), $groups),
+        ];
+    }
+
+    /** Atalho para quem só quer os técnicos (contrato do 6b-2 p1). */
+    public static function scopeMembers(int $usersId): array
+    {
+        return self::scope($usersId)['members'];
     }
 
     /**
@@ -796,6 +809,10 @@ class Team
             $members[$uid] = [
                 'label'  => $label,
                 'groups' => $names,
+                // 6b-2 p2: os IDS dos setores, além dos nomes — o modo
+                // "Equipe — Setor X" do Painel filtra por id, e casar
+                // por nome quebraria com setores homônimos.
+                'group_ids' => array_map('intval', array_keys($byUser[$uid] ?? [])),
             ];
         }
 

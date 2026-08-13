@@ -30,6 +30,19 @@ namespace GlpiPlugin\Taskplus;
  *    consultada; qualquer outro cai no próprio painel com `denied`;
  *  - é leitura pura — nenhuma ação do Painel escreve, e o gestor
  *    continua sem tocar em tarefa alheia por esta tela.
+ *
+ * 6b-2 p2 — modo EQUIPE. O alvo passa a ter tipo (`kind`): 'self',
+ * 'user' (um técnico) ou 'team' (agregado do setor, ou de todos os
+ * setores administrados). No modo equipe:
+ *
+ *  - o base do assemble() é a UNIÃO dos dias dos técnicos, cada item
+ *    marcado com `owner_id` na cópia do consumidor (T32);
+ *  - falha no payload de UM técnico não derruba a tela (padrão da
+ *    Equipe): ele fica fora dos números e o contador `failed` avisa;
+ *  - a tabela "Taxa por rotina" dá lugar à "Taxa por responsável",
+ *    semeada com TODOS os técnicos do recorte — quem não teve tarefa
+ *    aparece zerado, que é justamente o que o gestor procura;
+ *  - o gestor entra na conta, como na tela Equipe (ele também tem dia).
  *  - conteúdo: taxa de conclusão do período, heatmap calendário (estilo
  *    GitHub: colunas = semanas, linhas = seg–dom), melhor dia da
  *    semana e taxa por rotina (top 10);
@@ -79,15 +92,22 @@ class Panel
      *     'weekdays' => [7 × ['label','due','done']],
      *     'best_day' => ['label','done'] | null,
      *     'routines' => ['rows' => [até 10 × linha], 'more' => n],
-     *     'view'     => ['id','label','is_self','denied','options'],
+     *     'owners'   => ['rows' => [uma linha por técnico]]  (modo equipe),
+     *     'view'     => [
+     *        'kind' ('self'|'user'|'team'), 'id', 'label', 'group_id',
+     *        'group_name', 'techs', 'failed', 'is_self', 'denied',
+     *        'options'
+     *     ],
      *   ]
      *
      * `$from`/`$to` chegam crus do POST — a normalização é do
      * panelRange (mesma régua do periodRange + default + teto).
      *
-     * `$viewId` (6b-2 p1) é o técnico que o GESTOR quer ler; 0 ou o
-     * próprio id = painel pessoal. Vem cru do POST e é validado aqui —
-     * o front nunca é fonte de escopo.
+     * `$viewKind`/`$viewId` (6b-2) são o alvo pedido pelo GESTOR:
+     * 'self' = painel pessoal; 'user' + id = painel de um técnico;
+     * 'team' + groups_id (0 = todos os setores administrados) = painel
+     * agregado. Vêm crus do POST e são validados aqui — o front nunca é
+     * fonte de escopo.
      *
      * ATENÇÃO safeData(): chave nova aqui precisa entrar no panel.js.
      */
@@ -95,6 +115,7 @@ class Panel
         int $usersId,
         ?string $from = null,
         ?string $to = null,
+        string $viewKind = 'self',
         int $viewId = 0
     ): array {
         [$from, $to, $clamped] = self::panelRange($from, $to);
@@ -102,37 +123,112 @@ class Panel
         // Escopo consultado AGORA (T18): quem perdeu a gestão do setor
         // entre o carregamento da tela e este POST perde o acesso já
         // nesta resposta.
-        $options = self::viewOptions($usersId);
-        $view    = self::resolveView($usersId, $viewId, $options);
+        $scope   = Access::canTeam() ? Team::scope($usersId) : ['groups' => [], 'members' => []];
+        $options = self::optionsFor($scope, $usersId);
+        $view    = self::resolveView($usersId, $viewKind, $viewId, $options);
 
-        // Modo-período do Occurrence: tudo do intervalo (aberta,
-        // concluída, pendente), sem puladas nem excluídas, pendências
-        // aplicadas. As nativas vêm junto (estado atual, fora do
-        // recorte) e o assemble() as descarta — decisão nº 3.
-        $base = Occurrence::payload($view['id'], $from, $to);
+        if ($view['kind'] === 'team') {
+            // 6b-2 p2: a equipe é a UNIÃO dos dias dos técnicos do
+            // recorte — o próprio gestor incluído, como na tela Equipe
+            // (ele também tem dia).
+            $targets              = self::teamTargets($scope, $view['group_id']);
+            [$base, $failed]      = self::teamBase($targets, $from, $to);
+            $out                  = self::assemble($base, $from, $to, $clamped, $targets);
+            $view['techs']        = count($targets);
+            $view['failed']       = $failed;
+        } else {
+            // Modo-período do Occurrence: tudo do intervalo (aberta,
+            // concluída, pendente), sem puladas nem excluídas, pendências
+            // aplicadas. As nativas vêm junto (estado atual, fora do
+            // recorte) e o assemble() as descarta — decisão nº 3.
+            $base = Occurrence::payload($view['id'], $from, $to);
+            $out  = self::assemble($base, $from, $to, $clamped);
+        }
 
-        $out            = self::assemble($base, $from, $to, $clamped);
         $view['options'] = $options;
-        $out['view']    = $view;
+        $out['view']     = $view;
 
         return $out;
     }
 
     // =====================================================================
-    // Escopo do "Ver painel de:" (6b-2 p1)
+    // Escopo do "Ver painel de:" (6b-2)
     // =====================================================================
 
     /**
-     * Opções do seletor: os técnicos que o gestor $usersId pode ler,
-     * SEM ele mesmo (o próprio painel já é a opção "Meu painel" fixa do
-     * front — repetido viraria duas entradas para a mesma pessoa).
+     * Opções do seletor a partir do escopo já consultado. PURA.
+     *
+     * Ordem: primeiro a(s) opção(ões) de EQUIPE, depois os técnicos —
+     * o agregado é a leitura de cima para baixo, o técnico é o detalhe.
+     *
+     *  - um único setor administrado: uma opção de equipe, com o nome
+     *    do setor ("Equipe — Suporte"). "Todos os setores" seria a
+     *    mesma coisa com outro nome;
+     *  - mais de um: "Equipe (todos)" (group_id 0) + uma por setor.
+     *
+     * Os técnicos saem SEM o próprio gestor (o painel dele já é a opção
+     * "Meu painel" fixa do front — repetido viraria duas entradas para
+     * a mesma pessoa).
      *
      * Lista vazia = a tela não mostra seletor nenhum. É o caso do
      * técnico comum, e também o do gestor cujo setor ficou sem membros
      * ativos: sem opção, sem controle.
      *
-     *   [ ['id' => int, 'label' => string, 'groups' => 'Setor A · B'], … ]
+     *   [ ['kind' => 'team'|'user', 'id' => int, 'label' => string,
+     *      'groups' => 'Setor A · B'], … ]
      */
+    public static function optionsFor(array $scope, int $usersId): array
+    {
+        $groups  = (array) ($scope['groups'] ?? []);
+        $members = (array) ($scope['members'] ?? []);
+        unset($members[$usersId]);
+
+        if ($groups === [] || ($scope['members'] ?? []) === []) {
+            return [];
+        }
+
+        $sectors = Team::sectorOptions($groups);
+
+        $rows = [];
+        if (count($sectors) === 1) {
+            $rows[] = [
+                'kind'   => 'team',
+                'id'     => $sectors[0]['id'],
+                'label'  => $sectors[0]['name'],
+                'groups' => '',
+            ];
+        } else {
+            $rows[] = ['kind' => 'team', 'id' => 0, 'label' => '', 'groups' => ''];
+            foreach ($sectors as $sector) {
+                $rows[] = [
+                    'kind'   => 'team',
+                    'id'     => $sector['id'],
+                    'label'  => $sector['name'],
+                    'groups' => '',
+                ];
+            }
+        }
+
+        $techs = [];
+        foreach ($members as $id => $info) {
+            $techs[] = [
+                'kind'   => 'user',
+                'id'     => (int) $id,
+                'label'  => (string) ($info['label'] ?? ''),
+                'groups' => implode(' · ', (array) ($info['groups'] ?? [])),
+            ];
+        }
+        // Alfabética pelo nome exibido; homônimo desempata por id —
+        // MESMA ordem da tela Equipe, para o gestor achar no mesmo lugar.
+        usort($techs, static function (array $a, array $b): int {
+            return [mb_strtolower($a['label']), $a['id']]
+                <=> [mb_strtolower($b['label']), $b['id']];
+        });
+
+        return array_merge($rows, $techs);
+    }
+
+    /** Atalho com consulta (usado por harness e por chamadas avulsas). */
     public static function viewOptions(int $usersId): array
     {
         // Mesmo gate da tela Equipe: admin (`config` UPDATE) ou gestor
@@ -141,61 +237,125 @@ class Panel
             return [];
         }
 
-        $members = Team::scopeMembers($usersId);
-        unset($members[$usersId]);
-
-        $rows = [];
-        foreach ($members as $id => $info) {
-            $rows[] = [
-                'id'     => (int) $id,
-                'label'  => (string) ($info['label'] ?? ''),
-                'groups' => implode(' · ', (array) ($info['groups'] ?? [])),
-            ];
-        }
-
-        // Alfabética pelo nome exibido; homônimo desempata por id —
-        // MESMA ordem da tela Equipe, para o gestor achar no mesmo lugar.
-        usort($rows, static function (array $a, array $b): int {
-            return [mb_strtolower($a['label']), $a['id']]
-                <=> [mb_strtolower($b['label']), $b['id']];
-        });
-
-        return $rows;
+        return self::optionsFor(Team::scope($usersId), $usersId);
     }
 
     /**
      * Resolve o alvo pedido contra as opções permitidas. PURA (sem
-     * banco): o harness cobre os quatro caminhos.
+     * banco): o harness cobre todos os caminhos.
      *
-     *  - 0, negativo ou o próprio id → painel pessoal;
-     *  - id presente nas opções      → painel daquele técnico;
-     *  - qualquer outro id           → painel pessoal com `denied`
-     *    (id inexistente, técnico de outro setor, gestão perdida entre
-     *    o carregamento e o POST). Cair no próprio painel em vez de
-     *    devolver tela vazia mantém a leitura utilizável enquanto o
-     *    front avisa.
+     *  - 'self', id 0/negativo ou o próprio id → painel pessoal;
+     *  - 'user'/'team' presente nas opções     → aquele alvo;
+     *  - qualquer outro                        → painel pessoal com
+     *    `denied` (id inexistente, técnico de outro setor, setor que
+     *    saiu da gestão entre o carregamento e o POST). Cair no próprio
+     *    painel em vez de devolver tela vazia mantém a leitura
+     *    utilizável enquanto o front avisa.
      *
      * `label` fica vazio no modo pessoal — quem escreve "Meu painel" é
-     * o front (texto de interface não vem do domínio).
+     * o front (texto de interface não vem do domínio). No modo equipe,
+     * `group_name` vazio significa "todos os setores".
      */
-    public static function resolveView(int $usersId, int $viewId, array $options): array
+    public static function resolveView(int $usersId, string $viewKind, int $viewId, array $options): array
     {
-        if ($viewId <= 0 || $viewId === $usersId) {
-            return ['id' => $usersId, 'label' => '', 'is_self' => true, 'denied' => false];
+        $self = [
+            'kind'       => 'self',
+            'id'         => $usersId,
+            'label'      => '',
+            'group_id'   => 0,
+            'group_name' => '',
+            'techs'      => 0,
+            'failed'     => 0,
+            'is_self'    => true,
+            'denied'     => false,
+        ];
+
+        if ($viewKind === 'self' || ($viewKind === 'user' && ($viewId <= 0 || $viewId === $usersId))) {
+            return $self;
+        }
+        if ($viewKind !== 'user' && $viewKind !== 'team') {
+            return $self; // valor estranho no POST: pessoal, sem alarme
         }
 
         foreach ($options as $opt) {
-            if ((int) ($opt['id'] ?? 0) === $viewId) {
-                return [
+            if ((string) ($opt['kind'] ?? '') !== $viewKind || (int) ($opt['id'] ?? 0) !== $viewId) {
+                continue;
+            }
+            if ($viewKind === 'user') {
+                return array_merge($self, [
+                    'kind'    => 'user',
                     'id'      => $viewId,
                     'label'   => (string) ($opt['label'] ?? ''),
                     'is_self' => false,
-                    'denied'  => false,
-                ];
+                ]);
+            }
+            return array_merge($self, [
+                'kind'       => 'team',
+                'id'         => 0, // agregado: não é o dia de UMA pessoa
+                'group_id'   => $viewId,
+                'group_name' => (string) ($opt['label'] ?? ''),
+                'is_self'    => false,
+            ]);
+        }
+
+        return array_merge($self, ['denied' => true]);
+    }
+
+    /**
+     * Técnicos que entram no agregado: todos os do escopo (group_id 0)
+     * ou só os do setor pedido. Devolve [users_id => rótulo].
+     *
+     * O gestor entra na conta — é a mesma régua da tela Equipe, onde
+     * ele aparece como mais uma linha. PURA.
+     */
+    public static function teamTargets(array $scope, int $groupId): array
+    {
+        $targets = [];
+        foreach ((array) ($scope['members'] ?? []) as $id => $info) {
+            if ($groupId > 0
+                && !in_array($groupId, array_map('intval', (array) ($info['group_ids'] ?? [])), true)
+            ) {
+                continue;
+            }
+            $targets[(int) $id] = (string) ($info['label'] ?? '');
+        }
+
+        return $targets;
+    }
+
+    /**
+     * União dos dias dos técnicos num único payload-base para o
+     * assemble(), com cada item marcado com o dono (`owner_id`).
+     *
+     * Falha no payload de UM técnico não derruba a tela — mesmo padrão
+     * da Equipe: ele fica de fora dos números e o contador `failed`
+     * avisa. Devolve [base, quantos falharam].
+     */
+    private static function teamBase(array $targets, string $from, string $to): array
+    {
+        $items  = [];
+        $failed = 0;
+
+        foreach ($targets as $techId => $label) {
+            try {
+                $one = Occurrence::payload((int) $techId, $from, $to);
+            } catch (\Throwable $e) {
+                $failed++;
+                continue;
+            }
+            foreach ((array) ($one['today'] ?? []) as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                // Marca de dono aplicada AQUI, na cópia do consumidor —
+                // nunca dentro do Occurrence::payload, que é o mesmo
+                // payload da tela Hoje do técnico (T32).
+                $item['owner_id'] = (int) $techId;
+                $items[]          = $item;
             }
         }
 
-        return ['id' => $usersId, 'label' => '', 'is_self' => true, 'denied' => true];
+        return [['date' => date('Y-m-d'), 'today' => $items], $failed];
     }
 
     /**
@@ -238,9 +398,20 @@ class Panel
      * PURA (sem banco): é o método que o harness valida — precedência
      * dos estados, montagem do heatmap semana a semana, melhor dia e
      * agrupamento por rotina.
+     *
+     * `$owners` (6b-2 p2) é [users_id => rótulo] no modo equipe: SEMEIA
+     * a tabela "Taxa por responsável" com todo mundo do recorte, para
+     * quem não teve nenhuma tarefa aparecer como linha zerada em vez de
+     * sumir da lista — a ausência é justamente o que o gestor procura.
+     * Vazio (o caso pessoal) = tabela vazia.
      */
-    public static function assemble(array $base, string $from, string $to, bool $clamped): array
-    {
+    public static function assemble(
+        array $base,
+        string $from,
+        string $to,
+        bool $clamped,
+        array $owners = []
+    ): array {
         $today = (string) ($base['date'] ?? date('Y-m-d'));
 
         // ---- 1. Varredura única dos itens do período -----------------
@@ -252,6 +423,18 @@ class Panel
 
         $byDay = [];      // 'Y-m-d' => ['due' => n, 'done' => n]
         $byRoutine = [];  // routines_id => ['name','due','done','pending']
+        $byOwner = [];    // users_id => ['name','due','done','pending']
+
+        // Todo técnico do recorte nasce na tabela, mesmo sem tarefa —
+        // linha zerada informa; linha ausente esconde.
+        foreach ($owners as $ownerId => $ownerName) {
+            $byOwner[(int) $ownerId] = [
+                'name'    => (string) $ownerName,
+                'due'     => 0,
+                'done'    => 0,
+                'pending' => 0,
+            ];
+        }
 
         foreach (($base['today'] ?? []) as $item) {
             if (!is_array($item) || !empty($item['is_native'])) {
@@ -277,6 +460,14 @@ class Panel
                 $routineId = 0;
             }
 
+            // 6b-2 p2: dono do item no modo equipe. Só conta quem foi
+            // semeado — item de alguém que saiu do recorte não inventa
+            // linha nova.
+            $ownerId = (int) ($item['owner_id'] ?? 0);
+            if (!isset($byOwner[$ownerId])) {
+                $ownerId = 0;
+            }
+
             // Precedência do modo-período: pendente · concluída ·
             // atrasada · aberta. Pendente sai da régua (e das células).
             if ($isPending) {
@@ -284,12 +475,18 @@ class Panel
                 if ($routineId > 0) {
                     $byRoutine[$routineId]['pending']++;
                 }
+                if ($ownerId > 0) {
+                    $byOwner[$ownerId]['pending']++;
+                }
                 continue;
             }
 
             $due++;
             if ($routineId > 0) {
                 $byRoutine[$routineId]['due']++;
+            }
+            if ($ownerId > 0) {
+                $byOwner[$ownerId]['due']++;
             }
             if ($date !== '' && $date >= $from && $date <= $to) {
                 if (!isset($byDay[$date])) {
@@ -302,6 +499,9 @@ class Panel
                 $done++;
                 if ($routineId > 0) {
                     $byRoutine[$routineId]['done']++;
+                }
+                if ($ownerId > 0) {
+                    $byOwner[$ownerId]['done']++;
                 }
                 if (isset($byDay[$date])) {
                     $byDay[$date]['done']++;
@@ -401,6 +601,28 @@ class Panel
         $more = max(0, count($rows) - self::TOP_ROUTINES);
         $rows = array_slice($rows, 0, self::TOP_ROUTINES);
 
+        // ---- 5. Taxa por responsável (6b-2 p2; vazia no modo pessoal)
+        // Sem teto: a lista é a equipe do gestor, que é pequena por
+        // natureza — e cortar responsável some com gente da conta.
+        // Ordem ALFABÉTICA, a mesma da tela Equipe: o gestor procura
+        // pessoa pelo nome, não pelo ranking (ranking de gente é o que
+        // esta tela justamente não quer virar).
+        $ownerRows = [];
+        foreach ($byOwner as $id => $o) {
+            $ownerRows[] = [
+                'id'      => (int) $id,
+                'name'    => $o['name'],
+                'due'     => $o['due'],
+                'done'    => $o['done'],
+                'pending' => $o['pending'],
+                'rate'    => self::rate($o['due'], $o['done']),
+            ];
+        }
+        usort($ownerRows, static function (array $a, array $b): int {
+            return [mb_strtolower($a['name']), $a['id']]
+                <=> [mb_strtolower($b['name']), $b['id']];
+        });
+
         return [
             'date'   => $today,
             'period' => [
@@ -427,6 +649,9 @@ class Panel
             'routines' => [
                 'rows' => $rows,
                 'more' => $more,
+            ],
+            'owners' => [
+                'rows' => $ownerRows,
             ],
         ];
     }

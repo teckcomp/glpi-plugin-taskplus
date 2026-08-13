@@ -71,7 +71,7 @@
            sem dado por dia — ficam fora dos números do Painel. #}
         <div class="taskplus-weeknote">
             <i class="ti ti-info-circle"></i>
-            <span>{{ __('O Painel mede suas tarefas próprias (rotinas e avulsas). As origens do GLPI — chamados e projetos — não têm dado por dia e ficam de fora. Tarefa pendente sai da régua: tem volta marcada.', 'taskplus') }}</span>
+            <span>{{ __('O Painel mede as tarefas próprias do plugin (rotinas e avulsas). As origens do GLPI — chamados e projetos — não têm dado por dia e ficam de fora. Tarefa pendente sai da régua: tem volta marcada.', 'taskplus') }}</span>
         </div>
 
         {# Heatmap calendário (colunas = semanas, linhas seg–dom) #}
@@ -83,12 +83,22 @@
             <div class="taskplus-hm" id="tp-p-heatmap"></div>
         </div>
 
-        {# Taxa por rotina (top 10) #}
-        <div class="taskplus-panelblock">
+        {# Taxa por rotina (top 10) — some no modo equipe, onde a mesma
+           rotina de vários técnicos viraria linhas homônimas. #}
+        <div class="taskplus-panelblock" id="tp-p-routines-block">
             <div class="taskplus-panelblock__head">
                 <h3>{{ __('Taxa por rotina', 'taskplus') }}</h3>
             </div>
             <div id="tp-p-routines"></div>
+        </div>
+
+        {# 6b-2 p2: taxa por responsável — só no modo equipe. Quem mostra
+           e esconde os dois blocos é o JS, pelo `view.kind`. #}
+        <div class="taskplus-panelblock" id="tp-p-owners-block" hidden>
+            <div class="taskplus-panelblock__head">
+                <h3>{{ __('Taxa por responsável', 'taskplus') }}</h3>
+            </div>
+            <div id="tp-p-owners"></div>
         </div>
     </div>
 </div>
