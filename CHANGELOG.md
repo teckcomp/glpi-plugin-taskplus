@@ -3,6 +3,59 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Adicionado
+
+**Diálogo**
+- Contador de comentários não lidos por tarefa: badge `💬 N` no card da
+  tela Hoje, zerado ao abrir o diálogo; na tela Equipe o mesmo
+  mecanismo com o gestor como leitor, no rótulo do botão
+  ("Diálogo (2)")
+
+**Painel da equipe**
+- Gestor pode abrir o Painel de um técnico do seu escopo, com a mesma
+  régua da tela Equipe
+- Painel agregado da equipe: união dos dias dos técnicos com marca de
+  dono, seleção por setor ou "todos", e tabela de taxa por responsável
+  semeada com todo o recorte
+
+**Histórico com alvo**
+- Gestor pode ver o histórico de um técnico do seu escopo, com faixa de
+  identificação do alvo e alvo revalidado a cada consulta
+- Restauração de tarefa excluída pelo gestor, com confirmação extra
+  quando a tarefa é de outra pessoa
+
+**Instalação**
+- As ações automáticas (`taskplusgen`, `taskplusalerts`) passam a nascer
+  em modo GLPI, como as tarefas nativas do core: **instalação nova não
+  exige mais configurar crontab à mão**. Bases já instaladas mantêm o
+  modo atual
+- README com a seção "Agendamento: modo GLPI x modo CLI", incluindo a
+  limitação do modo interno (sem tráfego no GLPI, o disparo atrasa)
+
+### Alterado
+
+- Notificações passam a assinar **"Tarefas"** em vez de "Task+" —
+  modelos, nomes de notificação, assuntos, corpos e mensagens de log —,
+  com migração que **preserva qualquer edição feita pelo admin** (troca
+  só o que ainda estiver idêntico ao texto original) e que é retomável
+  se a instalação for interrompida no meio
+
+### Corrigido
+
+- Download de anexo do diálogo deixou de usar API depreciada e passou a
+  devolver a resposta pelo fluxo do core, eliminando três linhas de
+  ruído em `php-errors.log` a cada download
+- Recusa de acesso nas telas Equipe e Configurações e nos 10 endpoints
+  JSON passou a usar as exceções HTTP do core em vez de encerrar o
+  script por fora do fluxo. Mesmo status HTTP de antes, mesma régua de
+  permissão; a diferença é que a resposta agora passa pelo tratamento
+  de erro do GLPI e o registro vai para o log de acesso, não para o de
+  erros
+- `ajax/alerts.php` não rotula mais como JSON a resposta de um método
+  não aceito
+
 ## [0.1.0-beta] — 2026-08-10
 
 Primeira versão pública (beta). Consolida as etapas 0 a 8 do
