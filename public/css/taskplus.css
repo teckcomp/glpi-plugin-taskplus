@@ -829,3 +829,27 @@
 .taskplus-dialog__file { flex: 1; min-width: 0; font-size: 0.8rem; color: #8a97a5; }
 .taskplus-dialog__attach { display: inline-block; margin-top: 4px; font-size: 0.85rem; color: #2a76a8; text-decoration: none; }
 .taskplus-dialog__attach:hover { text-decoration: underline; }
+
+/* ===== Etapa 6b-2 p1 — "Ver painel de:" (leitura de gestor) ===== */
+
+/* O seletor mora na toolbar do periodo; herda a altura dos inputs de
+   data para a barra nao ficar desalinhada. */
+.taskplus-toolbar2__label select {
+    padding: 5px 8px; border: 1px solid #c8d0d9; border-radius: 6px;
+    font-size: 0.82rem; background: #fff; color: #2c3947;
+    max-width: 320px;
+}
+.taskplus-toolbar2__label select:focus {
+    outline: none; border-color: #2a76a8;
+    box-shadow: 0 0 0 2px rgba(42, 118, 168, 0.15);
+}
+
+/* Faixa "estes numeros nao sao os seus": mesma familia do weeknote,
+   com contraste maior porque troca o SIGNIFICADO da tela inteira. */
+.taskplus-viewnote {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; margin-bottom: 12px; border-radius: 6px;
+    background: #eaf4fb; color: #1f5c85; border: 1px solid #9cc4e0;
+    border-left: 4px solid #2a76a8;
+    font-size: 0.85rem; font-weight: 600;
+}

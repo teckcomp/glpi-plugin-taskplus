@@ -712,6 +712,31 @@ class Team
     // =====================================================================
 
     /**
+     * Escopo do gestor $usersId em UMA chamada: os técnicos ao alcance
+     * dele, no mesmo formato do members() —
+     * [users_id => ['label' => …, 'groups' => […]]].
+     *
+     * Existe para o Painel (6b-2) NÃO reimplementar a régua de quem o
+     * gestor enxerga: é a MESMA cadeia que monta a tela Equipe e que o
+     * managedTech revalida a cada POST (isPhaseAdmin → managedGroups →
+     * members). Régua duplicada é régua que diverge na próxima mudança.
+     *
+     * Devolve [] quando o usuário não administra setor algum — o
+     * chamador decide se isso é "sem opções" (Painel) ou erro de escopo
+     * (ações da Equipe).
+     */
+    public static function scopeMembers(int $usersId): array
+    {
+        $isAdmin = Access::isPhaseAdmin();
+        $groups  = Access::managedGroups($usersId, $isAdmin);
+        if ($groups === []) {
+            return [];
+        }
+
+        return self::members(array_keys($groups), $groups);
+    }
+
+    /**
      * Usuários MEMBROS dos grupos $groupIds, deduplicados:
      * [users_id => ['label' => nome exibido, 'groups' => [nomes]]].
      *

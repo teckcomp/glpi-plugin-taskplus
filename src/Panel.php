@@ -16,6 +16,20 @@ namespace GlpiPlugin\Taskplus;
  *    `period.clamped` quando encolheu o pedido);
  *  - SÓ o painel pessoal nesta fase — visão do gestor sobre a equipe e
  *    taxa por responsável são o 6b-2;
+ *
+ * 6b-2 p1 — "Ver painel de:" (leitura de gestor). O assemble() nunca
+ * soube DE QUEM é o dado, então basta alimentá-lo com o payload de
+ * outro técnico: os números saem idênticos aos que ele vê. O que o
+ * bloco acrescenta é ESCOPO:
+ *
+ *  - as opções do seletor são os técnicos dos setores administrados —
+ *    a MESMA cadeia da tela Equipe (Team::scopeMembers), nunca uma
+ *    régua paralela;
+ *  - o alvo é revalidado a CADA chamada do payload (T18): o
+ *    resolveView() só aceita id que esteja na lista de opções recém
+ *    consultada; qualquer outro cai no próprio painel com `denied`;
+ *  - é leitura pura — nenhuma ação do Painel escreve, e o gestor
+ *    continua sem tocar em tarefa alheia por esta tela.
  *  - conteúdo: taxa de conclusão do período, heatmap calendário (estilo
  *    GitHub: colunas = semanas, linhas = seg–dom), melhor dia da
  *    semana e taxa por rotina (top 10);
@@ -65,22 +79,123 @@ class Panel
      *     'weekdays' => [7 × ['label','due','done']],
      *     'best_day' => ['label','done'] | null,
      *     'routines' => ['rows' => [até 10 × linha], 'more' => n],
+     *     'view'     => ['id','label','is_self','denied','options'],
      *   ]
      *
      * `$from`/`$to` chegam crus do POST — a normalização é do
      * panelRange (mesma régua do periodRange + default + teto).
+     *
+     * `$viewId` (6b-2 p1) é o técnico que o GESTOR quer ler; 0 ou o
+     * próprio id = painel pessoal. Vem cru do POST e é validado aqui —
+     * o front nunca é fonte de escopo.
+     *
+     * ATENÇÃO safeData(): chave nova aqui precisa entrar no panel.js.
      */
-    public static function payload(int $usersId, ?string $from = null, ?string $to = null): array
-    {
+    public static function payload(
+        int $usersId,
+        ?string $from = null,
+        ?string $to = null,
+        int $viewId = 0
+    ): array {
         [$from, $to, $clamped] = self::panelRange($from, $to);
+
+        // Escopo consultado AGORA (T18): quem perdeu a gestão do setor
+        // entre o carregamento da tela e este POST perde o acesso já
+        // nesta resposta.
+        $options = self::viewOptions($usersId);
+        $view    = self::resolveView($usersId, $viewId, $options);
 
         // Modo-período do Occurrence: tudo do intervalo (aberta,
         // concluída, pendente), sem puladas nem excluídas, pendências
         // aplicadas. As nativas vêm junto (estado atual, fora do
         // recorte) e o assemble() as descarta — decisão nº 3.
-        $base = Occurrence::payload($usersId, $from, $to);
+        $base = Occurrence::payload($view['id'], $from, $to);
 
-        return self::assemble($base, $from, $to, $clamped);
+        $out            = self::assemble($base, $from, $to, $clamped);
+        $view['options'] = $options;
+        $out['view']    = $view;
+
+        return $out;
+    }
+
+    // =====================================================================
+    // Escopo do "Ver painel de:" (6b-2 p1)
+    // =====================================================================
+
+    /**
+     * Opções do seletor: os técnicos que o gestor $usersId pode ler,
+     * SEM ele mesmo (o próprio painel já é a opção "Meu painel" fixa do
+     * front — repetido viraria duas entradas para a mesma pessoa).
+     *
+     * Lista vazia = a tela não mostra seletor nenhum. É o caso do
+     * técnico comum, e também o do gestor cujo setor ficou sem membros
+     * ativos: sem opção, sem controle.
+     *
+     *   [ ['id' => int, 'label' => string, 'groups' => 'Setor A · B'], … ]
+     */
+    public static function viewOptions(int $usersId): array
+    {
+        // Mesmo gate da tela Equipe: admin (`config` UPDATE) ou gestor
+        // com is_manager em algum setor.
+        if (!Access::canTeam()) {
+            return [];
+        }
+
+        $members = Team::scopeMembers($usersId);
+        unset($members[$usersId]);
+
+        $rows = [];
+        foreach ($members as $id => $info) {
+            $rows[] = [
+                'id'     => (int) $id,
+                'label'  => (string) ($info['label'] ?? ''),
+                'groups' => implode(' · ', (array) ($info['groups'] ?? [])),
+            ];
+        }
+
+        // Alfabética pelo nome exibido; homônimo desempata por id —
+        // MESMA ordem da tela Equipe, para o gestor achar no mesmo lugar.
+        usort($rows, static function (array $a, array $b): int {
+            return [mb_strtolower($a['label']), $a['id']]
+                <=> [mb_strtolower($b['label']), $b['id']];
+        });
+
+        return $rows;
+    }
+
+    /**
+     * Resolve o alvo pedido contra as opções permitidas. PURA (sem
+     * banco): o harness cobre os quatro caminhos.
+     *
+     *  - 0, negativo ou o próprio id → painel pessoal;
+     *  - id presente nas opções      → painel daquele técnico;
+     *  - qualquer outro id           → painel pessoal com `denied`
+     *    (id inexistente, técnico de outro setor, gestão perdida entre
+     *    o carregamento e o POST). Cair no próprio painel em vez de
+     *    devolver tela vazia mantém a leitura utilizável enquanto o
+     *    front avisa.
+     *
+     * `label` fica vazio no modo pessoal — quem escreve "Meu painel" é
+     * o front (texto de interface não vem do domínio).
+     */
+    public static function resolveView(int $usersId, int $viewId, array $options): array
+    {
+        if ($viewId <= 0 || $viewId === $usersId) {
+            return ['id' => $usersId, 'label' => '', 'is_self' => true, 'denied' => false];
+        }
+
+        foreach ($options as $opt) {
+            if ((int) ($opt['id'] ?? 0) === $viewId) {
+                return [
+                    'id'      => $viewId,
+                    'label'   => (string) ($opt['label'] ?? ''),
+                    'is_self' => false,
+                    'denied'  => false,
+                ];
+            }
+        }
+
+        return ['id' => $usersId, 'label' => '', 'is_self' => true, 'denied' => true];
     }
 
     /**
@@ -384,8 +499,8 @@ class Panel
 
     /**
      * 6b é leitura pura: a única ação é `list` (o endpoint anexa o
-     * payload sozinho). O switch fica pelo padrão das outras telas —
-     * o "ver como" do gestor (6b-2) entraria aqui.
+     * payload sozinho, já com o alvo do "Ver painel de:" resolvido).
+     * O switch fica pelo padrão das outras telas.
      */
     public static function handle(string $action, array $input, int $usersId): array
     {

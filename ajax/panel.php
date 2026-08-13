@@ -44,9 +44,22 @@ $result = Panel::handle($action, $_POST, $usersId);
 $pf = isset($_POST['period_from']) ? (string) $_POST['period_from'] : null;
 $pt = isset($_POST['period_to']) ? (string) $_POST['period_to'] : null;
 
+// 6b-2 p1: alvo do "Ver painel de:" — 0/ausente = painel pessoal. O
+// escopo NÃO é do front: o Panel::payload revalida o id contra os
+// setores administrados a cada POST (T18) e, se não puder, devolve o
+// painel do próprio com `view.denied`.
+$vi = (int) ($_POST['view_id'] ?? 0);
+
 // Token novo para o JS rotacionar + estado atualizado para re-render
 $result['csrf'] = Session::getNewCSRFToken();
-$result['data'] = Panel::payload($usersId, $pf, $pt);
+$result['data'] = Panel::payload($usersId, $pf, $pt, $vi);
+
+// Alvo recusado: a resposta traz o painel pessoal, mas o gestor precisa
+// saber POR QUE a tela voltou para ele (mesma mensagem neutra da Equipe).
+if (!empty($result['data']['view']['denied'])) {
+    $result['success'] = false;
+    $result['message'] = __('Técnico fora dos setores que você administra', 'taskplus');
+}
 
 header('Content-Type: application/json; charset=UTF-8');
 echo json_encode($result, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);

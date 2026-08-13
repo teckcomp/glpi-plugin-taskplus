@@ -11,6 +11,10 @@
  *    token é de uso único) e `data` com o payload agregado do período
  *    pedido, para re-render. O servidor é a fonte da verdade do
  *    recorte: default de 90 dias, teto de 180 (flag `clamped`);
+ *  - 6b-2 p1: o POST leva também `view_id` (0 = meu painel; id do
+ *    técnico = leitura de gestor). O front NÃO decide escopo — manda o
+ *    pedido e obedece ao `view` da resposta, que diz qual painel foi
+ *    realmente lido e traz as opções permitidas;
  *  - defesa de cliente: Array.isArray em toda lista vinda do servidor
  *    (variável ausente vira null → .map() quebraria a tela).
  *
@@ -26,6 +30,9 @@
         csrf: '',
         // Recorte exibido: '' + '' = default do servidor (últimos 90)
         period: { from: '', to: '' },
+        // 6b-2 p1: alvo pedido (0 = meu painel). Quem manda é a resposta
+        // do servidor — o syncView reescreve isto a cada render.
+        view: 0,
         busy: false,
         data: emptyData()
     };
@@ -38,7 +45,10 @@
             heatmap: { weeks: [], max_done: 0 },
             weekdays: [],
             best_day: null,
-            routines: { rows: [], more: 0 }
+            routines: { rows: [], more: 0 },
+            // 6b-2 p1: alvo exibido + opções do gestor (vazias para
+            // quem não administra setor — sem seletor na tela)
+            view: { id: 0, label: '', is_self: true, denied: false, options: [] }
         };
     }
 
@@ -97,7 +107,30 @@
             routines: {
                 rows: Array.isArray(r.rows) ? r.rows.map(safeRoutine) : [],
                 more: Number(r.more) || 0
-            }
+            },
+            view: safeView(d.view)
+        };
+    }
+
+    function safeView(raw) {
+        var v = (raw && typeof raw === 'object') ? raw : {};
+        return {
+            id: Number(v.id) || 0,
+            label: (typeof v.label === 'string') ? v.label : '',
+            // Ausente = pessoal: o modo "outro técnico" só existe se o
+            // servidor disser explicitamente que não é o próprio.
+            is_self: (v.is_self === undefined) ? true : !!v.is_self,
+            denied: !!v.denied,
+            options: Array.isArray(v.options) ? v.options.map(safeViewOption) : []
+        };
+    }
+
+    function safeViewOption(raw) {
+        var o = (raw && typeof raw === 'object') ? raw : {};
+        return {
+            id: Number(o.id) || 0,
+            label: (typeof o.label === 'string') ? o.label : '',
+            groups: (typeof o.groups === 'string') ? o.groups : ''
         };
     }
 
@@ -176,6 +209,10 @@
         // período que o usuário está vendo ('' + '' = default de 90).
         fd.append('period_from', state.period.from);
         fd.append('period_to', state.period.to);
+        // 6b-2 p1: o alvo viaja junto do recorte — trocar o período
+        // enquanto se lê outro técnico não pode devolver o painel
+        // próprio. 0 = meu painel. Quem valida é o servidor.
+        fd.append('view_id', String(state.view));
 
         fetch(state.ajaxUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(function (resp) { return resp.json(); })
@@ -219,6 +256,7 @@
     // ------------------------------------------------------------------
 
     function render() {
+        syncView();
         syncToolbar();
         renderKpis();
         renderHeatmap();
@@ -247,6 +285,67 @@
             note.textContent = 'Período: ' + p.label + ' (' + p.days + ' dias)'
                 + (p.clamped ? ' — recorte limitado a 180 dias' : '');
         }
+    }
+
+    /**
+     * 6b-2 p1: seletor "Ver painel de:" + faixa de identificação.
+     *
+     * A RESPOSTA manda: `view.id` é o alvo que o servidor realmente
+     * leu. Se o pedido foi recusado (`denied`), o select volta sozinho
+     * para "Meu painel" — a tela nunca fica dizendo que mostra alguém
+     * que não está mostrando.
+     */
+    function syncView() {
+        var v = state.data.view;
+        var selected = v.is_self ? 0 : v.id;
+        state.view = selected;
+
+        var box = $('tp-p-viewbox');
+        var select = $('tp-p-view');
+        var hasOptions = (v.options.length > 0);
+
+        if (box) {
+            box.hidden = !hasOptions;
+        }
+        if (select) {
+            select.textContent = '';
+            if (hasOptions) {
+                select.appendChild(makeOption('0', 'Meu painel'));
+                v.options.forEach(function (o) {
+                    var text = o.label || ('#' + o.id);
+                    if (o.groups) {
+                        text += ' (' + o.groups + ')';
+                    }
+                    select.appendChild(makeOption(String(o.id), text));
+                });
+                select.value = String(selected);
+            }
+        }
+
+        var note = $('tp-p-viewnote');
+        var text = $('tp-p-viewnote-text');
+        if (note) {
+            note.hidden = v.is_self;
+        }
+        if (text) {
+            text.textContent = v.is_self
+                ? ''
+                : ('Painel de ' + (v.label || ('#' + v.id))
+                    + ' — leitura de gestor: os mesmos números que ele vê.');
+        }
+    }
+
+    function makeOption(value, text) {
+        var opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = text;
+        return opt;
+    }
+
+    function changeView() {
+        var select = $('tp-p-view');
+        state.view = select ? (Number(select.value) || 0) : 0;
+        post({ action: 'list' });
     }
 
     function renderKpis() {
@@ -440,6 +539,10 @@
         var clear = $('tp-p-clear');
         if (clear) {
             clear.addEventListener('click', clearPeriod);
+        }
+        var view = $('tp-p-view');
+        if (view) {
+            view.addEventListener('change', changeView);
         }
 
         render();

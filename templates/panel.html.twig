@@ -16,6 +16,14 @@
         {# Período (de–até, padrão 5b-2 p2). Sem busca: o Painel não
            lista itens — só agrega. O aviso do recorte é do JS. #}
         <div class="taskplus-toolbar2">
+            {# 6b-2 p1: "Ver painel de:" — nasce OCULTO e só aparece
+               quando o payload traz opções (gestor com técnicos no
+               escopo). Quem popula é o JS: as opções vêm do servidor,
+               não do template. #}
+            <label class="taskplus-toolbar2__label" id="tp-p-viewbox" hidden>
+                {{ __('Ver painel de', 'taskplus') }}
+                <select id="tp-p-view"></select>
+            </label>
             <label class="taskplus-toolbar2__label">{{ __('De', 'taskplus') }}
                 <input type="date" id="tp-p-from">
             </label>
@@ -25,6 +33,13 @@
             <button type="button" class="btn btn-primary btn-sm" id="tp-p-apply">{{ __('Aplicar', 'taskplus') }}</button>
             <button type="button" class="btn btn-ghost-secondary btn-sm" id="tp-p-clear">{{ __('Últimos 90 dias', 'taskplus') }}</button>
             <div class="taskplus-toolbar2__note" id="tp-p-note" hidden></div>
+        </div>
+
+        {# 6b-2 p1: faixa de identificação — nada de confundir os números
+           de outra pessoa com os próprios. Texto e visibilidade são do JS. #}
+        <div class="taskplus-viewnote" id="tp-p-viewnote" hidden>
+            <i class="ti ti-eye"></i>
+            <span id="tp-p-viewnote-text"></span>
         </div>
 
         {# Cartões do período: taxa, concluídas, devidas, pendentes,
