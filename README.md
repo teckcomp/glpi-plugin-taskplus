@@ -132,6 +132,25 @@ execução**. Nada no plugin precisa ser reinstalado. Crontab sugerido:
 
 ## Instalação
 
+**A pasta de destino tem que se chamar `taskplus`** — é o nome interno do
+plugin, e o GLPI não o reconhece sob outro nome.
+
+### Via git (recomendado)
+
+```bash
+cd /var/www/html/glpi/plugins
+git clone --branch v0.2.0-beta \
+  https://github.com/teckcomp/glpi-plugin-taskplus.git taskplus
+chown -R www-data:www-data taskplus
+sudo -u www-data php ../bin/console plugin:install taskplus
+sudo -u www-data php ../bin/console plugin:activate taskplus
+```
+
+O `taskplus` ao final do `git clone` não é opcional: sem ele a pasta
+nasceria como `glpi-plugin-taskplus`.
+
+### Via zip
+
 ```bash
 cd /var/www/html/glpi/plugins
 unzip taskplus.zip                      # cria plugins/taskplus
@@ -140,18 +159,34 @@ sudo -u www-data php ../bin/console plugin:install taskplus
 sudo -u www-data php ../bin/console plugin:activate taskplus
 ```
 
-Atualizando de uma versão anterior: sobrescreva os arquivos e rode
-`plugin:install --force taskplus` seguido de `plugin:activate taskplus`
-(o `--force` reexecuta a migração e **desativa** o plugin — a ativação
-na sequência é obrigatória).
+### Atualizando de uma versão anterior
+
+Por git:
+
+```bash
+cd /var/www/html/glpi/plugins/taskplus
+git fetch --tags && git checkout v0.2.0-beta
+chown -R www-data:www-data .
+cd /var/www/html/glpi
+sudo -u www-data php bin/console plugin:install --force taskplus
+sudo -u www-data php bin/console plugin:activate taskplus
+sudo -u www-data php bin/console cache:clear
+```
+
+Por zip: sobrescreva os arquivos e rode os mesmos três comandos do
+console.
+
+O `--force` reexecuta a migração e **desativa** o plugin — a ativação na
+sequência é obrigatória. Os dados são preservados: as tabelas do plugin
+não são recriadas, apenas migradas.
 
 Depois da instalação: marque os direitos na aba **Tarefas** de cada
 perfil (Administração → Perfis) e saia/entre para o menu aparecer.
 
 ## Estrutura
 
-- 6 tabelas próprias: `routines`, `occurrences`, `phases`, `pendings`,
-  `alerts`, `comments` (prefixo `glpi_plugin_taskplus_`)
+- 7 tabelas próprias: `routines`, `occurrences`, `phases`, `pendings`,
+  `alerts`, `comments`, `comment_reads` (prefixo `glpi_plugin_taskplus_`)
 - Exclusão sempre **soft** — a trilha do Histórico é preservada
 - Twig + JavaScript puro (sem framework), CSRF rotacionado a cada
   resposta, escrita nativa só via objetos do core

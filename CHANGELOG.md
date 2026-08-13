@@ -5,6 +5,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.2.0-beta] — 2026-08-13
+
+Primeira versão instalada em produção. Consolida o pós-beta: diálogo com
+contador de não lidos, Painel e Histórico da equipe para o gestor, e uma
+rodada de higiene que tirou o plugin da dependência de crontab manual e
+fez a recusa do servidor chegar à tela com o texto certo.
+
 ### Adicionado
 
 **Diálogo**
