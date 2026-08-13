@@ -52,7 +52,7 @@ class Cron
         $result = Routine::generateForDate($date);
 
         $task->log(sprintf(
-            'Task+ %s: %d rotina(s) ativa(s), %d ocorrencia(s) criada(s), %d ja existente(s).',
+            'Tarefas %s: %d rotina(s) ativa(s), %d ocorrencia(s) criada(s), %d ja existente(s).',
             $date,
             $result['routines'],
             $result['created'],
@@ -84,7 +84,7 @@ class Cron
         $result = Alerts::process();
 
         $task->log(sprintf(
-            'Task+ alertas: %d candidata(s) de horario-limite, %d no sino, %d via navegador.',
+            'Tarefas alertas: %d candidata(s) de horario-limite, %d no sino, %d via navegador.',
             $result['candidates'],
             $result['bell'],
             $result['raised']
@@ -98,7 +98,7 @@ class Cron
         $emails = Emails::processEod();
         if ($emails['due']) {
             $task->log(sprintf(
-                'Task+ fim de dia: %d tecnico(s) com tarefas vivas, %d e-mail(s) enfileirado(s).',
+                'Tarefas fim de dia: %d tecnico(s) com tarefas vivas, %d e-mail(s) enfileirado(s).',
                 $emails['users'],
                 $emails['sent']
             ));
@@ -110,7 +110,7 @@ class Cron
         $digest = Emails::processDigest();
         if ($digest['due']) {
             $task->log(sprintf(
-                'Task+ resumo matinal: %d gestor(es) com equipe, %d e-mail(s) enfileirado(s).',
+                'Tarefas resumo matinal: %d gestor(es) com equipe, %d e-mail(s) enfileirado(s).',
                 $digest['managers'],
                 $digest['sent']
             ));

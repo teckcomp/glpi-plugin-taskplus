@@ -95,13 +95,36 @@ cron `queuednotification`) e têm horário configurável (fim de dia 18:00,
 resumo matinal 08:00, por padrão). O alerta do sino tem canal de
 notificação do navegador opcional (opt-in do usuário).
 
+### Agendamento: modo GLPI x modo CLI
+
+As duas ações são registradas **sem forçar o modo**, exatamente como o
+GLPI faz com as próprias: numa instalação nova elas nascem em **modo
+GLPI** (`allowmode` permite os dois) e **funcionam sem nenhum crontab** —
+não há passo manual depois de instalar. Se a instalação vier de um pacote
+com cron de sistema (`GLPI_SYSTEM_CRON`), o próprio core já as registra em
+modo CLI.
+
+| | Modo GLPI (padrão) | Modo CLI (recomendado em produção) |
+|---|---|---|
+| Configuração | nenhuma | crontab no usuário do webserver |
+| Disparo | pela navegação dos usuários (o GLPI chama `front/cron.php` no rodapé das páginas, no máximo a cada 5 min por sessão) | pelo relógio do sistema |
+| Limite | `cron_limit` tarefas por chamada (padrão 5) | sem limite |
+| Ponto fraco | **sem tráfego não roda**: o e-mail de fim de dia das 18:00 só sai quando alguém abrir uma página depois desse horário — sai atrasado, e se ninguém acessar naquele dia, aquele envio não acontece (não há rajada retroativa no dia seguinte) | nenhum |
+
+Para trocar: *Configurar → Ações automáticas* → a ação → **Modo de
+execução**. Nada no plugin precisa ser reinstalado. Crontab sugerido:
+
+```
+* * * * * /usr/bin/php /var/www/html/glpi/front/cron.php >/dev/null 2>&1
+```
+
 ## Requisitos
 
 - GLPI **11.0.x** (desenvolvido e homologado no 11.0.6)
 - PHP 8.3, MySQL/MariaDB
-- Modo cron **externo** recomendado para as ações automáticas:
-  `* * * * * /usr/bin/php /var/www/html/glpi/front/cron.php >/dev/null 2>&1`
-  (crontab do usuário do webserver, ex. `www-data`)
+- Nenhum crontab é **exigido** — as ações automáticas funcionam em modo
+  GLPI assim que o plugin é ativado. Em produção, o modo CLI é
+  recomendado (ver *Agendamento*, acima)
 - Para os e-mails: em *Configurar → Notificações*, habilitar
   acompanhamento **e** acompanhamento por e-mail, configurar o SMTP, e
   garantir e-mail válido nos usuários. O envio é assíncrono — quem

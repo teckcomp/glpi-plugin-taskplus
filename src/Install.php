@@ -471,6 +471,23 @@ class Install
         // 10h precisa aparecer na tela Hoje do mesmo dia, não só amanhã.
         // A idempotência (UNIQUE routine_day) garante que rodar N vezes ao
         // dia não duplica nada.
+        //
+        // 9d: `mode` NÃO é informado — de propósito (decisão nº 42).
+        // Validado no fonte do 11.0.6 (src/CronTask.php::register e
+        // install/empty_data.php):
+        //  - o default do schema é mode=1 (GLPI/interno) e allowmode=3,
+        //    então a tarefa já nasce rodando SEM crontab do sistema —
+        //    que é o que o core faz com as PRÓPRIAS tarefas nativas,
+        //    inclusive a `queuednotification` que despacha nossos e-mails;
+        //  - se a instalação tiver GLPI_SYSTEM_CRON ligada (pacote de
+        //    distro que traz cron do sistema), o register() escolhe
+        //    MODE_EXTERNAL sozinho — mas SÓ se o plugin não informar o
+        //    modo. Fixar EXTERNAL aqui era justamente o que impedia
+        //    isso e obrigava todo mundo a configurar crontab na mão.
+        // Quem quer CLI troca em Configurar → Ações automáticas
+        // (allowmode=3 permite os dois). Linha JÁ existente não é
+        // tocada: register() não altera registro existente, e rebaixar
+        // um ambiente que já tem crontab seria regressão.
         // ------------------------------------------------------------------
         CronTask::register(
             Cron::class,
@@ -478,9 +495,8 @@ class Install
             HOUR_TIMESTAMP,
             [
                 'state'         => CronTask::STATE_WAITING,
-                'mode'          => CronTask::MODE_EXTERNAL,
                 'logs_lifetime' => 30,
-                'comment'       => 'Task+: materializa as ocorrências do dia (idempotente)',
+                'comment'       => 'Tarefas: materializa as ocorrências do dia (idempotente)',
             ]
         );
         CronTask::register(
@@ -489,9 +505,8 @@ class Install
             10 * MINUTE_TIMESTAMP,
             [
                 'state'         => CronTask::STATE_WAITING,
-                'mode'          => CronTask::MODE_EXTERNAL,
                 'logs_lifetime' => 30,
-                'comment'       => 'Task+: alertas de horário-limite e pendências',
+                'comment'       => 'Tarefas: alertas de horário-limite e pendências',
             ]
         );
 
@@ -512,6 +527,13 @@ class Install
                 'frequency' => 10 * MINUTE_TIMESTAMP,
             ]);
         }
+
+        // 9d: renomeia a marca ANTES de semear. A âncora do modelo é
+        // itemtype + NOME: se o seed rodasse primeiro com o nome novo,
+        // não acharia o modelo antigo e criaria um DUPLICADO órfão (o
+        // link de modo já aponta para o velho). Renomear antes faz o
+        // ensureNotifications() achar tudo e não mexer em nada.
+        self::migrateBrandNames();
 
         self::ensureNotifications();
 
@@ -545,14 +567,269 @@ class Install
      * ambíguo — aperto feito na 7b-1; os nomes batem com os semeados
      * na 7a, então nada duplica em base existente).
      */
+    /**
+     * 9d — mapa da renomeação "Task+" → "Tarefas" (decisão nº 41).
+     *
+     * Uma entrada por cadeia, com o par (antigo, novo) de cada campo que
+     * carrega a marca. Os corpos legados são DERIVADOS do texto atual por
+     * uma substituição de frase única e literal, em vez de duplicados
+     * inteiros aqui: o que mudou foi uma frase por corpo, e repetir os
+     * blocos ##FOREACH## nesta tabela só criaria uma segunda cópia para
+     * sair de sincronia. Falha SEGURA: se um corpo for reescrito no
+     * futuro, o legado derivado deixa de bater com o gravado e a migração
+     * simplesmente não atualiza aquele campo — nunca corrompe.
+     *
+     * `null` = o campo não menciona a marca (nada a migrar).
+     */
+    private static function brandMigrationMap(): array
+    {
+        return [
+            [
+                'event'        => Alerts::EVENT_TIME_LIMIT,
+                'cron'         => null,
+                'template_old' => 'Task+ horario-limite',
+                'template_new' => 'Tarefas horario-limite',
+                'notif_old'    => 'Task+ — horário-limite estourado',
+                'notif_new'    => 'Tarefas — horário-limite estourado',
+                'subject_old'  => 'Task+: horário-limite estourado — ##taskplus.name##',
+                'subject_new'  => 'Tarefas: horário-limite estourado — ##taskplus.name##',
+                'text_old'     => null, // o corpo do sino não cita a marca
+                'text_new'     => null,
+                'html_old'     => null,
+                'html_new'     => null,
+            ],
+            [
+                'event'        => Emails::EVENT_END_OF_DAY,
+                'cron'         => null,
+                'template_old' => 'Task+ fim de dia',
+                'template_new' => 'Tarefas fim de dia',
+                'notif_old'    => 'Task+ — fim de dia (e-mail ao técnico)',
+                'notif_new'    => 'Tarefas — fim de dia (e-mail ao técnico)',
+                'subject_old'  => 'Task+: fim de dia ##taskplus.eod_date## — o que ficou para amanhã',
+                'subject_new'  => 'Tarefas: fim de dia ##taskplus.eod_date## — o que ficou para amanhã',
+                'text_old'     => self::legacyEodContentText(),
+                'text_new'     => self::eodContentText(),
+                'html_old'     => self::legacyEodContentHtml(),
+                'html_new'     => self::eodContentHtml(),
+            ],
+            [
+                'event'        => Emails::EVENT_MORNING_DIGEST,
+                'cron'         => null,
+                'template_old' => 'Task+ resumo matinal',
+                'template_new' => 'Tarefas resumo matinal',
+                'notif_old'    => 'Task+ — resumo matinal (e-mail ao gestor)',
+                'notif_new'    => 'Tarefas — resumo matinal (e-mail ao gestor)',
+                'subject_old'  => 'Task+: resumo matinal ##taskplus.digest_date## — sua equipe',
+                'subject_new'  => 'Tarefas: resumo matinal ##taskplus.digest_date## — sua equipe',
+                'text_old'     => self::legacyDigestContentText(),
+                'text_new'     => self::digestContentText(),
+                'html_old'     => self::legacyDigestContentHtml(),
+                'html_new'     => self::digestContentHtml(),
+            ],
+        ];
+    }
+
+    /**
+     * 9d — comentários legados das ações automáticas (mesma régua: só
+     * troca se o gravado for idêntico ao que NÓS semeamos).
+     */
+    private const CRON_COMMENTS = [
+        'taskplusgen' => [
+            'Task+: materializa as ocorrências do dia (idempotente)',
+            'Tarefas: materializa as ocorrências do dia (idempotente)',
+        ],
+        'taskplusalerts' => [
+            'Task+: alertas de horário-limite e pendências',
+            'Tarefas: alertas de horário-limite e pendências',
+        ],
+    ];
+
+    /**
+     * 9d — renomeia a marca em base JÁ INSTALADA (decisão nº 41).
+     *
+     * Régua (decisões nº 2 e 3):
+     *  - NOME de modelo e de notificação: trocado sempre que casar pelo
+     *    nome antigo EXATO. Se o admin renomeou, não casa e fica quieto;
+     *  - ASSUNTO e CORPOS: trocados só quando o gravado for idêntico
+     *    BYTE A BYTE ao que semeamos. Qualquer diferença = edição do
+     *    admin, e edição do admin não se sobrescreve. Campo a campo: dá
+     *    para ter mexido só no HTML e manter o texto puro.
+     *
+     * Idempotente por construção: casa pelo nome ANTIGO, que some na
+     * primeira passada. Tudo por objeto nativo (invariante do projeto:
+     * tabela do core só se escreve pelo core).
+     */
+    private static function migrateBrandNames(): void
+    {
+        $itemtype = OccurrenceAlert::class;
+
+        foreach (self::brandMigrationMap() as $chain) {
+            // 1) Modelo. Casa pelo nome ANTIGO **ou pelo novo**: uma
+            // migração interrompida no meio (o install aborta na primeira
+            // exceção) pode ter renomeado o modelo sem chegar à tradução.
+            // Casar só pelo antigo deixaria essa cadeia órfã para sempre;
+            // casar pelos dois torna a passada RETOMÁVEL. Não afrouxa a
+            // régua: o que protege a edição do admin é a comparação byte
+            // a byte lá dentro, não o nome.
+            $template = new NotificationTemplate();
+            $rows     = $template->find([
+                'itemtype' => $itemtype,
+                'name'     => [$chain['template_old'], $chain['template_new']],
+            ]);
+            if ($rows !== []) {
+                $row         = reset($rows);
+                $templatesId = (int) $row['id'];
+                if ((string) $row['name'] !== $chain['template_new']) {
+                    $template->update([
+                        'id'   => $templatesId,
+                        'name' => $chain['template_new'],
+                    ]);
+                }
+                self::migrateTranslation($templatesId, $chain);
+            }
+
+            // 2) Notificação: âncora é itemtype + EVENTO; o nome é só
+            // rótulo, então casa-se pelo nome antigo antes de trocar.
+            $notification = new Notification();
+            $rows         = $notification->find([
+                'itemtype' => $itemtype,
+                'event'    => $chain['event'],
+                'name'     => $chain['notif_old'],
+            ]);
+            if ($rows !== []) {
+                $notification->update([
+                    'id'   => (int) reset($rows)['id'],
+                    'name' => $chain['notif_new'],
+                ]);
+            }
+        }
+
+        self::migrateCronComments();
+    }
+
+    /**
+     * Tradução default de um modelo: assunto e corpos, campo a campo,
+     * só quando idênticos ao seed antigo.
+     *
+     * ATENÇÃO (9d, achado em homologação): o input do update tem de
+     * trazer SEMPRE `content_html` e `content_text`, mesmo quando não
+     * mudam. O `prepareInputForUpdate` do core chama
+     * `NotificationTemplateTranslation::cleanContentHtml()`, que lê as
+     * duas chaves sem verificar existência — update parcial estoura em
+     * `RichText::getTextFromHtml(): Argument #1 must be of type string,
+     * null given`. Por isso o input parte da linha lida e só sobrescreve
+     * o que casou.
+     */
+    private static function migrateTranslation(int $templatesId, array $chain): void
+    {
+        $translation = new NotificationTemplateTranslation();
+        $rows        = $translation->find([
+            'notificationtemplates_id' => $templatesId,
+            'language'                 => '',
+        ]);
+        if ($rows === []) {
+            return;
+        }
+
+        $row    = reset($rows);
+        $update = [
+            'id'           => (int) $row['id'],
+            'subject'      => (string) ($row['subject'] ?? ''),
+            'content_text' => (string) ($row['content_text'] ?? ''),
+            'content_html' => (string) ($row['content_html'] ?? ''),
+        ];
+
+        $pairs = [
+            'subject'      => ['subject_old', 'subject_new'],
+            'content_text' => ['text_old', 'text_new'],
+            'content_html' => ['html_old', 'html_new'],
+        ];
+        $changed = false;
+        foreach ($pairs as $field => [$oldKey, $newKey]) {
+            if ($chain[$oldKey] === null) {
+                continue; // campo sem marca
+            }
+            if ($update[$field] === $chain[$oldKey]) {
+                $update[$field] = $chain[$newKey];
+                $changed        = true;
+            }
+        }
+
+        if ($changed) {
+            $translation->update($update);
+        }
+    }
+
+    /**
+     * Comentário das ações automáticas (Configurar → Ações automáticas).
+     * `CronTask::register` não altera linha existente, então a troca tem
+     * de ser explícita — mesma régua do byte a byte.
+     */
+    private static function migrateCronComments(): void
+    {
+        foreach (self::CRON_COMMENTS as $name => [$old, $new]) {
+            $task = new CronTask();
+            if (!$task->getFromDBbyName(Cron::class, $name)) {
+                continue;
+            }
+            if ((string) ($task->fields['comment'] ?? '') !== $old) {
+                continue; // ausente ou editado pelo admin — não se toca
+            }
+            $task->update([
+                'id'      => $task->getID(),
+                'comment' => $new,
+            ]);
+        }
+    }
+
+    /**
+     * Corpos legados (pré-9d) derivados do atual — ver docblock de
+     * brandMigrationMap(). Cada um troca UMA frase literal.
+     */
+    private static function legacyEodContentText(): string
+    {
+        return str_replace(
+            '— suas tarefas de hoje.',
+            '— suas tarefas no Task+.',
+            self::eodContentText()
+        );
+    }
+
+    private static function legacyEodContentHtml(): string
+    {
+        return str_replace(
+            '— suas tarefas de hoje.&lt;/p&gt;',
+            '— suas tarefas no Task+.&lt;/p&gt;',
+            self::eodContentHtml()
+        );
+    }
+
+    private static function legacyDigestContentText(): string
+    {
+        return str_replace(
+            '— situação da sua equipe ',
+            '— situação da sua equipe no Task+ ',
+            self::digestContentText()
+        );
+    }
+
+    private static function legacyDigestContentHtml(): string
+    {
+        return str_replace(
+            '— situação da sua equipe ',
+            '— situação da sua equipe no Task+ ',
+            self::digestContentHtml()
+        );
+    }
+
     private static function ensureNotifications(): void
     {
         self::ensureNotificationChain(
-            'Task+ horario-limite',
+            'Tarefas horario-limite',
             Alerts::EVENT_TIME_LIMIT,
-            'Task+ — horário-limite estourado',
+            'Tarefas — horário-limite estourado',
             Notification_NotificationTemplate::MODE_AJAX,
-            'Task+: horário-limite estourado — ##taskplus.name##',
+            'Tarefas: horário-limite estourado — ##taskplus.name##',
             "A tarefa ##taskplus.name## tinha horário-limite ##taskplus.limit## "
                 . "de hoje (##taskplus.date##) e ainda está aberta.\n\n"
                 . "##taskplus.description##\n\n"
@@ -565,11 +842,11 @@ class Install
         );
 
         self::ensureNotificationChain(
-            'Task+ fim de dia',
+            'Tarefas fim de dia',
             Emails::EVENT_END_OF_DAY,
-            'Task+ — fim de dia (e-mail ao técnico)',
+            'Tarefas — fim de dia (e-mail ao técnico)',
             Notification_NotificationTemplate::MODE_MAIL,
-            'Task+: fim de dia ##taskplus.eod_date## — o que ficou para amanhã',
+            'Tarefas: fim de dia ##taskplus.eod_date## — o que ficou para amanhã',
             self::eodContentText(),
             self::eodContentHtml()
         );
@@ -579,11 +856,11 @@ class Install
         // ocorrência de técnico; quem resolve o gestor é o
         // addSpecificTargets do target, lendo as $options do raise).
         self::ensureNotificationChain(
-            'Task+ resumo matinal',
+            'Tarefas resumo matinal',
             Emails::EVENT_MORNING_DIGEST,
-            'Task+ — resumo matinal (e-mail ao gestor)',
+            'Tarefas — resumo matinal (e-mail ao gestor)',
             Notification_NotificationTemplate::MODE_MAIL,
-            'Task+: resumo matinal ##taskplus.digest_date## — sua equipe',
+            'Tarefas: resumo matinal ##taskplus.digest_date## — sua equipe',
             self::digestContentText(),
             self::digestContentHtml(),
             Emails::TARGET_MANAGER
@@ -597,7 +874,7 @@ class Install
      */
     private static function digestContentText(): string
     {
-        return "Resumo matinal ##taskplus.digest_date## — situação da sua equipe no Task+ "
+        return "Resumo matinal ##taskplus.digest_date## — situação da sua equipe "
             . "(##taskplus.tech_count## técnico(s) com tarefas vivas).\n\n"
             . "##FOREACHtechs##"
             . " - ##digest.tech##: ##digest.open## aberta(s) hoje, "
@@ -613,7 +890,7 @@ class Install
     private static function digestContentHtml(): string
     {
         return '&lt;p&gt;Resumo matinal &lt;strong&gt;##taskplus.digest_date##&lt;/strong&gt; '
-            . '— situação da sua equipe no Task+ '
+            . '— situação da sua equipe '
             . '(##taskplus.tech_count## técnico(s) com tarefas vivas).&lt;/p&gt;'
             . '&lt;ul&gt;##FOREACHtechs##&lt;li&gt;&lt;strong&gt;##digest.tech##&lt;/strong&gt;: '
             . '##digest.open## aberta(s) hoje, ##digest.overdue## atrasada(s), '
@@ -628,7 +905,7 @@ class Install
      */
     private static function eodContentText(): string
     {
-        return "Fim de dia ##taskplus.eod_date## — suas tarefas no Task+.\n\n"
+        return "Fim de dia ##taskplus.eod_date## — suas tarefas de hoje.\n\n"
             . "##IFtaskplus.open_count##"
             . "Abertas de hoje (##taskplus.open_count##):\n"
             . "##FOREACHopen##"
@@ -659,7 +936,7 @@ class Install
     private static function eodContentHtml(): string
     {
         return '&lt;p&gt;Fim de dia &lt;strong&gt;##taskplus.eod_date##&lt;/strong&gt; '
-            . '— suas tarefas no Task+.&lt;/p&gt;'
+            . '— suas tarefas de hoje.&lt;/p&gt;'
             . '##IFtaskplus.open_count##'
             . '&lt;p&gt;&lt;strong&gt;Abertas de hoje (##taskplus.open_count##):&lt;/strong&gt;&lt;/p&gt;'
             . '&lt;ul&gt;##FOREACHopen##&lt;li&gt;##eod.name##'
