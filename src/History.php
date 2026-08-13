@@ -33,8 +33,12 @@ namespace GlpiPlugin\Taskplus;
  * Etapa 9b-1: a tela ganhou ALVO. O gestor escolhe "Ver histórico de:"
  * e lê a trilha de um técnico do escopo — mesma régua da Equipe e do
  * Painel (Team::scope), revalidada a CADA payload (T18). Só técnicos,
- * sem modo equipe (decisão nº 36), e leitura pura: no modo técnico
- * `view.can_restore` vem falso e a tela não oferece ação nenhuma.
+ * sem modo equipe (decisão nº 36).
+ *
+ * Etapa 9b-2: no modo técnico a tela deixa de ser leitura pura — o
+ * gestor restaura a tarefa EXCLUÍDA do técnico, fechando a decisão
+ * nº 9. A posse deixa de ser "só o dono" e passa por dono OU técnico
+ * do escopo, revalidado dentro do próprio restore().
  *
  * As origens nativas (chamados/projetos) ficam FORA, como em todo
  * recorte por dia (decisão nº 3): são estado atual, sem trilha por dia
@@ -221,9 +225,12 @@ class History
      *    histórico em vez de devolver tela vazia mantém a leitura
      *    utilizável enquanto o front avisa.
      *
-     * `can_restore` é a permissão de AÇÃO da tela: no 9b-1 só o dono
-     * restaura a própria tarefa (leitura pura no modo técnico) — o
-     * 9b-2 liga a restauração pelo gestor mudando SÓ esta linha.
+     * `can_restore` é a permissão de AÇÃO da tela. Desde o 9b-2 ela
+     * acompanha o alvo: quem chegou até aqui no modo 'user' passou pelo
+     * escopo do gestor recém-consultado, então pode restaurar a excluída
+     * do técnico (decisão nº 9, enfim fechada). O flag é conveniência de
+     * INTERFACE — quem decide de verdade é o restore(), que refaz a
+     * validação inteira a cada POST (T18).
      *
      * `label` fica vazio no modo próprio — quem escreve "Meu histórico"
      * é o front (texto de interface não vem do domínio).
@@ -255,7 +262,7 @@ class History
                 'id'          => $viewId,
                 'label'       => (string) ($opt['label'] ?? ''),
                 'is_self'     => false,
-                'can_restore' => false,
+                'can_restore' => true,
             ]);
         }
 
@@ -670,10 +677,14 @@ class History
      * tarefa volta ao estado que tinha) e atualiza `date_mod`. Ela
      * reaparece nas telas vivas conforme a própria data.
      *
-     * Regras revalidadas a CADA POST (T18), nunca herdadas da tela:
-     *  - posse: a linha tem que ser do PRÓPRIO usuário — o restaurar
-     *    pelo gestor fica para quando existir trilha na visão da
-     *    equipe (backlog, junto do 6b-2);
+     * 9b-2 — a tarefa pode ser do PRÓPRIO usuário ou de um técnico do
+     * escopo do gestor. Regras revalidadas a CADA POST (T18), nunca
+     * herdadas da tela nem do `view` que o front mandou:
+     *  - posse: dono = o próprio, OU dono presente nas opções montadas
+     *    AGORA a partir do Team::scope (quem perdeu a gestão do setor
+     *    entre o carregamento e este POST perde a ação já aqui). Falha
+     *    de escopo devolve a MESMA mensagem neutra de "não encontrada"
+     *    — a resposta não conta ao gestor que a tarefa existe;
      *  - só EXCLUÍDA (`is_deleted` = 1) se restaura — pulada não;
      *  - só AVULSA: o delete atual já recusa ocorrência de rotina, mas
      *    a dupla checagem fica aqui de defesa — se um dia surgir rotina
@@ -685,27 +696,42 @@ class History
         /** @var \DBmysql $DB */
         global $DB;
 
+        $notFound = ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
+
         $id = (int) ($input['id'] ?? 0);
         if ($id <= 0) {
-            return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
+            return $notFound;
         }
 
-        // Busca da linha do PRÓPRIO usuário SEM filtro de is_deleted —
-        // o ownRow do Occurrence filtra is_deleted = 0 de propósito
-        // (régua do trabalho vivo); aqui a excluída é exatamente o alvo.
+        // Busca da linha SEM filtro de is_deleted — o ownRow do
+        // Occurrence filtra is_deleted = 0 de propósito (régua do
+        // trabalho vivo); aqui a excluída é exatamente o alvo. E SEM
+        // filtro de dono: a posse é decidida logo abaixo, porque o
+        // dono legítimo pode ser o gestor OU o técnico dele.
         $row = null;
         foreach ($DB->request([
             'FROM'  => Occurrence::TABLE,
             'WHERE' => [
-                Occurrence::TABLE . '.id'       => $id,
-                Occurrence::TABLE . '.users_id' => $usersId,
+                Occurrence::TABLE . '.id' => $id,
             ],
         ]) as $r) {
             $row = $r;
             break;
         }
         if ($row === null) {
-            return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
+            return $notFound;
+        }
+
+        $ownerId = (int) ($row['users_id'] ?? 0);
+        if ($ownerId !== $usersId) {
+            // 9b-2: caminho do gestor. Escopo consultado AGORA e o
+            // mesmo resolveView da leitura — a ação nunca alcança quem
+            // o seletor não ofereceria.
+            $scope   = Access::canTeam() ? Team::scope($usersId) : ['groups' => [], 'members' => []];
+            $view    = self::resolveView($usersId, 'user', $ownerId, self::optionsFor($scope, $usersId));
+            if ($view['is_self'] || (int) $view['id'] !== $ownerId) {
+                return $notFound;
+            }
         }
 
         if (((int) ($row['is_deleted'] ?? 0)) !== 1) {

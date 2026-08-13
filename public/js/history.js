@@ -16,8 +16,10 @@
  *    escopo — manda o pedido e obedece ao `view` da resposta, que diz
  *    o que o servidor realmente leu e se a tela pode agir
  *    (`can_restore`);
- *  - ÚNICA ação da tela (6c-2): "Restaurar" nos cards EXCLUÍDA — POST
- *    `restore` + id; posse e estado são revalidados no SERVIDOR (T18)
+ *  - ação da tela (6c-2, ampliada na 9b-2): "Restaurar" nos cards
+ *    EXCLUÍDA — POST
+ *    `restore` + id; posse (dono OU técnico do escopo do gestor) e
+ *    estado são revalidados no SERVIDOR (T18)
  *    e a resposta volta com o payload completo, então o re-render é
  *    integral (badge troca, contadores se corrigem, busca reaplica);
  *  - busca 100% LOCAL (título/descrição/categoria, sem acento): item
@@ -353,7 +355,8 @@
 
     function viewNoteText(v) {
         return 'Histórico de ' + (v.label || ('#' + v.id))
-            + ' — leitura de gestor: a mesma trilha que ele vê.';
+            + ' — leitura de gestor: a mesma trilha que ele vê.'
+            + (v.can_restore ? ' Você pode restaurar as tarefas excluídas dele.' : '');
     }
 
     function makeOption(value, text) {
@@ -540,15 +543,21 @@
             c.appendChild(el('div', 'taskplus-hcard__desc', item.description));
         }
 
-        // 9b-1: quem diz se a tela pode agir é o servidor. No modo
-        // "trilha de um técnico" o can_restore vem falso (leitura pura)
-        // — o 9b-2 é que liga a restauração pelo gestor.
+        // 9b-1/9b-2: quem diz se a tela pode agir é o servidor. No modo
+        // "trilha de um técnico" o can_restore vem ligado para o gestor
+        // do setor — e o restore() revalida o escopo inteiro no POST.
         if (item.state === 'deleted' && state.data.view.can_restore) {
             var actions = el('div', 'taskplus-hcard__actions');
             var btn = el('button', 'btn btn-sm btn-outline-secondary taskplus-hcard__restore',
                 'Restaurar');
             btn.type = 'button';
             btn.addEventListener('click', function () {
+                // Escrever no dado de OUTRA pessoa pede confirmação —
+                // mesma régua da trava de duplicadas (8d). No próprio
+                // histórico segue em um clique.
+                if (!state.data.view.is_self && !confirmRestore(item)) {
+                    return;
+                }
                 post({ action: 'restore', id: String(item.id) });
             });
             actions.appendChild(btn);
@@ -556,6 +565,20 @@
         }
 
         return c;
+    }
+
+    /**
+     * 9b-2: confirmação do gestor. window.confirm ausente (ou recusado
+     * pelo navegador) NÃO pode virar restauração silenciosa — sem
+     * confirmação possível, a ação não segue.
+     */
+    function confirmRestore(item) {
+        var who = state.data.view.label || 'este técnico';
+        var what = item.name || '(sem título)';
+        if (typeof window.confirm !== 'function') {
+            return false;
+        }
+        return window.confirm('Restaurar a tarefa "' + what + '" de ' + who + '?');
     }
 
     // ------------------------------------------------------------------
