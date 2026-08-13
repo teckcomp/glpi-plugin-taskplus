@@ -52,7 +52,13 @@
         }
 
         function refresh() {
-            fetch(url + '?action=list', { credentials: 'same-origin' })
+            // 9e-2: sem o Accept o core devolve a página de erro em HTML, o
+            // resp.json() abaixo quebra e o usuário vê "Falha de comunicação"
+            // em vez da mensagem real (inclusive na sessão expirada).
+            fetch(url + '?action=list', {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            })
                 .then(function (r) { return r.json(); })
                 .then(absorb)
                 .catch(function () { /* silencioso; próxima rodada tenta de novo */ });
@@ -68,7 +74,15 @@
             Object.keys(fields).forEach(function (k) { fd.append(k, fields[k]); });
             fd.append('_glpi_csrf_token', state.csrf);
 
-            fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' })
+            // 9e-2: sem o Accept o core devolve a página de erro em HTML, o
+            // resp.json() abaixo quebra e o usuário vê "Falha de comunicação"
+            // em vez da mensagem real (inclusive na sessão expirada).
+            fetch(url, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            })
                 .then(function (r) { return r.json(); })
                 .then(function (res) {
                     state.busy = false;

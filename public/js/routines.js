@@ -82,7 +82,15 @@
         });
         fd.append('_glpi_csrf_token', state.csrf);
 
-        fetch(state.ajaxUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
+        // 9e-2: sem o Accept o core devolve a página de erro em HTML, o
+        // resp.json() abaixo quebra e o usuário vê "Falha de comunicação"
+        // em vez da mensagem real (inclusive na sessão expirada).
+        fetch(state.ajaxUrl, {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        })
             .then(function (resp) { return resp.json(); })
             .then(function (res) {
                 state.busy = false;

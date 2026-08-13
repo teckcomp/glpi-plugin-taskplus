@@ -55,6 +55,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
   erros
 - `ajax/alerts.php` não rotula mais como JSON a resposta de um método
   não aceito
+- Erro do servidor volta a aparecer com o texto certo na tela: as
+  chamadas do plugin passaram a declarar que esperam JSON, então uma
+  recusa chega como JSON estruturado e o aviso mostra o motivo real em
+  vez de "Falha de comunicação com o servidor". Vale principalmente
+  para **sessão expirada**, que agora avisa "Sua sessão expirou. Por
+  favor, autentique-se novamente." em vez da mensagem genérica
 
 ## [0.1.0-beta] — 2026-08-10
 
