@@ -11,6 +11,11 @@
  *    token é de uso único) e `data` com o payload do período pedido,
  *    para re-render. O servidor é a fonte da verdade do recorte:
  *    default de 30 dias, teto de 180 (flag `clamped`);
+ *  - 9b-1: o POST leva também `view_kind` + `view_id` ('self' = meu
+ *    histórico, 'user' + id = trilha de um técnico). O front NÃO decide
+ *    escopo — manda o pedido e obedece ao `view` da resposta, que diz
+ *    o que o servidor realmente leu e se a tela pode agir
+ *    (`can_restore`);
  *  - ÚNICA ação da tela (6c-2): "Restaurar" nos cards EXCLUÍDA — POST
  *    `restore` + id; posse e estado são revalidados no SERVIDOR (T18)
  *    e a resposta volta com o payload completo, então o re-render é
@@ -33,6 +38,10 @@
         csrf: '',
         // Recorte exibido: '' + '' = default do servidor (últimos 30)
         period: { from: '', to: '' },
+        // 9b-1: alvo pedido, no formato "kind:id" ('self:0' = meu
+        // histórico). Quem manda é a resposta do servidor — o syncView
+        // reescreve isto a cada render.
+        view: 'self:0',
         search: '',
         busy: false,
         data: emptyData()
@@ -43,7 +52,13 @@
             date: '',
             period: { from: '', to: '', label: '', days: 0, clamped: false },
             totals: { all: 0, done: 0, pending: 0, late: 0, open: 0, skipped: 0, deleted: 0 },
-            days: []
+            days: [],
+            // 9b-1: alvo exibido + opções do gestor (vazias para quem
+            // não administra setor — sem seletor na tela)
+            view: {
+                kind: 'self', id: 0, label: '', is_self: true,
+                denied: false, can_restore: true, options: []
+            }
         };
     }
 
@@ -88,7 +103,35 @@
                 skipped: Number(t.skipped) || 0,
                 deleted: Number(t.deleted) || 0
             },
-            days: Array.isArray(d.days) ? d.days.map(safeDay) : []
+            days: Array.isArray(d.days) ? d.days.map(safeDay) : [],
+            view: safeView(d.view)
+        };
+    }
+
+    function safeView(raw) {
+        var v = (raw && typeof raw === 'object') ? raw : {};
+        return {
+            kind: (v.kind === 'user') ? 'user' : 'self',
+            id: Number(v.id) || 0,
+            label: (typeof v.label === 'string') ? v.label : '',
+            // Ausente = próprio: o modo "outro técnico" só existe se o
+            // servidor disser explicitamente que não é o próprio.
+            is_self: (v.is_self === undefined) ? true : !!v.is_self,
+            denied: !!v.denied,
+            // Ausente = pode: payload antigo (aba aberta antes da
+            // atualização) mantém o restaurar do próprio funcionando.
+            can_restore: (v.can_restore === undefined) ? true : !!v.can_restore,
+            options: Array.isArray(v.options) ? v.options.map(safeViewOption) : []
+        };
+    }
+
+    function safeViewOption(raw) {
+        var o = (raw && typeof raw === 'object') ? raw : {};
+        return {
+            kind: 'user',
+            id: Number(o.id) || 0,
+            label: (typeof o.label === 'string') ? o.label : '',
+            groups: (typeof o.groups === 'string') ? o.groups : ''
         };
     }
 
@@ -168,6 +211,12 @@
         // período que o usuário está vendo ('' + '' = default de 30).
         fd.append('period_from', state.period.from);
         fd.append('period_to', state.period.to);
+        // 9b-1: o alvo viaja junto do recorte — trocar o período
+        // enquanto se lê a trilha do técnico não pode devolver a
+        // própria. Quem valida o par kind+id é o servidor.
+        var target = splitView(state.view);
+        fd.append('view_kind', target.kind);
+        fd.append('view_id', String(target.id));
 
         fetch(state.ajaxUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(function (resp) { return resp.json(); })
@@ -235,9 +284,96 @@
     // ------------------------------------------------------------------
 
     function render() {
+        syncView();
         syncToolbar();
         renderTotals();
         renderList();
+    }
+
+    /**
+     * 9b-1: seletor "Ver histórico de:" + faixa de identificação.
+     *
+     * A RESPOSTA manda: `view.kind` + id dizem o que o servidor
+     * realmente leu. Se o pedido foi recusado (`denied`), o select
+     * volta sozinho para "Meu histórico" — a tela nunca fica dizendo
+     * que mostra algo que não está mostrando.
+     */
+    function syncView() {
+        var v = state.data.view;
+        var selected = viewKey(v);
+        state.view = selected;
+
+        var box = $('tp-h-viewbox');
+        var select = $('tp-h-view');
+        var hasOptions = (v.options.length > 0);
+
+        if (box) {
+            box.hidden = !hasOptions;
+        }
+        if (select) {
+            select.textContent = '';
+            if (hasOptions) {
+                select.appendChild(makeOption('self:0', 'Meu histórico'));
+                v.options.forEach(function (o) {
+                    select.appendChild(makeOption('user:' + o.id, optionText(o)));
+                });
+                select.value = selected;
+            }
+        }
+
+        var note = $('tp-h-viewnote');
+        var text = $('tp-h-viewnote-text');
+        if (note) {
+            note.hidden = v.is_self;
+        }
+        if (text) {
+            text.textContent = v.is_self ? '' : viewNoteText(v);
+        }
+    }
+
+    /** Chave "kind:id" do alvo exibido, na forma que o select usa. */
+    function viewKey(v) {
+        return (v.is_self || v.kind !== 'user') ? 'self:0' : ('user:' + v.id);
+    }
+
+    function splitView(key) {
+        var parts = String(key || 'self:0').split(':');
+        var kind = (parts[0] === 'user') ? 'user' : 'self';
+        return { kind: kind, id: Number(parts[1]) || 0 };
+    }
+
+    /** Rótulo da opção — o texto de interface é do front, não do domínio. */
+    function optionText(o) {
+        var text = o.label || ('#' + o.id);
+        if (o.groups) {
+            text += ' (' + o.groups + ')';
+        }
+        return text;
+    }
+
+    function viewNoteText(v) {
+        return 'Histórico de ' + (v.label || ('#' + v.id))
+            + ' — leitura de gestor: a mesma trilha que ele vê.';
+    }
+
+    function makeOption(value, text) {
+        var opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = text;
+        return opt;
+    }
+
+    function changeView() {
+        var select = $('tp-h-view');
+        state.view = select ? String(select.value || 'self:0') : 'self:0';
+        // Alvo novo, busca local zerada: o filtro digitado para a
+        // própria trilha não faz sentido sobre a de outra pessoa.
+        state.search = '';
+        var search = $('tp-h-search');
+        if (search) {
+            search.value = '';
+        }
+        post({ action: 'list' });
     }
 
     /**
@@ -404,7 +540,10 @@
             c.appendChild(el('div', 'taskplus-hcard__desc', item.description));
         }
 
-        if (item.state === 'deleted') {
+        // 9b-1: quem diz se a tela pode agir é o servidor. No modo
+        // "trilha de um técnico" o can_restore vem falso (leitura pura)
+        // — o 9b-2 é que liga a restauração pelo gestor.
+        if (item.state === 'deleted' && state.data.view.can_restore) {
             var actions = el('div', 'taskplus-hcard__actions');
             var btn = el('button', 'btn btn-sm btn-outline-secondary taskplus-hcard__restore',
                 'Restaurar');
@@ -447,6 +586,10 @@
         var clear = $('tp-h-clear');
         if (clear) {
             clear.addEventListener('click', clearPeriod);
+        }
+        var view = $('tp-h-view');
+        if (view) {
+            view.addEventListener('change', changeView);
         }
         var search = $('tp-h-search');
         if (search) {

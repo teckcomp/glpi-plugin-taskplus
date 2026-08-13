@@ -30,6 +30,12 @@ namespace GlpiPlugin\Taskplus;
  * estado — e a agregação fica em assemble(), método PURO que o harness
  * valida linha a linha.
  *
+ * Etapa 9b-1: a tela ganhou ALVO. O gestor escolhe "Ver histórico de:"
+ * e lê a trilha de um técnico do escopo — mesma régua da Equipe e do
+ * Painel (Team::scope), revalidada a CADA payload (T18). Só técnicos,
+ * sem modo equipe (decisão nº 36), e leitura pura: no modo técnico
+ * `view.can_restore` vem falso e a tela não oferece ação nenhuma.
+ *
  * As origens nativas (chamados/projetos) ficam FORA, como em todo
  * recorte por dia (decisão nº 3): são estado atual, sem trilha por dia
  * — a tela repete o aviso fixo.
@@ -69,9 +75,23 @@ class History
      *
      * `$from`/`$to` chegam crus do POST — a normalização é do
      * historyRange (mesma régua do periodRange + default de 30 + teto).
+     *
+     * `$viewKind`/`$viewId` (9b-1) são o alvo pedido pelo GESTOR:
+     * 'self' = histórico próprio; 'user' + users_id = trilha de um
+     * técnico do escopo. NÃO existe modo equipe aqui (decisão nº 36):
+     * o Histórico é lista item a item — a união de N técnicos vira
+     * parede e a restauração é sempre individual. Vêm crus do POST e
+     * são validados aqui — o front nunca é fonte de escopo.
+     *
+     * ATENÇÃO safeData(): chave nova aqui precisa entrar no history.js.
      */
-    public static function payload(int $usersId, ?string $from = null, ?string $to = null): array
-    {
+    public static function payload(
+        int $usersId,
+        ?string $from = null,
+        ?string $to = null,
+        string $viewKind = 'self',
+        int $viewId = 0
+    ): array {
         /** @var \DBmysql $DB */
         global $DB;
 
@@ -80,6 +100,16 @@ class History
         $today   = date('Y-m-d');
         $nowTime = date('H:i:s');
 
+        // Escopo consultado AGORA (T18): quem perdeu a gestão do setor
+        // entre o carregamento da tela e este POST perde o acesso já
+        // nesta resposta. Régua idêntica à do Painel e à da Equipe.
+        $scope   = Access::canTeam() ? Team::scope($usersId) : ['groups' => [], 'members' => []];
+        $options = self::optionsFor($scope, $usersId);
+        $view    = self::resolveView($usersId, $viewKind, $viewId, $options);
+
+        // Dono da trilha lida: o próprio ou o técnico já validado.
+        $ownerId = (int) $view['id'];
+
         // Consulta própria do Histórico: TODAS as ocorrências do usuário
         // com `date` no intervalo — sem filtro de is_deleted/is_skipped/
         // is_done (é exatamente o que a tela existe para mostrar).
@@ -87,7 +117,7 @@ class History
         // dividir a chave do array — entram aninhadas, que o iterator
         // ANDa (T21).
         $where = [
-            Occurrence::TABLE . '.users_id' => $usersId,
+            Occurrence::TABLE . '.users_id' => $ownerId,
         ];
         $where[] = [Occurrence::TABLE . '.date' => ['>=', $from]];
         $where[] = [Occurrence::TABLE . '.date' => ['<=', $to]];
@@ -103,17 +133,133 @@ class History
         // pendências passadas é evolução futura, se o uso pedir.
         $pendings = [];
         try {
-            $pendings = Pending::activeMap($usersId, $today);
+            $pendings = Pending::activeMap($ownerId, $today);
         } catch (\Throwable $e) {
             $pendings = [];
         }
-        $items = self::applyPendings($items, $pendings, $usersId);
+        $items = self::applyPendings($items, $pendings, $ownerId);
 
         // Nomes dos autores (conclusão / pendência / criação por outro
         // usuário — o gestor pela Equipe), resolvidos em LOTE.
         $items = self::fillActorLabels($items);
 
-        return self::assemble($items, $from, $to, $clamped, $today);
+        $out             = self::assemble($items, $from, $to, $clamped, $today);
+        $view['options'] = $options;
+        $out['view']     = $view;
+
+        return $out;
+    }
+
+    // =====================================================================
+    // Escopo do "Ver histórico de:" (9b-1)
+    // =====================================================================
+
+    /**
+     * Opções do seletor a partir do escopo já consultado. PURA.
+     *
+     * Só TÉCNICOS (decisão nº 36 — sem opção de equipe): a tela é lista
+     * item a item e a única ação possível é individual. Sai o próprio
+     * gestor, que já é a opção fixa "Meu histórico" do front — repetido
+     * viraria duas entradas para a mesma pessoa.
+     *
+     * Lista vazia = a tela não mostra seletor nenhum (técnico comum, ou
+     * gestor cujo setor ficou sem membros ativos).
+     *
+     *   [ ['kind' => 'user', 'id' => int, 'label' => string,
+     *      'groups' => 'Setor A · B'], … ]
+     */
+    public static function optionsFor(array $scope, int $usersId): array
+    {
+        $members = (array) ($scope['members'] ?? []);
+        unset($members[$usersId]);
+
+        if ($members === []) {
+            return [];
+        }
+
+        $techs = [];
+        foreach ($members as $id => $info) {
+            $techs[] = [
+                'kind'   => 'user',
+                'id'     => (int) $id,
+                'label'  => (string) ($info['label'] ?? ''),
+                'groups' => implode(' · ', (array) ($info['groups'] ?? [])),
+            ];
+        }
+        // Alfabética pelo nome exibido; homônimo desempata por id —
+        // MESMA ordem da Equipe e do Painel, para o gestor achar a
+        // pessoa no mesmo lugar em todas as telas.
+        usort($techs, static function (array $a, array $b): int {
+            return [mb_strtolower($a['label']), $a['id']]
+                <=> [mb_strtolower($b['label']), $b['id']];
+        });
+
+        return $techs;
+    }
+
+    /** Atalho com consulta (usado por harness e por chamadas avulsas). */
+    public static function viewOptions(int $usersId): array
+    {
+        // Mesmo gate da tela Equipe e do Painel: admin (`config` UPDATE)
+        // ou gestor com is_manager em algum setor.
+        if (!Access::canTeam()) {
+            return [];
+        }
+
+        return self::optionsFor(Team::scope($usersId), $usersId);
+    }
+
+    /**
+     * Resolve o alvo pedido contra as opções permitidas. PURA (sem
+     * banco): o harness cobre todos os caminhos.
+     *
+     *  - 'self', id 0/negativo ou o próprio id → histórico próprio;
+     *  - 'user' presente nas opções            → trilha do técnico;
+     *  - qualquer outro                        → histórico próprio com
+     *    `denied` (id inexistente, técnico de outro setor, setor que
+     *    saiu da gestão entre o carregamento e o POST). Cair no próprio
+     *    histórico em vez de devolver tela vazia mantém a leitura
+     *    utilizável enquanto o front avisa.
+     *
+     * `can_restore` é a permissão de AÇÃO da tela: no 9b-1 só o dono
+     * restaura a própria tarefa (leitura pura no modo técnico) — o
+     * 9b-2 liga a restauração pelo gestor mudando SÓ esta linha.
+     *
+     * `label` fica vazio no modo próprio — quem escreve "Meu histórico"
+     * é o front (texto de interface não vem do domínio).
+     */
+    public static function resolveView(int $usersId, string $viewKind, int $viewId, array $options): array
+    {
+        $self = [
+            'kind'        => 'self',
+            'id'          => $usersId,
+            'label'       => '',
+            'is_self'     => true,
+            'denied'      => false,
+            'can_restore' => true,
+        ];
+
+        if ($viewKind === 'self' || $viewId <= 0 || $viewId === $usersId) {
+            return $self;
+        }
+        if ($viewKind !== 'user') {
+            return $self; // valor estranho no POST: próprio, sem alarme
+        }
+
+        foreach ($options as $opt) {
+            if ((string) ($opt['kind'] ?? '') !== 'user' || (int) ($opt['id'] ?? 0) !== $viewId) {
+                continue;
+            }
+            return array_merge($self, [
+                'kind'        => 'user',
+                'id'          => $viewId,
+                'label'       => (string) ($opt['label'] ?? ''),
+                'is_self'     => false,
+                'can_restore' => false,
+            ]);
+        }
+
+        return array_merge($self, ['denied' => true]);
     }
 
     /**
