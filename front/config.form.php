@@ -11,6 +11,7 @@
  */
 
 use Glpi\Application\View\TemplateRenderer;
+use Glpi\Exception\Http\AccessDeniedHttpException;
 use GlpiPlugin\Taskplus\Access;
 use GlpiPlugin\Taskplus\Config as PluginConfig;
 use GlpiPlugin\Taskplus\Phase;
@@ -25,8 +26,10 @@ $usersId = (int) Session::getLoginUserID();
 $isAdmin = Access::isPhaseAdmin();
 $managed = Access::managedGroups($usersId, $isAdmin);
 
+// 9c: exceção do core no lugar do Html::displayRightError() deprecado —
+// mesmo resultado, sem a linha de deprecação no php-errors.log.
 if (!$isAdmin && (!Session::haveRight('plugin_taskplus_manage', READ) || $managed === [])) {
-    Html::displayRightError();
+    throw new AccessDeniedHttpException();
 }
 
 if (isset($_POST['update'])) {

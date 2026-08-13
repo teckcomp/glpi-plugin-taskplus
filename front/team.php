@@ -15,6 +15,7 @@
  */
 
 use Glpi\Application\View\TemplateRenderer;
+use Glpi\Exception\Http\AccessDeniedHttpException;
 use GlpiPlugin\Taskplus\Access;
 use GlpiPlugin\Taskplus\Team;
 use GlpiPlugin\Taskplus\Today;
@@ -22,8 +23,10 @@ use GlpiPlugin\Taskplus\Url;
 
 include('../../../inc/includes.php');
 
+// 9c: exceção do core no lugar do Html::displayRightError() deprecado —
+// mesmo resultado, sem a linha de deprecação no php-errors.log.
 if (!Access::canTeam()) {
-    Html::displayRightError();
+    throw new AccessDeniedHttpException();
 }
 
 Html::header(

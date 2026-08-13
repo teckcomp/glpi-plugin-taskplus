@@ -2,7 +2,7 @@
 
 namespace GlpiPlugin\Taskplus;
 
-use Html;
+use Glpi\Exception\Http\AccessDeniedHttpException;
 use Session;
 
 /**
@@ -49,11 +49,18 @@ class Access
      * Gate de tela: interrompe com "sem permissão" se o perfil não puder
      * ver o módulo. Equivalente a Session::checkRight resolvendo o nome
      * do direito pelo mapa.
+     *
+     * 9c: lança a exceção do core DIRETAMENTE. O Html::displayRightError()
+     * que estava aqui está DEPRECADO no GLPI 11 — por dentro ele faz
+     * Toolbox::deprecated() (uma linha "Called method is deprecated" no
+     * php-errors.log a cada recusa) e depois exatamente este mesmo
+     * `throw new AccessDeniedHttpException()`. Comportamento idêntico,
+     * log limpo, e sem depender de um método que sai no próximo major.
      */
     public static function require(string $module, ?int $right = null): void
     {
         if (!self::can($module, $right)) {
-            Html::displayRightError();
+            throw new AccessDeniedHttpException();
         }
     }
 
