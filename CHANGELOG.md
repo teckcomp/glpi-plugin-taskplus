@@ -5,6 +5,29 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Alterado
+
+- **Quem cria a rotina, controla a rotina** (decisão nº 57, achado A-1).
+  Rotina que o gestor criou para um técnico — individual ou por setor —
+  passa a ser editada, pausada, retomada e excluída **só pelo criador**.
+  O técnico continua vendo a rotina na tela Rotinas (com o badge "criada
+  pelo gestor") e agindo normalmente nas tarefas do dia: concluir,
+  pendência e diálogo. Substitui a regra da 5c-2, em que a rotina
+  nascia sob controle total do técnico e o gestor não tinha como
+  desfazer a própria criação.
+
+### Adicionado
+
+- Seção **"Criadas para a equipe"** na tela Rotinas, visível para quem
+  criou rotina para terceiros. A criação por setor aparece como **lote**
+  ("Backup — 3 técnicos"), com pausar/retomar, editar e excluir valendo
+  para todos de uma vez; o lote expande e mostra cada técnico, com
+  pausar e excluir individuais. Rotina criada para um técnico só é um
+  lote de um.
+- Lote reconstituído a partir dos próprios dados (criador, instante de
+  criação e campos da recorrência) — **sem coluna nova e sem
+  reinstalação**, valendo também para as rotinas já criadas.
+
 ## [0.2.0-beta] — 2026-08-13
 
 Primeira versão instalada em produção. Consolida o pós-beta: diálogo com

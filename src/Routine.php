@@ -15,8 +15,13 @@ namespace GlpiPlugin\Taskplus;
  * 2b — não faz sentido misturar as duas áreas no mesmo bloco.
  *
  * Regras:
- *  - o usuário só enxerga/mexe nas PRÓPRIAS rotinas (users_id = ele);
- *    criar rotina para terceiros é papel do gestor (Etapa 4);
+ *  - o usuário ENXERGA as próprias rotinas (users_id = ele); quem MEXE
+ *    (editar/pausar/excluir) é quem CRIOU (users_id_creator) — decisão
+ *    nº 57 (A-1): rotina que o gestor criou para o técnico é do gestor
+ *    para controlar; o técnico a lê e age só nas tarefas do dia;
+ *  - o gestor vê, na mesma tela, as rotinas que criou para terceiros
+ *    agrupadas em LOTE (a criação por setor grava N linhas no mesmo
+ *    segundo) e age sobre o lote inteiro — ver batchKey()/batches();
  *  - frequency: 'daily' | 'weekly' | 'monthly'; cada uma valida só os
  *    campos que lhe dizem respeito — os demais vão zerados/vazios;
  *  - monthly aceita OU dia fixo (monthday) OU posição
@@ -85,7 +90,168 @@ class Routine
         return [
             'today'    => date('Y-m-d'),
             'routines' => $rows,
+            // A-1 (decisão nº 57): rotinas que EU criei para terceiros,
+            // agrupadas em lote. Chave nova → safeData do routines.js.
+            'batches'  => self::batches($usersId),
         ];
+    }
+
+    // =====================================================================
+    // Controle (decisão nº 57): quem criou, controla
+    // =====================================================================
+
+    /**
+     * $usersId controla a rotina $row? Regra única para editar, pausar e
+     * excluir, na tela do dono e na do criador:
+     *  - criador registrado: só ele;
+     *  - sem criador registrado (linha anterior à 5c-2, users_id_creator
+     *    = 0): o próprio dono.
+     * Pura — o harness a exercita direto.
+     */
+    public static function controls(array $row, int $usersId): bool
+    {
+        $creator = (int) ($row['users_id_creator'] ?? 0);
+        if ($creator > 0) {
+            return $creator === $usersId;
+        }
+        return ((int) ($row['users_id'] ?? 0)) === $usersId;
+    }
+
+    /**
+     * Chave de LOTE de uma rotina criada para terceiro: a criação por
+     * setor (Team::createGroupRoutine) grava N linhas IDÊNTICAS no
+     * mesmo segundo, com o mesmo criador. Como só o criador edita (e o
+     * batch_update grava o mesmo conteúdo em todas), as linhas do lote
+     * continuam iguais pela vida toda — a chave se reconstitui a partir
+     * dos dados, sem coluna nova, inclusive nas rotinas já existentes.
+     * Pura.
+     */
+    public static function batchKey(array $row): string
+    {
+        $parts = [];
+        foreach ([
+            'users_id_creator', 'date_creation', 'name', 'instructions',
+            'frequency', 'only_workdays', 'weekdays', 'monthday',
+            'monthweek', 'monthweekday', 'time_limit', 'date_begin', 'date_end',
+        ] as $field) {
+            $parts[] = (string) ($row[$field] ?? '');
+        }
+        return md5(implode('|', $parts));
+    }
+
+    /**
+     * Linhas VIVAS criadas por $usersId para OUTROS donos, em ordem
+     * estável (nome, id). Base do payload de lotes e da revalidação de
+     * cada ação em lote (T18: relido a cada POST).
+     */
+    private static function createdForOthers(int $usersId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $rows = [];
+        foreach ($DB->request([
+            'FROM'  => self::TABLE,
+            'WHERE' => [
+                self::TABLE . '.users_id_creator' => $usersId,
+                self::TABLE . '.is_deleted'       => 0,
+            ],
+            'ORDER' => [self::TABLE . '.name ASC', self::TABLE . '.id ASC'],
+        ]) as $row) {
+            if (((int) ($row['users_id'] ?? 0)) !== $usersId) {
+                $rows[] = $row;
+            }
+        }
+        return $rows;
+    }
+
+    /**
+     * Lotes do criador $usersId, prontos para o JS:
+     *
+     *   [ ['key', campos da rotina (do 1º membro), 'count',
+     *      'paused_count', 'is_paused' (todos), 'members' => [
+     *          ['id', 'users_id', 'label', 'is_paused'], ... ]], ... ]
+     *
+     * Um técnico só = lote de 1 (rotina criada pela Equipe para ele).
+     */
+    public static function batches(int $usersId): array
+    {
+        $byKey = [];
+        foreach (self::createdForOthers($usersId) as $row) {
+            $key = self::batchKey($row);
+            if (!isset($byKey[$key])) {
+                $item = self::format($row);
+                unset($item['created_by_other'], $item['created_by_id'], $item['created_by_label']);
+                $byKey[$key] = $item + [
+                    'key'          => $key,
+                    'count'        => 0,
+                    'paused_count' => 0,
+                    'members'      => [],
+                ];
+            }
+            $paused = ((int) ($row['is_paused'] ?? 0)) === 1;
+            $byKey[$key]['members'][] = [
+                'id'        => (int) ($row['id'] ?? 0),
+                'users_id'  => (int) ($row['users_id'] ?? 0),
+                'label'     => '',
+                'is_paused' => $paused,
+            ];
+            $byKey[$key]['count']++;
+            if ($paused) {
+                $byKey[$key]['paused_count']++;
+            }
+        }
+
+        $userIds = [];
+        foreach ($byKey as $batch) {
+            foreach ($batch['members'] as $m) {
+                $userIds[$m['users_id']] = true;
+            }
+        }
+        $labels = self::userLabels(array_keys($userIds));
+
+        $out = [];
+        foreach ($byKey as $batch) {
+            foreach ($batch['members'] as &$m) {
+                $m['label'] = $labels[$m['users_id']] ?? ('#' . $m['users_id']);
+            }
+            unset($m);
+            usort($batch['members'], static function (array $a, array $b): int {
+                return [mb_strtolower($a['label']), $a['id']]
+                    <=> [mb_strtolower($b['label']), $b['id']];
+            });
+            // O lote está pausado quando TODOS os membros estão
+            $batch['is_paused'] = $batch['count'] > 0 && $batch['paused_count'] === $batch['count'];
+            $out[] = $batch;
+        }
+        return $out;
+    }
+
+    /**
+     * Nome exibido de cada usuário em UMA consulta: [id => label].
+     */
+    private static function userLabels(array $ids): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        if ($ids === []) {
+            return [];
+        }
+        $labels = [];
+        foreach ($DB->request([
+            'FROM'  => 'glpi_users',
+            'WHERE' => ['glpi_users.id' => $ids ?: [0]],
+        ]) as $row) {
+            $label = trim(
+                (string) ($row['firstname'] ?? '') . ' ' . (string) ($row['realname'] ?? '')
+            );
+            if ($label === '') {
+                $label = (string) ($row['name'] ?? '');
+            }
+            $labels[(int) ($row['id'] ?? 0)] = $label;
+        }
+        return $labels;
     }
 
     /**
@@ -95,9 +261,6 @@ class Routine
      */
     private static function fillCreatorLabels(array $rows): array
     {
-        /** @var \DBmysql $DB */
-        global $DB;
-
         $ids = [];
         foreach ($rows as $item) {
             if (!empty($item['created_by_other']) && (int) ($item['created_by_id'] ?? 0) > 0) {
@@ -108,19 +271,7 @@ class Routine
             return $rows;
         }
 
-        $labels = [];
-        foreach ($DB->request([
-            'FROM'  => 'glpi_users',
-            'WHERE' => ['glpi_users.id' => array_keys($ids) ?: [0]],
-        ]) as $row) {
-            $label = trim(
-                (string) ($row['firstname'] ?? '') . ' ' . (string) ($row['realname'] ?? '')
-            );
-            if ($label === '') {
-                $label = (string) ($row['name'] ?? '');
-            }
-            $labels[(int) ($row['id'] ?? 0)] = $label;
-        }
+        $labels = self::userLabels(array_keys($ids));
 
         foreach ($rows as &$item) {
             if (!empty($item['created_by_other'])) {
@@ -161,6 +312,10 @@ class Routine
                 && ((int) ($row['users_id_creator'] ?? 0)) !== ((int) ($row['users_id'] ?? 0)),
             'created_by_id'    => (int) ($row['users_id_creator'] ?? 0),
             'created_by_label' => '',
+            // A-1 (decisão nº 57): o DONO só edita/pausa/exclui o que ele
+            // mesmo criou. O JS esconde os botões; o servidor recusa de
+            // qualquer jeito (controlledRow).
+            'can_manage'       => self::controls($row, (int) ($row['users_id'] ?? 0)),
         ];
     }
 
@@ -244,6 +399,12 @@ class Routine
                 return self::delete($input, $usersId);
             case 'pause':
                 return self::pause($input, $usersId);
+            case 'batch_update':
+                return self::batchUpdate($input, $usersId);
+            case 'batch_delete':
+                return self::batchDelete($input, $usersId);
+            case 'batch_pause':
+                return self::batchPause($input, $usersId);
             case 'list':
                 // Só quer o payload atualizado (o endpoint já o inclui)
                 return ['success' => true, 'message' => ''];
@@ -312,7 +473,7 @@ class Routine
         /** @var \DBmysql $DB */
         global $DB;
 
-        $row = self::ownRow((int) ($input['id'] ?? 0), $usersId);
+        $row = self::controlledRow((int) ($input['id'] ?? 0), $usersId);
         if ($row === null) {
             return ['success' => false, 'message' => __('Rotina não encontrada', 'taskplus')];
         }
@@ -336,7 +497,7 @@ class Routine
         /** @var \DBmysql $DB */
         global $DB;
 
-        $row = self::ownRow((int) ($input['id'] ?? 0), $usersId);
+        $row = self::controlledRow((int) ($input['id'] ?? 0), $usersId);
         if ($row === null) {
             return ['success' => false, 'message' => __('Rotina não encontrada', 'taskplus')];
         }
@@ -361,7 +522,7 @@ class Routine
         /** @var \DBmysql $DB */
         global $DB;
 
-        $row = self::ownRow((int) ($input['id'] ?? 0), $usersId);
+        $row = self::controlledRow((int) ($input['id'] ?? 0), $usersId);
         if ($row === null) {
             return ['success' => false, 'message' => __('Rotina não encontrada', 'taskplus')];
         }
@@ -379,6 +540,108 @@ class Routine
             'message' => $paused
                 ? __('Rotina pausada', 'taskplus')
                 : __('Rotina retomada', 'taskplus'),
+        ];
+    }
+
+    // =====================================================================
+    // Ações em LOTE (A-1, decisão nº 57) — o criador sobre N rotinas
+    // =====================================================================
+
+    /**
+     * Linhas do lote $key que $usersId criou, relidas do banco AGORA
+     * (T18). Vazio = lote inexistente ou de outro criador.
+     */
+    private static function batchRows(string $key, int $usersId): array
+    {
+        if ($key === '') {
+            return [];
+        }
+        $rows = [];
+        foreach (self::createdForOthers($usersId) as $row) {
+            if (self::batchKey($row) === $key) {
+                $rows[] = $row;
+            }
+        }
+        return $rows;
+    }
+
+    private static function batchUpdate(array $input, int $usersId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $rows = self::batchRows((string) ($input['batch'] ?? ''), $usersId);
+        if ($rows === []) {
+            return ['success' => false, 'message' => __('Lote não encontrado', 'taskplus')];
+        }
+
+        $fields = self::cleanFields($input);
+        if (is_string($fields)) {
+            return ['success' => false, 'message' => $fields];
+        }
+
+        $ids = array_map(static fn(array $r): int => (int) $r['id'], $rows);
+        $DB->update(
+            self::TABLE,
+            $fields + ['date_mod' => date('Y-m-d H:i:s')],
+            [self::TABLE . '.id' => $ids]
+        );
+
+        return [
+            'success' => true,
+            'message' => sprintf(__('Rotina atualizada para %d técnico(s)', 'taskplus'), count($ids)),
+        ];
+    }
+
+    private static function batchDelete(array $input, int $usersId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $rows = self::batchRows((string) ($input['batch'] ?? ''), $usersId);
+        if ($rows === []) {
+            return ['success' => false, 'message' => __('Lote não encontrado', 'taskplus')];
+        }
+
+        $ids = array_map(static fn(array $r): int => (int) $r['id'], $rows);
+        $DB->update(
+            self::TABLE,
+            ['is_deleted' => 1, 'date_mod' => date('Y-m-d H:i:s')],
+            [self::TABLE . '.id' => $ids]
+        );
+
+        return [
+            'success' => true,
+            'message' => sprintf(__('Rotina excluída para %d técnico(s)', 'taskplus'), count($ids)),
+        ];
+    }
+
+    private static function batchPause(array $input, int $usersId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $rows = self::batchRows((string) ($input['batch'] ?? ''), $usersId);
+        if ($rows === []) {
+            return ['success' => false, 'message' => __('Lote não encontrado', 'taskplus')];
+        }
+
+        $paused = ((int) ($input['paused'] ?? 0)) === 1;
+        $ids    = array_map(static fn(array $r): int => (int) $r['id'], $rows);
+        $DB->update(
+            self::TABLE,
+            ['is_paused' => $paused ? 1 : 0, 'date_mod' => date('Y-m-d H:i:s')],
+            [self::TABLE . '.id' => $ids]
+        );
+
+        return [
+            'success' => true,
+            'message' => sprintf(
+                $paused
+                    ? __('Rotina pausada para %d técnico(s)', 'taskplus')
+                    : __('Rotina retomada para %d técnico(s)', 'taskplus'),
+                count($ids)
+            ),
         ];
     }
 
@@ -742,9 +1005,11 @@ class Routine
     }
 
     /**
-     * A rotina $id, se pertencer a $usersId e não estiver excluída.
+     * A rotina $id, viva, se $usersId a CONTROLA (decisão nº 57: quem
+     * criou). Relida do banco a cada chamada (T18). Substitui o ownRow
+     * da 2a, que filtrava pelo dono.
      */
-    private static function ownRow(int $id, int $usersId): ?array
+    private static function controlledRow(int $id, int $usersId): ?array
     {
         /** @var \DBmysql $DB */
         global $DB;
@@ -757,11 +1022,10 @@ class Routine
             'FROM'  => self::TABLE,
             'WHERE' => [
                 self::TABLE . '.id'         => $id,
-                self::TABLE . '.users_id'   => $usersId,
                 self::TABLE . '.is_deleted' => 0,
             ],
         ]) as $row) {
-            return $row;
+            return self::controls($row, $usersId) ? $row : null;
         }
 
         return null;

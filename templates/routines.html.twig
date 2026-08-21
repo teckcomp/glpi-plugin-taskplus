@@ -24,6 +24,18 @@
 
         {# Lista de rotinas renderizada pelo JS #}
         <div id="tpr-list"></div>
+
+        {# A-1 (decisão nº 57): rotinas que EU criei para a equipe, em
+           lote. Só aparece para quem criou rotina para terceiros —
+           o JS mostra/esconde pelo payload. #}
+        <div class="taskplus-section taskplus-section--batches" id="tpr-batches-section" hidden>
+            <h3 class="taskplus-section__title">
+                <i class="ti ti-users"></i>&nbsp;{{ __('Criadas para a equipe', 'taskplus') }}
+                <span class="taskplus-section__count" id="tpr-batches-count">0</span>
+            </h3>
+            <p class="taskplus-batch__hint">{{ __('Você controla estas rotinas: o técnico as vê na tela dele e age só nas tarefas do dia. Ações aqui valem para todos do lote; abra o lote para agir em um técnico.', 'taskplus') }}</p>
+            <div id="tpr-batches"></div>
+        </div>
     </div>
 </div>
 

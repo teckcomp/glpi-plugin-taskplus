@@ -21,8 +21,12 @@
         csrf: '',
         showPaused: false,
         editingId: null,
+        // A-1: chave do LOTE em edição (null = rotina própria)
+        editingBatch: null,
+        // A-1: lotes expandidos (chave → true), preservado entre renders
+        openBatches: {},
         busy: false,
-        data: { today: '', routines: [] }
+        data: { today: '', routines: [], batches: [] }
     };
 
     function $(id) {
@@ -48,8 +52,22 @@
         var d = (raw && typeof raw === 'object') ? raw : {};
         return {
             today: (typeof d.today === 'string') ? d.today : '',
-            routines: Array.isArray(d.routines) ? d.routines : []
+            routines: Array.isArray(d.routines) ? d.routines : [],
+            // A-1: lotes criados para a equipe (payload antigo = lista vazia)
+            batches: Array.isArray(d.batches) ? d.batches.map(safeBatch) : []
         };
+    }
+
+    function safeBatch(raw) {
+        var b = (raw && typeof raw === 'object') ? raw : {};
+        var out = {};
+        Object.keys(b).forEach(function (k) { out[k] = b[k]; });
+        out.key = (typeof b.key === 'string') ? b.key : '';
+        out.count = Number(b.count) || 0;
+        out.paused_count = Number(b.paused_count) || 0;
+        out.is_paused = !!b.is_paused;
+        out.members = Array.isArray(b.members) ? b.members : [];
+        return out;
     }
 
     // ------------------------------------------------------------------
@@ -125,6 +143,8 @@
     // ------------------------------------------------------------------
 
     function render() {
+        renderBatches();
+
         var list = $('tpr-list');
         list.textContent = ''; // limpa
 
@@ -140,6 +160,174 @@
         items.forEach(function (item) {
             list.appendChild(card(item));
         });
+    }
+
+    /**
+     * A-1 (decisão nº 57): seção "Criadas para a equipe" — só aparece
+     * para quem criou rotina para terceiros. Segue o filtro "Mostrar
+     * pausadas" (lote pausado = todos os membros pausados).
+     */
+    function renderBatches() {
+        var section = $('tpr-batches-section');
+        var box = $('tpr-batches');
+        if (!section || !box) {
+            return;
+        }
+        box.textContent = '';
+
+        var batches = state.data.batches.filter(function (b) {
+            return state.showPaused || !b.is_paused;
+        });
+        section.hidden = state.data.batches.length === 0;
+        var count = $('tpr-batches-count');
+        if (count) {
+            count.textContent = String(batches.length);
+        }
+
+        batches.forEach(function (b) {
+            box.appendChild(batchCard(b));
+        });
+    }
+
+    function batchCard(b) {
+        var c = el('div', 'taskplus-card taskplus-card--routine taskplus-card--batch'
+            + (b.is_paused ? ' taskplus-card--paused' : ''));
+
+        var body = el('div', 'taskplus-card__body');
+
+        var head = el('div', 'taskplus-batch__head');
+        head.setAttribute('role', 'button');
+        head.tabIndex = 0;
+        var chevron = el('i', 'ti taskplus-team__chevron '
+            + (state.openBatches[b.key] ? 'ti-chevron-down' : 'ti-chevron-right'));
+        head.appendChild(chevron);
+        head.appendChild(el('span', 'taskplus-card__name', b.name || '(sem nome)'));
+        head.appendChild(el('span', 'taskplus-badge taskplus-badge--manager',
+            b.count + (b.count === 1 ? ' técnico' : ' técnicos')));
+        body.appendChild(head);
+
+        if (b.instructions) {
+            body.appendChild(el('div', 'taskplus-card__desc', b.instructions));
+        }
+
+        var badges = el('div', 'taskplus-card__badges');
+        badges.appendChild(el('span', 'taskplus-badge taskplus-badge--category', b.frequency_label || ''));
+        if (b.recurrence_label) {
+            badges.appendChild(el('span', 'taskplus-badge', b.recurrence_label));
+        }
+        if (b.time_limit) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--limit', 'até ' + b.time_limit));
+        }
+        if (b.date_begin) {
+            var period = 'a partir de ' + b.date_begin.split('-').reverse().join('/');
+            if (b.date_end) {
+                period += ' até ' + b.date_end.split('-').reverse().join('/');
+            }
+            badges.appendChild(el('span', 'taskplus-badge', period));
+        }
+        if (b.is_paused) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--late', 'pausada'));
+        } else if (b.paused_count > 0) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--late',
+                'pausada para ' + b.paused_count + ' de ' + b.count));
+        }
+        body.appendChild(badges);
+
+        var members = el('div', 'taskplus-batch__members');
+        members.hidden = !state.openBatches[b.key];
+        b.members.forEach(function (m) {
+            members.appendChild(memberRow(m));
+        });
+        body.appendChild(members);
+
+        function toggle() {
+            state.openBatches[b.key] = !state.openBatches[b.key];
+            members.hidden = !state.openBatches[b.key];
+            chevron.className = 'ti taskplus-team__chevron '
+                + (state.openBatches[b.key] ? 'ti-chevron-down' : 'ti-chevron-right');
+        }
+        head.addEventListener('click', toggle);
+        head.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter' || ev.key === ' ') {
+                ev.preventDefault();
+                toggle();
+            }
+        });
+
+        c.appendChild(body);
+
+        var actions = el('div', 'taskplus-card__actions');
+
+        var pauseBtn = el('button', 'taskplus-iconbtn');
+        pauseBtn.type = 'button';
+        pauseBtn.title = b.is_paused ? 'Retomar para todos' : 'Pausar para todos';
+        pauseBtn.appendChild(el('i', 'ti ' + (b.is_paused ? 'ti-player-play' : 'ti-player-pause')));
+        pauseBtn.addEventListener('click', function () {
+            post({ action: 'batch_pause', batch: b.key, paused: b.is_paused ? '0' : '1' });
+        });
+        actions.appendChild(pauseBtn);
+
+        var edit = el('button', 'taskplus-iconbtn');
+        edit.type = 'button';
+        edit.title = 'Editar para todos';
+        edit.appendChild(el('i', 'ti ti-pencil'));
+        edit.addEventListener('click', function () {
+            openModal(b, b.key);
+        });
+        actions.appendChild(edit);
+
+        var del = el('button', 'taskplus-iconbtn taskplus-iconbtn--danger');
+        del.type = 'button';
+        del.title = 'Excluir para todos';
+        del.appendChild(el('i', 'ti ti-trash'));
+        del.addEventListener('click', function () {
+            if (window.confirm('Excluir a rotina "' + b.name + '" para ' + b.count
+                + (b.count === 1 ? ' técnico' : ' técnicos') + '?')) {
+                post({ action: 'batch_delete', batch: b.key });
+            }
+        });
+        actions.appendChild(del);
+
+        c.appendChild(actions);
+        return c;
+    }
+
+    /**
+     * Linha de um técnico do lote, com pausar/retomar e excluir SÓ dele
+     * (passam pelo `pause`/`delete` comuns — o criador controla cada
+     * rotina individualmente também).
+     */
+    function memberRow(m) {
+        var row = el('div', 'taskplus-team__item taskplus-batch__member');
+        row.appendChild(el('span', 'taskplus-team__title', m.label || ('#' + m.users_id)));
+        if (m.is_paused) {
+            row.appendChild(el('span', 'taskplus-badge taskplus-badge--late', 'pausada'));
+        }
+
+        var acts = el('span', 'taskplus-card__actions taskplus-batch__member-acts');
+
+        var pauseBtn = el('button', 'taskplus-iconbtn');
+        pauseBtn.type = 'button';
+        pauseBtn.title = m.is_paused ? 'Retomar só para ' + m.label : 'Pausar só para ' + m.label;
+        pauseBtn.appendChild(el('i', 'ti ' + (m.is_paused ? 'ti-player-play' : 'ti-player-pause')));
+        pauseBtn.addEventListener('click', function () {
+            post({ action: 'pause', id: String(m.id), paused: m.is_paused ? '0' : '1' });
+        });
+        acts.appendChild(pauseBtn);
+
+        var del = el('button', 'taskplus-iconbtn taskplus-iconbtn--danger');
+        del.type = 'button';
+        del.title = 'Excluir só para ' + m.label;
+        del.appendChild(el('i', 'ti ti-trash'));
+        del.addEventListener('click', function () {
+            if (window.confirm('Excluir esta rotina só para ' + m.label + '?')) {
+                post({ action: 'delete', id: String(m.id) });
+            }
+        });
+        acts.appendChild(del);
+
+        row.appendChild(acts);
+        return row;
     }
 
     function emptyBox() {
@@ -193,6 +381,14 @@
             body.appendChild(badges);
         }
         c.appendChild(body);
+
+        // A-1 (decisão nº 57): rotina criada pelo gestor é SÓ LEITURA
+        // para o dono — quem edita/pausa/exclui é o criador, na tela
+        // dele. Payload antigo (sem can_manage) mantém os botões; o
+        // servidor recusa de qualquer forma (controlledRow).
+        if (item.can_manage === false) {
+            return c;
+        }
 
         var actions = el('div', 'taskplus-card__actions');
 
@@ -254,9 +450,12 @@
         return checked ? checked.value : 'day';
     }
 
-    function openModal(item) {
-        state.editingId = item ? item.id : null;
-        $('tpr-modal-title').textContent = item ? 'Editar rotina' : 'Nova rotina';
+    function openModal(item, batchKey) {
+        state.editingBatch = batchKey || null;
+        state.editingId = (item && !batchKey) ? item.id : null;
+        $('tpr-modal-title').textContent = batchKey
+            ? ('Editar rotina para ' + item.count + (item.count === 1 ? ' técnico' : ' técnicos'))
+            : (item ? 'Editar rotina' : 'Nova rotina');
 
         $('tpr-f-name').value = item ? item.name : '';
         $('tpr-f-instructions').value = item ? item.instructions : '';
@@ -290,6 +489,7 @@
     function closeModal() {
         $('tpr-modal').hidden = true;
         state.editingId = null;
+        state.editingBatch = null;
     }
 
     function saveModal() {
@@ -303,7 +503,7 @@
         var frequency = $('tpr-f-frequency').value;
 
         var fields = {
-            action: state.editingId ? 'update' : 'add',
+            action: state.editingBatch ? 'batch_update' : (state.editingId ? 'update' : 'add'),
             name: name,
             instructions: $('tpr-f-instructions').value.trim(),
             frequency: frequency,
@@ -343,7 +543,9 @@
             }
         }
 
-        if (state.editingId) {
+        if (state.editingBatch) {
+            fields.batch = state.editingBatch;
+        } else if (state.editingId) {
             fields.id = String(state.editingId);
         }
         post(fields, closeModal);
@@ -408,6 +610,8 @@
         init: init,
         render: render,
         safeData: safeData,
+        card: card,
+        batchCard: batchCard,
         state: state
     };
 
