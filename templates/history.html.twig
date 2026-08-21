@@ -40,6 +40,12 @@
             </label>
             <button type="button" class="btn btn-primary btn-sm" id="tp-h-apply">{{ __('Aplicar', 'taskplus') }}</button>
             <button type="button" class="btn btn-ghost-secondary btn-sm" id="tp-h-clear">{{ __('Últimos 30 dias', 'taskplus') }}</button>
+            {# 10a: exporta o que está na tela — alvo, período e busca já
+               aplicados. O arquivo é montado no navegador; não há
+               endpoint novo nem leitura extra no servidor. #}
+            <button type="button" class="btn btn-ghost-secondary btn-sm" id="tp-h-export">
+                <i class="ti ti-download"></i> {{ __('Exportar CSV', 'taskplus') }}
+            </button>
             <input type="search" id="tp-h-search" class="taskplus-toolbar2__search"
                    placeholder="{{ __('Buscar por título, descrição ou categoria', 'taskplus') }}"
                    aria-label="{{ __('Buscar', 'taskplus') }}">

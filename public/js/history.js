@@ -184,6 +184,128 @@
     }
 
     // ------------------------------------------------------------------
+    // 10a — exportação CSV
+    // ------------------------------------------------------------------
+
+    var CSV_SEP = ';';
+
+    /**
+     * Uma célula de CSV para o Excel em pt-BR.
+     *
+     * Duas defesas obrigatórias:
+     *  - separador ';' (o Excel em português não reconhece vírgula) e
+     *    aspas duplicadas quando o texto contém ';', '"' ou quebra;
+     *  - célula que COMEÇA por = + - @ vira fórmula ao abrir no Excel.
+     *    Título de tarefa é texto livre digitado por técnico, então a
+     *    apóstrofe entra na frente para neutralizar (CSV injection).
+     */
+    function csvCell(value) {
+        var s = (value === null || value === undefined) ? '' : String(value);
+        if (/^[=+\-@\t\r]/.test(s)) {
+            s = "'" + s;
+        }
+        if (s.indexOf('"') !== -1 || s.indexOf(CSV_SEP) !== -1 || /[\r\n]/.test(s)) {
+            s = '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+    }
+
+    function csvLine(cells) {
+        return cells.map(csvCell).join(CSV_SEP);
+    }
+
+    /** Estado em texto, sem os rótulos de horário do badge. */
+    function stateText(item) {
+        switch (item.state) {
+            case 'deleted':  return 'excluída';
+            case 'skipped':  return 'pulada';
+            case 'done':     return 'concluída';
+            case 'pending':  return 'pendente';
+            case 'late':     return 'atrasada';
+            default:         return 'aberta';
+        }
+    }
+
+    /** Quem está sendo exibido, em texto — vai para o arquivo e o nome dele. */
+    function viewLabel() {
+        var v = state.data.view;
+        return v.is_self ? 'Meu histórico' : (v.label || ('#' + v.id));
+    }
+
+    /**
+     * O arquivo é EXATAMENTE o que está na tela (decisão do bloco): alvo
+     * e período já vêm decididos pelo servidor, e a busca local é
+     * reaplicada aqui. Exportar o período inteiro com a busca digitada
+     * na tela faria o gestor levar 40 linhas achando que levou 12.
+     *
+     * O cabeçalho registra os três recortes, para o arquivo não mentir
+     * sobre o próprio conteúdo depois de sair daqui.
+     */
+    function buildCsv() {
+        var p = state.data.period;
+        var rows = [];
+
+        state.data.days.forEach(function (day) {
+            day.items.filter(matchesSearch).forEach(function (item) {
+                rows.push(csvLine([
+                    item.date,
+                    item.name,
+                    item.category,
+                    item.is_routine ? 'Rotina' : 'Avulsa',
+                    item.routine_name,
+                    stateText(item),
+                    item.done_label,
+                    item.pending_reason || item.skip_reason
+                ]));
+            });
+        });
+
+        var head = [
+            csvLine(['Task+ — Histórico']),
+            csvLine(['Alvo', viewLabel()]),
+            csvLine(['Período', p.from + ' a ' + p.to]),
+            csvLine(['Busca', state.search || '(sem filtro)']),
+            csvLine(['Linhas', String(rows.length)]),
+            '',
+            csvLine(['Data', 'Tarefa', 'Categoria', 'Origem', 'Rotina',
+                     'Estado', 'Conclusão', 'Motivo'])
+        ];
+
+        return head.concat(rows).join('\r\n') + '\r\n';
+    }
+
+    function slug(s) {
+        return norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'sem-nome';
+    }
+
+    function csvName() {
+        var p = state.data.period;
+        return 'taskplus-historico-' + slug(viewLabel()) + '-' + p.from + '-a-' + p.to + '.csv';
+    }
+
+    function exportCsv() {
+        var visible = 0;
+        state.data.days.forEach(function (day) {
+            visible += day.items.filter(matchesSearch).length;
+        });
+        if (visible === 0) {
+            toast('Nada para exportar neste recorte.', true);
+            return;
+        }
+        // BOM: sem ele o Excel em pt-BR abre "concluída" como lixo.
+        var blob = new Blob(['\uFEFF' + buildCsv()], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = csvName();
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast(visible + ' linha(s) exportada(s).');
+    }
+
+    // ------------------------------------------------------------------
     // Toast de feedback
     // ------------------------------------------------------------------
 
@@ -713,6 +835,10 @@
             view.addEventListener('change', changeView);
         }
         // A-2a: filtrar é local — remonta o <select> e NÃO faz POST.
+        var exportBtn = $('tp-h-export');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', exportCsv);
+        }
         var vfilter = $('tp-h-viewfilter');
         if (vfilter) {
             vfilter.addEventListener('input', function () {
@@ -733,7 +859,9 @@
 
     // jsdom com runScripts 'outside-only' não dispara DOMContentLoaded
     // (T14): o harness chama window.TaskplusHistory.init() na mão.
-    window.TaskplusHistory = { init: init };
+    // `csv` exposto para o harness conferir o TEXTO gerado sem depender
+    // de Blob/createObjectURL, que o jsdom não implementa.
+    window.TaskplusHistory = { init: init, csv: buildCsv, csvName: csvName };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

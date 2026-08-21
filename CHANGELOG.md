@@ -5,6 +5,33 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Adicionado
+
+- **Filtro no seletor de alvo** do Painel e do Histórico (achado A-2).
+  A caixa "Ver painel de" / "Ver histórico de" ganhou um campo de busca
+  ao lado, os técnicos passaram a aparecer **agrupados por setor** e o
+  filtro casa **nome ou setor, sem acento**, com um contador "N de M"
+  dizendo que a lista está recortada. Em base de cliente há setor com
+  mais de 150 membros — a lista plana era impraticável. "Meu painel",
+  "Meu histórico", as opções de equipe e **o alvo já selecionado** nunca
+  são filtrados: opção ativa escondida faria o seletor trocar de valor
+  sozinho e disparar uma leitura que ninguém pediu.
+- **Exportar CSV no Histórico**: uma linha por tarefa (data, tarefa,
+  categoria, origem, rotina, estado, conclusão, motivo), com o alvo, o
+  período e a busca aplicada registrados no cabeçalho do arquivo. Sai
+  **exatamente o que está na tela** — a busca digitada vale também para
+  o arquivo.
+- **Exportar CSV no Painel em modo equipe**: uma linha por responsável
+  (nome, setor, devidas, concluídas, pendentes, taxa), para quantificar
+  o mês de todo o setor num arquivo só.
+- Os dois arquivos saem com **BOM UTF-8** e separador `;`, que é o que o
+  Excel em português abre sem quebrar acento nem coluna, e com célula
+  iniciada por `=`, `+`, `-` ou `@` neutralizada — título de tarefa é
+  texto livre e não deve virar fórmula na planilha do gestor. A geração
+  é **no navegador**: sem endpoint novo, sem leitura extra no servidor e
+  sem chance de exportar além do que o servidor já autorizou para
+  aquela tela.
+
 ### Alterado
 
 - **Quem cria a rotina, controla a rotina** (decisão nº 57, achado A-1).

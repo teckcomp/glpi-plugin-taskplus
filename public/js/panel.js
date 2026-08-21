@@ -212,6 +212,117 @@
     // Toast de feedback
     // ------------------------------------------------------------------
 
+    // ------------------------------------------------------------------
+    // 10b — exportação CSV da tabela por responsável
+    // ------------------------------------------------------------------
+
+    var CSV_SEP = ';';
+
+    /**
+     * Célula de CSV para o Excel em pt-BR: separador ';', aspas
+     * duplicadas, e apóstrofe na frente de = + - @ (nome vindo do
+     * cadastro não deveria virar fórmula ao abrir a planilha).
+     */
+    function csvCell(value) {
+        var s = (value === null || value === undefined) ? '' : String(value);
+        if (/^[=+\-@\t\r]/.test(s)) {
+            s = "'" + s;
+        }
+        if (s.indexOf('"') !== -1 || s.indexOf(CSV_SEP) !== -1 || /[\r\n]/.test(s)) {
+            s = '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+    }
+
+    function csvLine(cells) {
+        return cells.map(csvCell).join(CSV_SEP);
+    }
+
+    /**
+     * Setor do técnico, tirado das OPÇÕES do seletor (a tabela de
+     * responsáveis não carrega o setor). O próprio gestor não está nas
+     * opções — a coluna dele sai vazia, e é assim mesmo: ele aparece na
+     * tabela porque também tem dia, não porque é membro do recorte.
+     */
+    function sectorOf(id) {
+        var found = '';
+        state.data.view.options.forEach(function (o) {
+            if (o.kind !== 'team' && o.id === id && found === '') {
+                found = String(o.groups || '');
+            }
+        });
+        return found;
+    }
+
+    function viewLabel() {
+        var v = state.data.view;
+        if (v.kind !== 'team') {
+            return v.is_self ? 'Meu painel' : (v.label || ('#' + v.id));
+        }
+        return v.group_name ? ('Equipe — ' + v.group_name) : 'Equipe (todos os setores)';
+    }
+
+    /**
+     * Uma linha por técnico do recorte: é a resposta direta a "quantas
+     * tarefas cada colaborador fez no mês", num arquivo só, em vez de
+     * repetir a leitura técnico a técnico.
+     */
+    function buildCsv() {
+        var p = state.data.period;
+        var v = state.data.view;
+
+        var rows = state.data.owners.rows.map(function (r) {
+            return csvLine([
+                r.name,
+                sectorOf(r.id),
+                String(r.due),
+                String(r.done),
+                String(r.pending),
+                (r.rate === null) ? '' : String(r.rate)
+            ]);
+        });
+
+        var head = [
+            csvLine(['Task+ — Painel por responsável']),
+            csvLine(['Alvo', viewLabel()]),
+            csvLine(['Período', p.from + ' a ' + p.to]),
+            csvLine(['Técnicos no recorte', String(v.techs)]),
+            csvLine(['Sem dados nesta leitura', String(v.failed)]),
+            '',
+            csvLine(['Responsável', 'Setor', 'Devidas', 'Concluídas',
+                     'Pendentes', 'Taxa (%)'])
+        ];
+
+        return head.concat(rows).join('\r\n') + '\r\n';
+    }
+
+    function slug(s) {
+        return norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'sem-nome';
+    }
+
+    function csvName() {
+        var p = state.data.period;
+        return 'taskplus-equipe-' + slug(viewLabel()) + '-' + p.from + '-a-' + p.to + '.csv';
+    }
+
+    function exportCsv() {
+        if (state.data.owners.rows.length === 0) {
+            toast('Nada para exportar neste recorte.', true);
+            return;
+        }
+        // BOM: sem ele o Excel em pt-BR abre "Concluídas" como lixo.
+        var blob = new Blob(['\uFEFF' + buildCsv()], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = csvName();
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast(state.data.owners.rows.length + ' responsável(is) exportado(s).');
+    }
+
     function toast(msg, isError) {
         var t = el('div', 'taskplus-toast' + (isError ? ' taskplus-toast--error' : ''), msg);
         document.body.appendChild(t);
@@ -788,6 +899,10 @@
             view.addEventListener('change', changeView);
         }
         // A-2a: filtrar é local — remonta o <select> e NÃO faz POST.
+        var exportBtn = $('tp-p-export');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', exportCsv);
+        }
         var vfilter = $('tp-p-viewfilter');
         if (vfilter) {
             vfilter.addEventListener('input', function () {
@@ -801,7 +916,9 @@
 
     // Exposto para o harness (jsdom outside-only não dispara
     // DOMContentLoaded — lição T14) e para depuração.
-    window.TaskplusPanel = { init: init };
+    // `csv` exposto para o harness conferir o TEXTO gerado sem depender
+    // de Blob/createObjectURL, que o jsdom não implementa.
+    window.TaskplusPanel = { init: init, csv: buildCsv, csvName: csvName };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

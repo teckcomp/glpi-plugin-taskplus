@@ -105,6 +105,12 @@
         <div class="taskplus-panelblock" id="tp-p-owners-block" hidden>
             <div class="taskplus-panelblock__head">
                 <h3>{{ __('Taxa por responsável', 'taskplus') }}</h3>
+                {# 10b: uma linha por técnico do recorte. Vive DENTRO do
+                   bloco que só existe no modo equipe, então o botão
+                   aparece e some junto com a tabela. #}
+                <button type="button" class="btn btn-ghost-secondary btn-sm" id="tp-p-export">
+                    <i class="ti ti-download"></i> {{ __('Exportar CSV', 'taskplus') }}
+                </button>
             </div>
             <div id="tp-p-owners"></div>
         </div>
