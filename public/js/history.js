@@ -44,6 +44,9 @@
         // histórico). Quem manda é a resposta do servidor — o syncView
         // reescreve isto a cada render.
         view: 'self:0',
+        // A-2a: texto do filtro do seletor de alvo. Puramente local —
+        // não vai ao servidor e não altera o recorte.
+        viewFilter: '',
         search: '',
         busy: false,
         data: emptyData()
@@ -314,20 +317,17 @@
         state.view = selected;
 
         var box = $('tp-h-viewbox');
-        var select = $('tp-h-view');
         var hasOptions = (v.options.length > 0);
 
         if (box) {
             box.hidden = !hasOptions;
         }
-        if (select) {
-            select.textContent = '';
-            if (hasOptions) {
-                select.appendChild(makeOption('self:0', 'Meu histórico'));
-                v.options.forEach(function (o) {
-                    select.appendChild(makeOption('user:' + o.id, optionText(o)));
-                });
-                select.value = selected;
+        if (hasOptions) {
+            renderViewOptions();
+        } else {
+            var empty = $('tp-h-view');
+            if (empty) {
+                empty.textContent = '';
             }
         }
 
@@ -352,13 +352,103 @@
         return { kind: kind, id: Number(parts[1]) || 0 };
     }
 
-    /** Rótulo da opção — o texto de interface é do front, não do domínio. */
-    function optionText(o) {
-        var text = o.label || ('#' + o.id);
-        if (o.groups) {
-            text += ' (' + o.groups + ')';
+    /**
+     * A-2a: monta o seletor aplicando o filtro digitado.
+     *
+     * Em produção há setor com mais de 150 membros — um <select> plano
+     * com essa massa é impossível de percorrer. Três regras:
+     *
+     *  1. os técnicos vão em <optgroup> pelo SETOR (a string `groups`
+     *     que o servidor já manda), então o nome do setor sai do texto
+     *     da opção e vira cabeçalho;
+     *  2. o filtro casa nome OU setor, sem acento (mesmo `norm` da
+     *     busca da tela);
+     *  3. "Meu histórico" e o ALVO SELECIONADO nunca são filtrados.
+     *     Se a opção ativa sumisse, o <select> assumiria outro valor
+     *     sozinho — e o próximo `change` mandaria um POST para um
+     *     técnico que ninguém escolheu.
+     */
+    function renderViewOptions() {
+        var select = $('tp-h-view');
+        if (!select) {
+            return;
         }
-        return text;
+
+        var options = state.data.view.options;
+        var q = norm(state.viewFilter);
+        var kept = 0;
+
+        select.textContent = '';
+        select.appendChild(makeOption('self:0', 'Meu histórico'));
+
+        var groups = [];
+        var byGroup = {};
+
+        options.forEach(function (o) {
+            var key = 'user:' + o.id;
+            var match = (q === '') || matchesOption(o, q);
+            if (match) {
+                kept++;
+            } else if (key !== state.view) {
+                return; // fora do filtro e não é o alvo atual
+            }
+            var name = String(o.groups || '');
+            if (!byGroup[name]) {
+                byGroup[name] = [];
+                groups.push(name);
+            }
+            byGroup[name].push(o);
+        });
+
+        // Setor sem nome por último: é a exceção, não o cabeçalho.
+        groups.sort(function (a, b) {
+            if (a === '') { return 1; }
+            if (b === '') { return -1; }
+            return norm(a) < norm(b) ? -1 : (norm(a) > norm(b) ? 1 : 0);
+        });
+
+        groups.forEach(function (name) {
+            var target = select;
+            if (name !== '') {
+                target = document.createElement('optgroup');
+                target.label = name;
+                select.appendChild(target);
+            }
+            byGroup[name].forEach(function (o) {
+                target.appendChild(makeOption('user:' + o.id, optionText(o)));
+            });
+        });
+
+        select.value = state.view;
+        syncViewCount(kept, options.length);
+    }
+
+    /** O técnico casa o filtro pelo nome OU pelo setor. */
+    function matchesOption(o, q) {
+        return norm(String(o.label || '') + ' ' + String(o.groups || '')).indexOf(q) !== -1;
+    }
+
+    /**
+     * "4 de 187" — sem isso, quem digita e não acha ninguém conclui que
+     * o técnico não existe mais, em vez de que a lista está recortada.
+     */
+    function syncViewCount(kept, total) {
+        var count = $('tp-h-viewcount');
+        if (!count) {
+            return;
+        }
+        var on = (state.viewFilter !== '');
+        count.hidden = !on;
+        count.textContent = on ? (kept + ' de ' + total) : '';
+    }
+
+    /**
+     * Rótulo da opção — o texto de interface é do front, não do domínio.
+     * A-2a: o setor NÃO entra mais aqui quando existe, porque virou o
+     * cabeçalho do <optgroup>; repeti-lo dobraria a linha inteira.
+     */
+    function optionText(o) {
+        return o.label || ('#' + o.id);
     }
 
     function viewNoteText(v) {
@@ -621,6 +711,14 @@
         var view = $('tp-h-view');
         if (view) {
             view.addEventListener('change', changeView);
+        }
+        // A-2a: filtrar é local — remonta o <select> e NÃO faz POST.
+        var vfilter = $('tp-h-viewfilter');
+        if (vfilter) {
+            vfilter.addEventListener('input', function () {
+                state.viewFilter = vfilter.value.trim();
+                renderViewOptions();
+            });
         }
         var search = $('tp-h-search');
         if (search) {

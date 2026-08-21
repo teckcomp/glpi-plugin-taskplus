@@ -20,10 +20,18 @@
                quando o payload traz opções (gestor com técnicos no
                escopo). Quem popula é o JS: as opções vêm do servidor,
                não do template. #}
-            <label class="taskplus-toolbar2__label" id="tp-h-viewbox" hidden>
-                {{ __('Ver histórico de', 'taskplus') }}
-                <select id="tp-h-view"></select>
-            </label>
+            {# A-2a: a caixa deixou de ser <label> porque agora abriga DOIS
+               controles (filtro + seletor) — um <label> só pode rotular um.
+               A classe é a mesma, então o CSS da barra não muda. #}
+            <div class="taskplus-toolbar2__label" id="tp-h-viewbox" hidden>
+                <label for="tp-h-view">{{ __('Ver histórico de', 'taskplus') }}</label>
+                <input type="search" id="tp-h-viewfilter"
+                       class="taskplus-toolbar2__vfilter"
+                       placeholder="{{ __('Filtrar por nome ou setor', 'taskplus') }}"
+                       aria-label="{{ __('Filtrar por nome ou setor', 'taskplus') }}">
+                <select id="tp-h-view" class="taskplus-toolbar2__vselect"></select>
+                <span class="taskplus-toolbar2__vcount" id="tp-h-viewcount" hidden></span>
+            </div>
             <label class="taskplus-toolbar2__label">{{ __('De', 'taskplus') }}
                 <input type="date" id="tp-h-from">
             </label>

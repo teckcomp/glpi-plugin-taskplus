@@ -35,6 +35,9 @@
         // painel). Quem manda é a resposta do servidor — o syncView
         // reescreve isto a cada render.
         view: 'self:0',
+        // A-2a: texto do filtro do seletor de alvo. Puramente local —
+        // não vai ao servidor e não altera o recorte.
+        viewFilter: '',
         busy: false,
         data: emptyData()
     };
@@ -341,20 +344,17 @@
         state.view = selected;
 
         var box = $('tp-p-viewbox');
-        var select = $('tp-p-view');
         var hasOptions = (v.options.length > 0);
 
         if (box) {
             box.hidden = !hasOptions;
         }
-        if (select) {
-            select.textContent = '';
-            if (hasOptions) {
-                select.appendChild(makeOption('self:0', 'Meu painel'));
-                v.options.forEach(function (o) {
-                    select.appendChild(makeOption(o.kind + ':' + o.id, optionText(o)));
-                });
-                select.value = selected;
+        if (hasOptions) {
+            renderViewOptions();
+        } else {
+            var empty = $('tp-p-view');
+            if (empty) {
+                empty.textContent = '';
             }
         }
 
@@ -396,18 +396,118 @@
         return { kind: kind, id: Number(parts[1]) || 0 };
     }
 
-    /** Rótulo da opção — o texto de interface é do front, não do domínio. */
+    /**
+     * A-2a: monta o seletor aplicando o filtro digitado.
+     *
+     * Igual ao do Histórico, com uma diferença: as opções de EQUIPE
+     * ficam num grupo próprio no topo e NÃO são filtradas — são no
+     * máximo cinco linhas e é por elas que a leitura começa.
+     *
+     * Os técnicos vão em <optgroup> pelo setor; o filtro casa nome ou
+     * setor, sem acento; "Meu painel" e o alvo selecionado nunca somem
+     * (opção ativa filtrada faria o <select> trocar de valor sozinho e
+     * o próximo `change` mandaria um POST que ninguém pediu).
+     */
+    function renderViewOptions() {
+        var select = $('tp-p-view');
+        if (!select) {
+            return;
+        }
+
+        var options = state.data.view.options;
+        var q = norm(state.viewFilter);
+        var kept = 0;
+        var techs = 0;
+
+        select.textContent = '';
+        select.appendChild(makeOption('self:0', 'Meu painel'));
+
+        var teamBox = null;
+        var groups = [];
+        var byGroup = {};
+
+        options.forEach(function (o) {
+            if (o.kind === 'team') {
+                if (!teamBox) {
+                    teamBox = document.createElement('optgroup');
+                    teamBox.label = 'Equipe';
+                    select.appendChild(teamBox);
+                }
+                teamBox.appendChild(makeOption('team:' + o.id, optionText(o)));
+                return;
+            }
+            techs++;
+            var key = 'user:' + o.id;
+            var match = (q === '') || matchesOption(o, q);
+            if (match) {
+                kept++;
+            } else if (key !== state.view) {
+                return;
+            }
+            var name = String(o.groups || '');
+            if (!byGroup[name]) {
+                byGroup[name] = [];
+                groups.push(name);
+            }
+            byGroup[name].push(o);
+        });
+
+        groups.sort(function (a, b) {
+            if (a === '') { return 1; }
+            if (b === '') { return -1; }
+            return norm(a) < norm(b) ? -1 : (norm(a) > norm(b) ? 1 : 0);
+        });
+
+        groups.forEach(function (name) {
+            var target = select;
+            if (name !== '') {
+                target = document.createElement('optgroup');
+                target.label = name;
+                select.appendChild(target);
+            }
+            byGroup[name].forEach(function (o) {
+                target.appendChild(makeOption('user:' + o.id, optionText(o)));
+            });
+        });
+
+        select.value = state.view;
+        syncViewCount(kept, techs);
+    }
+
+    /** O técnico casa o filtro pelo nome OU pelo setor. */
+    function matchesOption(o, q) {
+        return norm(String(o.label || '') + ' ' + String(o.groups || '')).indexOf(q) !== -1;
+    }
+
+    /** Busca sem acento — mesma régua da tela Equipe e do Histórico. */
+    function norm(s) {
+        return String(s || '').toLowerCase().normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+    }
+
+    /** "4 de 187" — diz que a lista está recortada, não vazia. */
+    function syncViewCount(kept, total) {
+        var count = $('tp-p-viewcount');
+        if (!count) {
+            return;
+        }
+        var on = (state.viewFilter !== '');
+        count.hidden = !on;
+        count.textContent = on ? (kept + ' de ' + total) : '';
+    }
+
+    /**
+     * Rótulo da opção — o texto de interface é do front, não do domínio.
+     * A-2a: o setor do técnico NÃO entra mais aqui quando existe, porque
+     * virou o cabeçalho do <optgroup>.
+     */
     function optionText(o) {
         if (o.kind === 'team') {
             return (o.id === 0)
                 ? 'Equipe (todos os setores)'
                 : ('Equipe — ' + (o.label || ('#' + o.id)));
         }
-        var text = o.label || ('#' + o.id);
-        if (o.groups) {
-            text += ' (' + o.groups + ')';
-        }
-        return text;
+        return o.label || ('#' + o.id);
     }
 
     function viewNoteText(v) {
@@ -686,6 +786,14 @@
         var view = $('tp-p-view');
         if (view) {
             view.addEventListener('change', changeView);
+        }
+        // A-2a: filtrar é local — remonta o <select> e NÃO faz POST.
+        var vfilter = $('tp-p-viewfilter');
+        if (vfilter) {
+            vfilter.addEventListener('input', function () {
+                state.viewFilter = vfilter.value.trim();
+                renderViewOptions();
+            });
         }
 
         render();

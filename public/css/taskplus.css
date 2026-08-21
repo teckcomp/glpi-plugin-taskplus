@@ -528,6 +528,23 @@
     padding: 5px 8px; border: 1px solid #c8d0d9; border-radius: 6px;
     font-size: 0.82rem; background: #fff; color: #2c3947;
 }
+
+/* ===== A-2a — filtro do seletor de alvo (Painel · Histórico) ===== */
+.taskplus-toolbar2__vfilter {
+    flex: 0 1 170px; min-width: 110px; padding: 5px 8px;
+    border: 1px solid #c8d0d9; border-radius: 6px;
+    font-size: 0.82rem; background: #fff; color: #2c3947;
+}
+.taskplus-toolbar2__vfilter:focus {
+    outline: none; border-color: #2a76a8;
+    box-shadow: 0 0 0 2px rgba(42, 118, 168, 0.15);
+}
+/* Teto de largura: nome de técnico longo esticava o <select> e
+   empurrava o período para a linha de baixo. */
+.taskplus-toolbar2__vselect { max-width: 300px; }
+.taskplus-toolbar2__vcount {
+    font-size: 0.75rem; color: #6c7a89; white-space: nowrap;
+}
 .taskplus-toolbar2__note {
     flex-basis: 100%; padding: 6px 10px; border-radius: 6px;
     background: #fdf4e3; color: #9a6a1b; border: 1px solid #f0d9a8;
