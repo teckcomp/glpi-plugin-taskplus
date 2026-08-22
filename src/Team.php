@@ -750,13 +750,21 @@ class Team
     }
 
     /**
-     * Usuários MEMBROS dos grupos $groupIds, deduplicados:
-     * [users_id => ['label' => nome exibido, 'groups' => [nomes]]].
+     * Usuários MEMBROS dos grupos $groupIds **que usam o Task+**,
+     * deduplicados: [users_id => ['label' => nome, 'groups' => [nomes]]].
      *
      * Duas consultas simples e junção em PHP (mesma higiene do
      * Access::managedGroups): dispensa JOIN com glpi_users e o
      * erro 1052 junto. Usuário desativado ou excluído fica fora —
      * a régua de "quem aparece na Equipe" é gente que ainda trabalha.
+     *
+     * A-2b (decisão nº 58): entra também o corte por DIREITO. Em base de
+     * cliente os grupos do GLPI carregam contas que não são técnicos —
+     * um único grupo com 266 membros, quase todos contas de cliente —
+     * e elas nunca terão tarefa aqui, porque sequer acessam o plugin.
+     * Listá-las era ruído no seletor e na tela Equipe, e linha zerada no
+     * CSV do Painel. Sem o direito, sem tarefa; sem tarefa, fora do
+     * escopo do gestor.
      */
     private static function members(array $groupIds, array $groupNames): array
     {
@@ -778,6 +786,15 @@ class Team
                 $byUser[$uid][$gid] = $groupNames[$gid];
             }
         }
+
+        if ($byUser === []) {
+            return [];
+        }
+
+        // A-2b: o corte acontece ANTES da consulta a glpi_users, então
+        // ela já sai reduzida. Quem sobra é quem tem o direito.
+        $allowed = self::withTaskRight(array_keys($byUser));
+        $byUser  = array_intersect_key($byUser, array_flip($allowed));
 
         if ($byUser === []) {
             return [];
@@ -817,5 +834,71 @@ class Team
         }
 
         return $members;
+    }
+
+    /**
+     * A-2b (decisão nº 58): dos $userIds, quais têm o direito
+     * `plugin_taskplus_task` em ALGUM perfil. Devolve lista de ids.
+     *
+     * Duas consultas e junção em PHP, como o resto do arquivo — nada de
+     * JOIN entre glpi_profiles_users e glpi_profilerights, que traria o
+     * 1052 de `id` ambíguo junto.
+     *
+     * "Em algum perfil" é de propósito: no GLPI o usuário pode ter
+     * perfis diferentes por entidade, e basta um deles conceder o
+     * direito para que ele consiga entrar no plugin — logo, para que
+     * possa ter tarefa. Régua mais frouxa que a da tela é o certo aqui:
+     * a autorização de cada AÇÃO continua sendo revalidada no servidor
+     * a cada POST (T18); isto aqui decide só quem aparece na lista.
+     *
+     * Nenhum perfil com o direito → lista vazia → o gestor não vê
+     * ninguém. É a resposta correta, não um filtro que sumiu: se
+     * ninguém pode usar o plugin, não há equipe para acompanhar.
+     */
+    private static function withTaskRight(array $userIds): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        if ($userIds === []) {
+            return [];
+        }
+
+        $profiles = [];
+        foreach ($DB->request([
+            'FROM'  => 'glpi_profilerights',
+            'WHERE' => [
+                'glpi_profilerights.name'   => Access::RIGHTS['task'],
+                'glpi_profilerights.rights' => ['>', 0],
+            ],
+        ]) as $row) {
+            $pid = (int) ($row['profiles_id'] ?? 0);
+            if ($pid > 0) {
+                $profiles[] = $pid;
+            }
+        }
+
+        if ($profiles === []) {
+            return [];
+        }
+
+        $allowed = [];
+        foreach ($DB->request([
+            'FROM'  => 'glpi_profiles_users',
+            'WHERE' => [
+                // Regra do filtro que nunca some: lista vazia viraria
+                // ZERO resultados, nunca filtro ignorado. Aqui as duas
+                // já são garantidamente não vazias.
+                'glpi_profiles_users.users_id'    => $userIds ?: [0],
+                'glpi_profiles_users.profiles_id' => $profiles ?: [0],
+            ],
+        ]) as $row) {
+            $uid = (int) ($row['users_id'] ?? 0);
+            if ($uid > 0) {
+                $allowed[$uid] = true;
+            }
+        }
+
+        return array_keys($allowed);
     }
 }

@@ -34,6 +34,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ### Alterado
 
+- **O escopo do gestor passa a considerar só quem usa o plugin**
+  (decisão nº 58, achado A-2). As telas Equipe, Painel e Histórico
+  listavam todo usuário ativo dos grupos administrados — e em base de
+  cliente isso traz contas que estão num grupo do GLPI mas não são
+  técnicas (um único grupo com 266 membros). Elas nunca teriam tarefa
+  aqui, porque sequer acessam o plugin: eram ruído no seletor, na tela
+  Equipe e linha zerada no CSV do Painel. Agora só entra quem tem o
+  direito `plugin_taskplus_task` em algum perfil. Um técnico que apareça
+  a menos é sinal de perfil sem o direito — e, sem ele, essa pessoa não
+  consegue usar o Task+ de qualquer forma.
+
 - **Quem cria a rotina, controla a rotina** (decisão nº 57, achado A-1).
   Rotina que o gestor criou para um técnico — individual ou por setor —
   passa a ser editada, pausada, retomada e excluída **só pelo criador**.
