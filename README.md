@@ -111,6 +111,16 @@ modo CLI.
 | Limite | `cron_limit` tarefas por chamada (padrão 5) | sem limite |
 | Ponto fraco | **sem tráfego não roda**: o e-mail de fim de dia das 18:00 só sai quando alguém abrir uma página depois desse horário — sai atrasado, e se ninguém acessar naquele dia, aquele envio não acontece (não há rajada retroativa no dia seguinte) | nenhum |
 
+⚠️ **Em servidor com muitas ações automáticas, troque para o modo CLI na
+implantação.** O GLPI ordena a fila colocando as tarefas de plugin
+**depois** de todas as nativas e executa no máximo `cron_limit` por
+chamada (padrão **5**). Se houver cinco ou mais tarefas nativas
+permanentemente vencidas, as do plugin nunca chegam à vez: nada roda,
+e **sem erro, sem log e sem alterar o estado da tarefa** — o sintoma é a
+tela Hoje vazia, que o técnico interpreta como "não tenho tarefa". Além
+do modo CLI, vale conferir se o `cron_limit` do servidor comporta o
+número de ações automáticas instaladas.
+
 Para trocar: *Configurar → Ações automáticas* → a ação → **Modo de
 execução**. Nada no plugin precisa ser reinstalado. Crontab sugerido:
 
@@ -120,8 +130,8 @@ execução**. Nada no plugin precisa ser reinstalado. Crontab sugerido:
 
 ## Requisitos
 
-- GLPI **11.0.x** (desenvolvido e homologado no 11.0.6)
-- PHP 8.3, MySQL/MariaDB
+- GLPI **11.0.x** (homologado no 11.0.8, em produção no 11.0.6)
+- PHP 8.3 ou superior (em uso no 8.4), MySQL/MariaDB
 - Nenhum crontab é **exigido** — as ações automáticas funcionam em modo
   GLPI assim que o plugin é ativado. Em produção, o modo CLI é
   recomendado (ver *Agendamento*, acima)

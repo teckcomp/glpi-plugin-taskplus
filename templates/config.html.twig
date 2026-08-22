@@ -8,7 +8,7 @@
    Twig do GLPI é strict: TODA variável usada aqui é passada pelo
    front/config.form.php. #}
 
-<link rel="stylesheet" href="{{ plugin_web_dir }}/css/taskplus.css">
+<link rel="stylesheet" href="{{ plugin_web_dir }}/css/taskplus.css?v={{ plugin_version }}">
 
 <div class="taskplus-app" id="taskplus-config"
      data-csrf="{{ csrf_token }}"

@@ -5,6 +5,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.2.1-beta] — 2026-08-22
+
+Primeira correção de campo do piloto de 30 dias: quatro achados de uso
+real, todos **sem tocar em schema, direitos ou ações automáticas**.
+
 ### Adicionado
 
 - **Filtro no seletor de alvo** do Painel e do Histórico (achado A-2).
@@ -65,6 +70,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Lote reconstituído a partir dos próprios dados (criador, instante de
   criação e campos da recorrência) — **sem coluna nova e sem
   reinstalação**, valendo também para as rotinas já criadas.
+
+### Corrigido
+
+- **A folha de estilo passa a carregar com a versão do plugin na URL**
+  (`taskplus.css?v=…`), como o JS já fazia. Sem isso, o navegador de
+  quem já usava o plugin servia o CSS antigo depois de uma atualização e
+  a tela saía com estilo de uma versão e marcação de outra — e a única
+  saída era pedir Ctrl+F5 máquina por máquina.
 
 ## [0.2.0-beta] — 2026-08-13
 
