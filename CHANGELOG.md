@@ -5,7 +5,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
-## [0.2.1-beta] — 2026-08-22
+## [0.2.1-beta] — 2026-08-21
 
 Primeira correção de campo do piloto de 30 dias: quatro achados de uso
 real, todos **sem tocar em schema, direitos ou ações automáticas**.

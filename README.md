@@ -10,7 +10,7 @@ Desenvolvido pela [Teckcomp I.T. Services](https://github.com/teckcomp).
 Derivado da base do [ProjectPlus](https://github.com/teckcomp/glpi-plugin-projectplus),
 sem os módulos de Projetos, Modelos, Orçamento, Custos e Relatórios.
 
-**Versão atual:** `0.1.0-beta` · **GLPI:** 11.0.x · **Licença:** GPL-2.0-or-later
+**Versão atual:** `0.2.1-beta` · **GLPI:** 11.0.x · **Licença:** GPL-2.0-or-later
 
 ---
 
@@ -149,7 +149,7 @@ plugin, e o GLPI não o reconhece sob outro nome.
 
 ```bash
 cd /var/www/html/glpi/plugins
-git clone --branch v0.2.0-beta \
+git clone --branch v0.2.1-beta \
   https://github.com/teckcomp/glpi-plugin-taskplus.git taskplus
 chown -R www-data:www-data taskplus
 sudo -u www-data php ../bin/console plugin:install taskplus
@@ -175,7 +175,7 @@ Por git:
 
 ```bash
 cd /var/www/html/glpi/plugins/taskplus
-git fetch --tags && git checkout v0.2.0-beta
+git fetch --tags && git checkout v0.2.1-beta
 chown -R www-data:www-data .
 cd /var/www/html/glpi
 sudo -u www-data php bin/console plugin:install --force taskplus
