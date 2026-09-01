@@ -10,7 +10,7 @@ Desenvolvido pela [Teckcomp I.T. Services](https://github.com/teckcomp).
 Derivado da base do [ProjectPlus](https://github.com/teckcomp/glpi-plugin-projectplus),
 sem os módulos de Projetos, Modelos, Orçamento, Custos e Relatórios.
 
-**Versão atual:** `0.2.1-beta` · **GLPI:** 11.0.x · **Licença:** GPL-2.0-or-later
+**Versão atual:** `0.2.2-beta` · **GLPI:** 11.0.x · **Licença:** GPL-2.0-or-later
 
 ---
 
@@ -51,9 +51,9 @@ filtro por período cobrem a tela inteira.
 | **Quadro** | kanban com as 4 colunas de sistema + fases por setor, arrastar e soltar |
 | **Rotinas** | CRUD de rotinas (diária/só dias úteis, semanal, mensal por dia fixo ou posição) |
 | **Semana** | grade seg–dom somente leitura |
-| **Equipe** | (gestor) acompanhar técnicos, concluir/editar/pendenciar tarefas deles, criar avulsas e rotinas para técnico ou para todo o setor, dialogar nas tarefas |
+| **Equipe** | (gestor) acompanhar técnicos, concluir/editar/pendenciar tarefas deles, criar avulsas e rotinas para técnico ou para todo o setor, dialogar nas tarefas, **validar ou reprovar** a execução das tarefas que criou |
 | **Painel** | indicadores pessoais: heatmap de conclusão, melhor dia da semana, taxa (feitas ÷ devidas) |
-| **Histórico** | trilha auditável por dia, com restauração de avulsa excluída (só o dono) |
+| **Histórico** | trilha auditável por dia, leitura do diálogo de cada tarefa, com restauração de avulsa excluída (só o dono) |
 | **Configurações** | fases por setor, horários dos e-mails, opções gerais |
 
 Todas as telas trazem o **sino de alertas** no cabeçalho da sidebar.
@@ -149,7 +149,7 @@ plugin, e o GLPI não o reconhece sob outro nome.
 
 ```bash
 cd /var/www/html/glpi/plugins
-git clone --branch v0.2.1-beta \
+git clone --branch v0.2.2-beta \
   https://github.com/teckcomp/glpi-plugin-taskplus.git taskplus
 chown -R www-data:www-data taskplus
 sudo -u www-data php ../bin/console plugin:install taskplus
@@ -175,7 +175,7 @@ Por git:
 
 ```bash
 cd /var/www/html/glpi/plugins/taskplus
-git fetch --tags && git checkout v0.2.1-beta
+git fetch --tags && git checkout v0.2.2-beta
 chown -R www-data:www-data .
 cd /var/www/html/glpi
 sudo -u www-data php bin/console plugin:install --force taskplus
