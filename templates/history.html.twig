@@ -5,7 +5,10 @@
 <div class="taskplus-app" id="taskplus-history"
      data-csrf="{{ csrf_token }}"
      data-user-id="{{ current_user_id }}"
-     data-ajax-url="{{ plugin_web_dir }}/ajax/history.php">
+     data-ajax-url="{{ plugin_web_dir }}/ajax/history.php"
+     {# 11a: download do anexo do diálogo — o gate é do próprio plugin
+        (ajax/attachment.php), a mesma régua da tela Equipe #}
+     data-attachments-url="{{ plugin_web_dir }}/ajax/attachment.php">
 
     {# ================= COLUNA ESQUERDA: título + sidebar ================= #}
     {% include '@taskplus/_sidebar.html.twig' with {'active': 'history'} %}
@@ -97,6 +100,25 @@
 
         {# Lista agrupada por dia (mais recentes primeiro), do JS #}
         <div class="taskplus-hist" id="tp-h-list"></div>
+    </div>
+</div>
+
+{# ================= 11a — MODAL do diálogo (SOMENTE LEITURA) ==========
+   A trilha da tarefa: comentários e anexos do dia em que ela aconteceu.
+   Sem compositor de propósito — quem responde é a tela do dia, onde a
+   régua de participação (decisão nº 28) vale inteira. =============== #}
+<div class="taskplus-modal" id="tp-h-dialog-modal" hidden>
+    <div class="taskplus-modal__box">
+        <h3>{{ __('Diálogo', 'taskplus') }}</h3>
+        <p class="taskplus-modal__subject" id="tp-h-d-title"></p>
+        <div class="taskplus-dialog">
+            <ul class="taskplus-dialog__list" id="tp-h-d-list"></ul>
+            <p class="taskplus-dialog__empty" id="tp-h-d-empty" hidden>{{ __('Nenhum comentário ainda.', 'taskplus') }}</p>
+            <p class="taskplus-dialog__empty" id="tp-h-d-readonly">{{ __('Leitura da trilha. Para responder, abra a tarefa na tela do dia.', 'taskplus') }}</p>
+        </div>
+        <div class="taskplus-modal__actions">
+            <button type="button" class="btn btn-ghost-secondary" id="tp-h-d-close">{{ __('Fechar', 'taskplus') }}</button>
+        </div>
     </div>
 </div>
 

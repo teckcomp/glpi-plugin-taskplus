@@ -147,6 +147,17 @@ class History
         // usuário — o gestor pela Equipe), resolvidos em LOTE.
         $items = self::fillActorLabels($items);
 
+        // 11a: trilha do diálogo — contagem de comentários e de anexos
+        // por item, em UMA consulta para o recorte inteiro. É o que
+        // decide se a linha ganha o botão "Diálogo".
+        $counts = [];
+        try {
+            $counts = self::dialogCountsFor(array_column($items, 'id'));
+        } catch (\Throwable $e) {
+            $counts = [];
+        }
+        $items = self::applyDialog($items, $counts);
+
         $out             = self::assemble($items, $from, $to, $clamped, $today);
         $view['options'] = $options;
         $out['view']     = $view;
@@ -509,6 +520,97 @@ class History
         ];
     }
 
+    // =====================================================================
+    // 11a — trilha do diálogo (leitura no Histórico)
+    // =====================================================================
+
+    /**
+     * 11a — quantos comentários VIVOS e quantos ANEXOS cada ocorrência
+     * tem. UMA consulta para o recorte inteiro: a tela já lista o
+     * período todo de um alvo só, e uma consulta por item devolveria o
+     * Histórico de 180 dias da produção em N+1.
+     *
+     * Conta em PHP de propósito: COUNT com GROUPBY no iterator do GLPI
+     * 11 DESCARTA os campos do SELECT — é a armadilha de sempre.
+     *
+     * Devolve SEMPRE uma chave por ocorrência pedida (zeros quando não
+     * há diálogo), para o chamador nunca precisar de `??`.
+     */
+    public static function dialogCountsFor(array $occIds): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $ids = [];
+        foreach ($occIds as $raw) {
+            $id = (int) $raw;
+            if ($id > 0) {
+                $ids[$id] = true;
+            }
+        }
+
+        $out = [];
+        foreach (array_keys($ids) as $id) {
+            $out[$id] = ['comments' => 0, 'files' => 0];
+        }
+        if ($out === []) {
+            return $out;
+        }
+
+        foreach ($DB->request([
+            'SELECT' => [
+                Comment::TABLE . '.plugin_taskplus_occurrences_id',
+                Comment::TABLE . '.documents_id',
+            ],
+            'FROM'  => Comment::TABLE,
+            'WHERE' => [
+                Comment::TABLE . '.plugin_taskplus_occurrences_id' => array_keys($ids),
+                Comment::TABLE . '.is_deleted'                     => 0,
+            ],
+        ]) as $row) {
+            $occId = (int) ($row['plugin_taskplus_occurrences_id'] ?? 0);
+            if (!isset($out[$occId])) {
+                continue;
+            }
+            $out[$occId]['comments']++;
+            if (((int) ($row['documents_id'] ?? 0)) > 0) {
+                $out[$occId]['files']++;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * 11a — carimba `dialog_count` e `file_count` em cada item. PURA
+     * (sem banco): é o que o harness valida.
+     *
+     * Item EXCLUÍDO sai sempre com zero, e isso é decisão, não
+     * descuido: o Comment::listFor só enxerga ocorrência viva
+     * (Comment::occRow filtra `is_deleted = 0`), então oferecer botão
+     * de diálogo numa tarefa excluída abriria um modal vazio. O
+     * "Restaurar" da própria tela devolve a tarefa — e o diálogo volta
+     * junto, porque o comentário nunca foi apagado.
+     */
+    public static function applyDialog(array $items, array $counts): array
+    {
+        foreach ($items as &$item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $id  = (int) ($item['id'] ?? 0);
+            $row = $counts[$id] ?? ['comments' => 0, 'files' => 0];
+
+            $isDeleted = ((string) ($item['state'] ?? '')) === 'deleted';
+
+            $item['dialog_count'] = $isDeleted ? 0 : (int) ($row['comments'] ?? 0);
+            $item['file_count']   = $isDeleted ? 0 : (int) ($row['files'] ?? 0);
+        }
+        unset($item);
+
+        return $items;
+    }
+
     /**
      * Marca o estado "pendente" nos itens vivos com pendência ativa.
      * Excluída/pulada/concluída NÃO viram pendentes — a precedência do
@@ -666,9 +768,85 @@ class History
                 return ['success' => true, 'message' => ''];
             case 'restore':
                 return self::restore($input, $usersId);
+            case 'dialog':
+                return self::dialogFor($input, $usersId);
             default:
                 return ['success' => false, 'message' => __('Ação desconhecida', 'taskplus')];
         }
+    }
+
+    /**
+     * 11a — LEITURA do diálogo de uma ocorrência a partir do Histórico.
+     *
+     * A tela existe para auditar o que já aconteceu, então esta ação é
+     * estritamente de leitura: devolve a thread e nada mais. Quem
+     * escreve continua sendo a tela do dia (Hoje/Quadro/Equipe), onde
+     * a régua da decisão nº 28 vale inteira.
+     *
+     * Escopo revalidado AQUI, a cada POST (T18) — nunca herdado do
+     * `view` que o front mandou:
+     *  - dono = o próprio usuário: leitura pela régua de participação
+     *    do Comment::listFor (dono ou criador);
+     *  - dono = técnico do escopo do gestor: `$managerRead`, com o
+     *    escopo resolvido AGORA pelo mesmo resolveView do restore.
+     * Falha de escopo devolve a MESMA mensagem neutra de "não
+     * encontrada": a resposta não conta ao gestor que a tarefa existe.
+     *
+     * NÃO marca a thread como lida, ao contrário da Equipe (9a-2).
+     * Auditar não é participar: se ler no Histórico zerasse o não lido,
+     * o gestor perderia na tela Equipe o aviso de que alguém falou com
+     * ele — e o sino existe para o trabalho do dia, não para a trilha.
+     */
+    private static function dialogFor(array $input, int $usersId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $notFound = [
+            'success'  => false,
+            'message'  => __('Tarefa não encontrada', 'taskplus'),
+            'comments' => [],
+        ];
+
+        $id = (int) ($input['id'] ?? 0);
+        if ($id <= 0) {
+            return $notFound;
+        }
+
+        // SEM filtro de dono: a posse é decidida abaixo, porque o dono
+        // legítimo pode ser o próprio OU um técnico do escopo.
+        $row = null;
+        foreach ($DB->request([
+            'FROM'  => Occurrence::TABLE,
+            'WHERE' => [Occurrence::TABLE . '.id' => $id],
+        ]) as $r) {
+            $row = $r;
+            break;
+        }
+        if ($row === null) {
+            return $notFound;
+        }
+
+        $ownerId = (int) ($row['users_id'] ?? 0);
+        $isSelf  = ($ownerId === $usersId);
+
+        if (!$isSelf) {
+            $scope = Access::canTeam() ? Team::scope($usersId) : ['groups' => [], 'members' => []];
+            $view  = self::resolveView($usersId, 'user', $ownerId, self::optionsFor($scope, $usersId));
+            if ($view['is_self'] || (int) $view['id'] !== $ownerId) {
+                return $notFound;
+            }
+        }
+
+        return [
+            'success'  => true,
+            'message'  => '',
+            'id'       => $id,
+            // Ocorrência excluída não tem diálogo legível (o occRow do
+            // Comment só enxerga viva) — devolve lista vazia, coerente
+            // com o applyDialog, que nem oferece o botão nesse caso.
+            'comments' => Comment::listFor($id, $usersId, !$isSelf),
+        ];
     }
 
     /**

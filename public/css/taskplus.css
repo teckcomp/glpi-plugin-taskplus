@@ -765,6 +765,9 @@
 /* --- 6c-2: acao "Restaurar" no card excluida do Historico ------------- */
 .taskplus-hcard__actions { margin-top: 6px; }
 .taskplus-hcard__restore { font-size: 0.75rem; padding: 2px 12px; }
+/* 11a: botão do diálogo — mesma escala do restaurar; só aparece quando
+   a tarefa tem comentário, então não compete com o resto da linha. */
+.taskplus-hcard__dialog { font-size: 0.75rem; padding: 2px 12px; }
 
 /* --- 7a: sino de alertas na sidebar (padrão do ProjectPlus) ----------- */
 /* 7a-3: ancorado no canto superior direito do cabeçalho — na linha da

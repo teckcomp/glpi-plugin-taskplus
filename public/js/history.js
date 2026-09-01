@@ -49,6 +49,10 @@
         viewFilter: '',
         search: '',
         busy: false,
+        // 11a: URL do download de anexo e tarefa cujo diálogo está
+        // aberto (null = modal fechado)
+        attachUrl: '',
+        dialogItem: null,
         data: emptyData()
     };
 
@@ -179,7 +183,12 @@
             pending_by_other: !!i.pending_by_other,
             pending_by_label: (typeof i.pending_by_label === 'string') ? i.pending_by_label : '',
             created_by_other: !!i.created_by_other,
-            created_by_label: (typeof i.created_by_label === 'string') ? i.created_by_label : ''
+            created_by_label: (typeof i.created_by_label === 'string') ? i.created_by_label : '',
+            // 11a: ausentes = zero. Aba aberta antes da atualização
+            // (payload velho) simplesmente não mostra o botão — nunca
+            // mostra um botão que abriria modal vazio.
+            dialog_count: Number(i.dialog_count) || 0,
+            file_count: Number(i.file_count) || 0
         };
     }
 
@@ -763,6 +772,21 @@
             c.appendChild(el('div', 'taskplus-hcard__desc', item.description));
         }
 
+        // 11a: o botão só existe quando HÁ diálogo. Ausência de botão é
+        // informação para quem audita ("esta tarefa não deixou
+        // evidência") — botão que abre modal vazio não é.
+        if (item.dialog_count > 0) {
+            var dact = el('div', 'taskplus-hcard__actions');
+            var dbtn = el('button', 'btn btn-sm btn-outline-secondary taskplus-hcard__dialog',
+                dialogLabel(item));
+            dbtn.type = 'button';
+            dbtn.addEventListener('click', function () {
+                openDialog(item);
+            });
+            dact.appendChild(dbtn);
+            c.appendChild(dact);
+        }
+
         // 9b-1/9b-2: quem diz se a tela pode agir é o servidor. No modo
         // "trilha de um técnico" o can_restore vem ligado para o gestor
         // do setor — e o restore() revalida o escopo inteiro no POST.
@@ -805,6 +829,135 @@
     // Init
     // ------------------------------------------------------------------
 
+    // ------------------------------------------------------------------
+    // 11a — diálogo da tarefa (LEITURA)
+    // ------------------------------------------------------------------
+
+    /**
+     * Rótulo do botão: contagem sempre, clipe só quando há anexo. O
+     * clipe é o que faz a evidência saltar aos olhos numa lista longa.
+     */
+    function dialogLabel(item) {
+        var n = item.dialog_count > 9 ? '9+' : String(item.dialog_count);
+        return 'Diálogo (' + n + ')' + (item.file_count > 0 ? ' \uD83D\uDCCE' : '');
+    }
+
+    function openDialog(item) {
+        state.dialogItem = item;
+        var title = $('tp-h-d-title');
+        if (title) {
+            // O dia entra no título: no Histórico duas ocorrências da
+            // MESMA rotina têm o mesmo nome, e sem a data o leitor não
+            // sabe qual delas está lendo.
+            title.textContent = (item.name || '(sem título)')
+                + (item.date_label ? ' — ' + item.date_label : '');
+        }
+        renderDialog([]);
+        var modal = $('tp-h-dialog-modal');
+        if (modal) {
+            modal.hidden = false;
+        }
+        postDialog(item);
+    }
+
+    function closeDialog() {
+        var modal = $('tp-h-dialog-modal');
+        if (modal) {
+            modal.hidden = true;
+        }
+        state.dialogItem = null;
+    }
+
+    /**
+     * POST próprio: mesma trava de busy e mesma rotação de token do
+     * post() principal, mas a resposta NÃO passa pelo safeData nem
+     * dispara re-render — o servidor não devolve payload para
+     * `action=dialog` de propósito (a trilha não mudou, e recalcular o
+     * recorte a cada abertura sairia caro no período de 180 dias).
+     */
+    function postDialog(item) {
+        if (state.busy || !item) {
+            return;
+        }
+        state.busy = true;
+        var asked = item;
+
+        var fd = new FormData();
+        fd.append('action', 'dialog');
+        fd.append('id', String(item.id));
+        fd.append('_glpi_csrf_token', state.csrf);
+
+        // Sem o Accept o core devolve a página de erro em HTML e o
+        // resp.json() abaixo quebra (9e-2).
+        fetch(state.ajaxUrl, {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        })
+            .then(function (resp) { return resp.json(); })
+            .then(function (res) {
+                state.busy = false;
+                if (res && typeof res.csrf === 'string' && res.csrf !== '') {
+                    state.csrf = res.csrf;
+                }
+                // O modal pode ter sido fechado (ou trocado de tarefa)
+                // enquanto a resposta vinha — thread de OUTRA tarefa não
+                // pode aterrissar na aberta agora.
+                if (!state.dialogItem || state.dialogItem.id !== asked.id) {
+                    return;
+                }
+                if (!res || !res.success) {
+                    toast((res && res.message) ? res.message : 'Erro ao abrir o diálogo', true);
+                }
+                renderDialog((res && Array.isArray(res.comments)) ? res.comments : []);
+            })
+            .catch(function () {
+                state.busy = false;
+                toast('Falha de comunicação com o servidor', true);
+            });
+    }
+
+    /** Thread do modal — textContent SEMPRE (nada de HTML do usuário). */
+    function renderDialog(comments) {
+        var list = $('tp-h-d-list');
+        if (!list) {
+            return;
+        }
+        list.textContent = '';
+        var empty = $('tp-h-d-empty');
+        if (empty) {
+            empty.hidden = comments.length > 0;
+        }
+        comments.forEach(function (c) {
+            var li = el('li', 'taskplus-dialog__item');
+
+            var head = el('div', 'taskplus-dialog__meta');
+            var who = document.createElement('strong');
+            who.textContent = c.author || '(usuário removido)';
+            head.appendChild(who);
+            head.appendChild(el('span', '', c.date || ''));
+            li.appendChild(head);
+
+            li.appendChild(el('div', 'taskplus-dialog__text', c.content || ''));
+
+            // Anexo: download servido pelo plugin, com o gate próprio do
+            // ajax/attachment.php (participante OU gestor do dono) — a
+            // mesma régua que já vale na Equipe, sem nada de novo aqui.
+            if (c.file_name) {
+                var fl = document.createElement('a');
+                fl.className = 'taskplus-dialog__attach';
+                fl.href = state.attachUrl + '?comment=' + encodeURIComponent(String(c.id));
+                fl.target = '_blank';
+                fl.rel = 'noopener';
+                fl.textContent = '\uD83D\uDCCE ' + c.file_name;
+                li.appendChild(fl);
+            }
+            list.appendChild(li);
+        });
+        list.scrollTop = list.scrollHeight;
+    }
+
     function init() {
         state.root = $('taskplus-history');
         if (!state.root) {
@@ -812,6 +965,7 @@
         }
         state.ajaxUrl = state.root.getAttribute('data-ajax-url') || '';
         state.csrf = state.root.getAttribute('data-csrf') || '';
+        state.attachUrl = state.root.getAttribute('data-attachments-url') || '';
 
         var dataEl = $('taskplus-history-data');
         if (dataEl) {
@@ -822,6 +976,10 @@
             }
         }
 
+        var dclose = $('tp-h-d-close');
+        if (dclose) {
+            dclose.addEventListener('click', closeDialog);
+        }
         var apply = $('tp-h-apply');
         if (apply) {
             apply.addEventListener('click', applyPeriod);
@@ -861,7 +1019,12 @@
     // (T14): o harness chama window.TaskplusHistory.init() na mão.
     // `csv` exposto para o harness conferir o TEXTO gerado sem depender
     // de Blob/createObjectURL, que o jsdom não implementa.
-    window.TaskplusHistory = { init: init, csv: buildCsv, csvName: csvName };
+    window.TaskplusHistory = {
+        init: init, csv: buildCsv, csvName: csvName,
+        // 11a: expostos para o harness conferir rótulo e thread sem
+        // depender de rede
+        dialogLabel: dialogLabel, renderDialog: renderDialog
+    };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

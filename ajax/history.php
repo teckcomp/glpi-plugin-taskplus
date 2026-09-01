@@ -69,6 +69,20 @@ $action  = (string) ($_POST['action'] ?? '');
 
 $result = History::handle($action, $_POST, $usersId);
 
+// 11a — a leitura do diálogo NÃO recarrega a trilha. Toda outra ação
+// devolve o payload do período para o JS re-renderizar; abrir um modal
+// de leitura não muda nada na lista, e recalcular o recorte (que na
+// produção chega a 180 dias) a cada clique em "Diálogo" seria pagar a
+// consulta mais cara da tela por uma informação que ela já tem. O JS
+// trata esta resposta por um caminho próprio (postDialog) e não passa
+// pelo safeData.
+if ($action === 'dialog') {
+    $result['csrf'] = Session::getNewCSRFToken();
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode($result, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    return;
+}
+
 // O período viaja em TODO POST (o JS o anexa) — a resposta devolve o
 // MESMO recorte que o usuário pediu. A normalização (data inválida,
 // par invertido, default de 30, teto de 180) é do historyRange.
