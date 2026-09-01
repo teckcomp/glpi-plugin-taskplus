@@ -271,10 +271,14 @@ class Board
         ];
         if ($isDone) {
             // Sair de Concluídas = desfazer a conclusão (mesmo efeito do
-            // clique no check da tela Hoje).
-            $fields['is_done']       = 0;
-            $fields['done_date']     = null;
-            $fields['users_id_done'] = 0;
+            // clique no check da tela Hoje). 11b: a validação sai junto —
+            // conclusão desfeita não fica aguardando nem validada.
+            $fields['is_done']           = 0;
+            $fields['done_date']         = null;
+            $fields['users_id_done']     = 0;
+            $fields['validation']        = 0;
+            $fields['users_id_validate'] = 0;
+            $fields['validation_date']   = null;
         }
 
         $DB->update(
@@ -353,6 +357,12 @@ class Board
                 'is_done'       => 1,
                 'done_date'     => date('Y-m-d H:i:s'),
                 'users_id_done' => $usersId,
+                // 11b: MESMA régua do toggleFor — tarefa criada por
+                // gestor entra na fila de validação ao ser concluída,
+                // por qualquer caminho de conclusão.
+                'validation'        => Occurrence::validationOnDone($row),
+                'users_id_validate' => 0,
+                'validation_date'   => null,
                 'date_mod'      => date('Y-m-d H:i:s'),
             ],
             [Occurrence::TABLE . '.id' => (int) $row['id']]

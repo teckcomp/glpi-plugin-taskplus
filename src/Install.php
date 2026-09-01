@@ -123,6 +123,14 @@ class Install
             'is_done'          => 'TINYINT NOT NULL DEFAULT 0',
             'done_date'        => 'TIMESTAMP NULL DEFAULT NULL',
             'users_id_done'    => 'INT %SIGN% NOT NULL DEFAULT 0',
+            // 11b (decisão nº 61): validação da execução pelo gestor.
+            // 0 = não se aplica · 1 = aguardando · 2 = validada.
+            // Base existente ganha a coluna com DEFAULT 0 e SEM varredura
+            // retroativa: a linha de base do piloto fica intacta — só
+            // conclusão NOVA de tarefa criada por gestor entra na fila.
+            'validation'       => 'TINYINT NOT NULL DEFAULT 0',
+            'users_id_validate' => 'INT %SIGN% NOT NULL DEFAULT 0',
+            'validation_date'  => 'TIMESTAMP NULL DEFAULT NULL',
             'is_skipped'       => 'TINYINT NOT NULL DEFAULT 0',
             'skip_reason'      => 'TEXT',
             'skip_date'        => 'TIMESTAMP NULL DEFAULT NULL',
@@ -276,6 +284,9 @@ class Install
                     `is_done`          TINYINT NOT NULL DEFAULT 0,
                     `done_date`        TIMESTAMP NULL DEFAULT NULL COMMENT 'quando concluiu',
                     `users_id_done`    INT {$sign} NOT NULL DEFAULT 0 COMMENT 'quem concluiu',
+                    `validation`       TINYINT NOT NULL DEFAULT 0 COMMENT '11b: 0 nao se aplica, 1 aguardando, 2 validada',
+                    `users_id_validate` INT {$sign} NOT NULL DEFAULT 0 COMMENT 'quem validou',
+                    `validation_date`  TIMESTAMP NULL DEFAULT NULL,
                     `is_skipped`       TINYINT NOT NULL DEFAULT 0 COMMENT 'pulada (auditoria)',
                     `is_deleted`       TINYINT NOT NULL DEFAULT 0,
                     `date_creation`    TIMESTAMP NULL DEFAULT NULL,

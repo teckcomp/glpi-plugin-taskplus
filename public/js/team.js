@@ -31,6 +31,8 @@
         // Modais do 5b-2: {item, tech} em edição / pendência
         editCtx: null,
         pendCtx: null,
+        // 11b: {item, tech} da reprovação em curso
+        rejectCtx: null,
         // Modal de criação do 5c-1: {tech} de destino
         createCtx: null,
         // 8e-2: {item, tech} do diálogo aberto
@@ -119,6 +121,10 @@
             can_edit: !!i.can_edit,
             can_pend: !!i.can_pend,
             can_unpend: !!i.can_unpend,
+            // 11b: estado da validação (0/1/2) e a ação de validar,
+            // decidida no SERVIDOR como todo can_* (payload antigo = 0)
+            validation: (typeof i.validation === 'number') ? i.validation : 0,
+            can_validate: !!i.can_validate,
             is_done: !!i.is_done,
             // Campos do modal de edição
             description: (typeof i.description === 'string') ? i.description : '',
@@ -429,6 +435,63 @@
         });
     }
 
+    /**
+     * 11b: fila de validação (decisão nº 61) — seção no TOPO da tela
+     * com as execuções aguardando, uma linha por (técnico, tarefa),
+     * para o gestor não precisar expandir técnico a técnico. Respeita
+     * o filtro de setor; some quando não há nada aguardando. As mesmas
+     * ações da linha expandida (o servidor decide o can_validate e
+     * revalida o escopo no POST).
+     */
+    function renderQueue(box) {
+        var rows = [];
+        visibleTechs().forEach(function (tech) {
+            tech.items.forEach(function (item) {
+                if (item.can_validate) {
+                    rows.push({ item: item, tech: tech });
+                }
+            });
+        });
+        if (rows.length === 0) {
+            return;
+        }
+
+        var sec = el('div', 'taskplus-team__queue');
+        sec.appendChild(el('h3', 'taskplus-team__queue-title',
+            'Aguardando validação (' + rows.length + ')'));
+
+        rows.forEach(function (entry) {
+            var line = el('div', 'taskplus-team__queue-row');
+            line.appendChild(el('span', 'taskplus-team__queue-tech', entry.tech.label));
+            line.appendChild(el('span', 'taskplus-team__title', entry.item.name));
+            if (entry.item.detail) {
+                line.appendChild(el('span', 'taskplus-team__detail', entry.item.detail));
+            }
+
+            var ok = el('button', 'taskplus-team__act taskplus-team__act--validate', 'Validar');
+            ok.type = 'button';
+            ok.addEventListener('click', function () {
+                post({
+                    action: 'validate',
+                    id: entry.item.id,
+                    tech_id: entry.tech.id
+                });
+            });
+            line.appendChild(ok);
+
+            var no = el('button', 'taskplus-team__act taskplus-team__act--reject', 'Reprovar');
+            no.type = 'button';
+            no.addEventListener('click', function () {
+                openRejectModal(entry.item, entry.tech);
+            });
+            line.appendChild(no);
+
+            sec.appendChild(line);
+        });
+
+        box.appendChild(sec);
+    }
+
     function render() {
         var box = $('tp-team');
         if (!box) {
@@ -437,6 +500,7 @@
         box.textContent = '';
 
         renderFilter(box);
+        renderQueue(box);
 
         var searching = state.search !== '';
         var techs = visibleTechs();
@@ -583,6 +647,17 @@
             row.appendChild(el('span', 'taskplus-badge taskplus-badge--project', 'Projeto'));
         }
 
+        // 11b: estado da validação da execução (decisão nº 61) —
+        // badge em item concluído que aguarda ou já foi validado
+        if (item.status === 'done' && item.validation === 1) {
+            row.appendChild(el('span', 'taskplus-badge taskplus-badge--validate',
+                'Aguardando validação'));
+        }
+        if (item.status === 'done' && item.validation === 2) {
+            row.appendChild(el('span', 'taskplus-badge taskplus-badge--validated',
+                'Validada'));
+        }
+
         // Auditoria: concluída (5b-1) ou colocada pendente (5b-2) por
         // OUTRO usuário (gestor/admin)
         if (item.status === 'done' && item.done_by) {
@@ -645,6 +720,20 @@
         if (item.can_edit) {
             actBtn('Editar', 'taskplus-team__act--edit', function () {
                 openEditModal(item, tech);
+            });
+        }
+        // 11b: validar/reprovar a execução — a guarda é o can_validate
+        // do SERVIDOR (concluída + aguardando), revalidado no POST
+        if (item.can_validate) {
+            actBtn('Validar', 'taskplus-team__act--validate', function () {
+                post({
+                    action: 'validate',
+                    id: item.id,
+                    tech_id: tech.id
+                });
+            });
+            actBtn('Reprovar', 'taskplus-team__act--reject', function () {
+                openRejectModal(item, tech);
             });
         }
 
@@ -726,6 +815,44 @@
             category: $('tp-t-e-category').value.trim(),
             description: $('tp-t-e-description').value.trim()
         }, closeEditModal);
+    }
+
+    /**
+     * 11b: modal de reprovação — o comentário é OBRIGATÓRIO (decisão
+     * nº 61) e vai gravado no diálogo da tarefa pelo servidor. O JS
+     * barra o vazio para poupar uma ida; a regra REAL vive no
+     * Team::rejectTech, revalidada no POST.
+     */
+    function openRejectModal(item, tech) {
+        state.rejectCtx = { item: item, tech: tech };
+        $('tp-t-r-title').textContent = item.name + ' — ' + tech.label;
+        $('tp-t-r-reason').value = '';
+        $('tp-t-reject-modal').hidden = false;
+        $('tp-t-r-reason').focus();
+    }
+
+    function closeRejectModal() {
+        $('tp-t-reject-modal').hidden = true;
+        state.rejectCtx = null;
+    }
+
+    function saveRejectModal() {
+        var ctx = state.rejectCtx;
+        if (!ctx) {
+            return;
+        }
+        var reason = $('tp-t-r-reason').value.trim();
+        if (reason === '') {
+            toast('Explique o motivo da reprovação', true);
+            $('tp-t-r-reason').focus();
+            return;
+        }
+        post({
+            action: 'reject',
+            id: String(ctx.item.id),
+            tech_id: String(ctx.tech.id),
+            content: reason
+        }, closeRejectModal);
     }
 
     function openPendModal(item, tech) {
@@ -1197,6 +1324,8 @@
             'tp-t-e-save': saveEditModal,
             'tp-t-p-cancel': closePendModal,
             'tp-t-p-save': savePendModal,
+            'tp-t-r-cancel': closeRejectModal,
+            'tp-t-r-save': saveRejectModal,
             'tp-t-c-cancel': closeCreateModal,
             'tp-t-c-save': saveCreateModal,
             'tp-t-d-close': closeDialogModal,

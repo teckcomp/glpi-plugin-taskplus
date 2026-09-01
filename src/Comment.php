@@ -499,6 +499,37 @@ class Comment
         return (int) $id;
     }
 
+    /**
+     * 11b (decisão nº 61) — comentário OBRIGATÓRIO da reprovação,
+     * gravado no próprio diálogo da tarefa.
+     *
+     * Fica fora do add() de propósito: a régua da decisão nº 28 (só
+     * dono e criador escrevem) NÃO cobre o gestor de setor que valida
+     * sem ser o criador — e a decisão nº 61 manda exatamente ele
+     * explicar a reprovação. O ESCOPO já foi revalidado pelo chamador
+     * (Team::rejectTech: managedTech + occRowOwned + estado aguardando
+     * — T18), no MESMO padrão do $managerRead do listFor. O prefixo
+     * deixa a trilha autoexplicativa no diálogo e no Histórico.
+     */
+    public static function addFromValidation(int $occId, int $authorId, string $content): void
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $DB->insert(self::TABLE, [
+            'plugin_taskplus_occurrences_id' => $occId,
+            'users_id'                       => $authorId,
+            'content'                        => mb_substr(
+                __('[Reprovação] ', 'taskplus') . $content,
+                0,
+                self::MAX_LENGTH
+            ),
+            'documents_id'                   => 0,
+            'is_deleted'                     => 0,
+            'date_creation'                  => date('Y-m-d H:i:s'),
+        ]);
+    }
+
     private static function delete(array $input, int $usersId): array
     {
         /** @var \DBmysql $DB */

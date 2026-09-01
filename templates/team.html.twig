@@ -89,6 +89,26 @@
     </div>
 </div>
 
+{# ================= MODAL de reprovação (11b — decisão nº 61): o
+   comentário do gestor é OBRIGATÓRIO e vai gravado no diálogo da
+   tarefa; a tarefa volta para aberta no dia original ============== #}
+<div class="taskplus-modal" id="tp-t-reject-modal" hidden>
+    <div class="taskplus-modal__box">
+        <h3>{{ __('Reprovar execução', 'taskplus') }}</h3>
+        <p class="taskplus-modal__subject" id="tp-t-r-title"></p>
+        <p class="taskplus-modal__hint">{{ __('A tarefa volta para aberta no dia original e o técnico vê o seu comentário no diálogo.', 'taskplus') }}</p>
+        <label class="taskplus-field">
+            <span>{{ __('Motivo da reprovação', 'taskplus') }} *</span>
+            <textarea id="tp-t-r-reason" rows="3" maxlength="2000"
+                      placeholder="{{ __('Ex.: a evidência anexada não cobre o passo 3 do procedimento', 'taskplus') }}"></textarea>
+        </label>
+        <div class="taskplus-modal__actions">
+            <button type="button" class="btn btn-ghost-secondary" id="tp-t-r-cancel">{{ __('Cancelar', 'taskplus') }}</button>
+            <button type="button" class="btn btn-primary" id="tp-t-r-save">{{ __('Reprovar', 'taskplus') }}</button>
+        </div>
+    </div>
+</div>
+
 {# ================= MODAL de diálogo (8e-2): o gestor lê a conversa da
    tarefa do técnico; ESCREVE só se for o criador (decisão nº 28) — o
    `can_write` da resposta esconde o compositor para os demais. ====== #}

@@ -884,3 +884,26 @@
 .taskplus-card--batch { border-left: 3px solid #7048a8; }
 .taskplus-batch__members { margin-top: 8px; padding: 2px 0 0 22px; border-top: 1px dashed #eef1f4; }
 .taskplus-batch__member-acts { margin-left: auto; }
+
+/* 11b (decisão nº 61): validação da execução pelo gestor */
+.taskplus-badge--validate { background: #fdf0d5; color: #a8641c; font-weight: 600; }
+.taskplus-badge--validated { background: #dcf1f5; color: #0f7285; font-weight: 600; }
+.taskplus-team__act--validate { border-color: #0f7285; color: #0f7285; }
+.taskplus-team__act--validate:hover { background: #0f7285; color: #fff; }
+.taskplus-team__act--reject { border-color: #c53030; color: #c53030; }
+.taskplus-team__act--reject:hover { background: #c53030; color: #fff; }
+
+/* 11b: fila "Aguardando validação" no topo da tela Equipe */
+.taskplus-team__queue {
+    margin-bottom: 14px; padding: 10px 12px;
+    border: 1px solid #f0dbb4; border-radius: 8px; background: #fffaf0;
+}
+.taskplus-team__queue-title {
+    margin: 0 0 8px; font-size: 0.9rem; color: #a8641c;
+}
+.taskplus-team__queue-row {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 5px 0; border-top: 1px solid #f5ead2;
+}
+.taskplus-team__queue-row:first-of-type { border-top: 0; }
+.taskplus-team__queue-tech { font-weight: 600; color: #2c3947; flex: 0 0 auto; }

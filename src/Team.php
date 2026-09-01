@@ -148,6 +148,10 @@ class Team
                 return self::createGroup($input, $usersId);
             case 'create_group_routine':
                 return self::createGroupRoutine($input, $usersId);
+            case 'validate':
+                return self::validateTech($input, $usersId);
+            case 'reject':
+                return self::rejectTech($input, $usersId);
             case 'comment_list':
             case 'comment_add':
             case 'comment_delete':
@@ -364,6 +368,129 @@ class Team
             $result['message'] = sprintf(__('Rotina criada para %s', 'taskplus'), $tech['label']);
         }
         return $result;
+    }
+
+    // =====================================================================
+    // Validação da execução (11b — decisão nº 61)
+    // =====================================================================
+
+    /**
+     * Ocorrência do técnico AGUARDANDO validação, com o escopo inteiro
+     * revalidado a cada POST (T18): gestor administra o setor →
+     * técnico é membro gerido (managedTech) → ocorrência VIVA pertence
+     * a ele (occRowOwned) → está concluída E na fila (validation = 1).
+     *
+     * Quem alcança esta tela já satisfaz a régua da decisão nº 61
+     * ("valida o criador OU qualquer gestor de setor do dono"): a
+     * Equipe só mostra técnicos de setores que o usuário administra.
+     *
+     * Devolve [$tech, $occ] ou a MENSAGEM de erro (string) — padrão
+     * managedTech/cleanFields da casa.
+     */
+    private static function awaitingRow(array $input, int $usersId): array|string
+    {
+        $tech = self::managedTech($input, $usersId);
+        if (is_string($tech)) {
+            return $tech;
+        }
+
+        $occ = Comment::occRowOwned((int) ($input['id'] ?? 0), $tech['tech_id']);
+        if ($occ === null) {
+            return __('Tarefa não encontrada', 'taskplus');
+        }
+        if (((int) ($occ['is_done'] ?? 0)) !== 1
+            || ((int) ($occ['validation'] ?? 0)) !== 1) {
+            return __('Esta tarefa não está aguardando validação', 'taskplus');
+        }
+
+        return [$tech, $occ];
+    }
+
+    /**
+     * Validar a execução: aguardando (1) → validada (2), com autoria e
+     * data — a trilha de QUEM validou fica na linha, como toda ação de
+     * estado do plugin (done/skip/pending).
+     */
+    private static function validateTech(array $input, int $usersId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $found = self::awaitingRow($input, $usersId);
+        if (is_string($found)) {
+            return ['success' => false, 'message' => $found];
+        }
+        [$tech, $occ] = $found;
+
+        $DB->update(
+            Occurrence::TABLE,
+            [
+                'validation'        => 2,
+                'users_id_validate' => $usersId,
+                'validation_date'   => date('Y-m-d H:i:s'),
+                'date_mod'          => date('Y-m-d H:i:s'),
+            ],
+            [Occurrence::TABLE . '.id' => (int) $occ['id']]
+        );
+
+        return [
+            'success' => true,
+            'message' => sprintf(__('Execução de %s validada', 'taskplus'), $tech['label']),
+        ];
+    }
+
+    /**
+     * Reprovar a execução (decisão nº 61): a tarefa volta para ABERTA
+     * NO DIA ORIGINAL — `date` não é tocada, então ela reaparece
+     * atrasada, trilha honesta — e o comentário do gestor é OBRIGATÓRIO,
+     * gravado no próprio diálogo (Comment::addFromValidation). O
+     * comentário é de OUTRO autor e nunca lido pelo técnico: o não lido
+     * do sino/diálogo (9a) avisa a reprovação sem mecanismo novo.
+     *
+     * O comentário entra ANTES do update, mas só depois de TODA a
+     * validação de escopo/estado: se o insert falhar, a exceção aborta
+     * a ação com a tarefa ainda concluída — nunca uma reprovação muda
+     * sem explicação gravada.
+     */
+    private static function rejectTech(array $input, int $usersId): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $found = self::awaitingRow($input, $usersId);
+        if (is_string($found)) {
+            return ['success' => false, 'message' => $found];
+        }
+        [$tech, $occ] = $found;
+
+        $content = trim((string) ($input['content'] ?? ''));
+        if ($content === '') {
+            return ['success' => false, 'message' => __('Explique o motivo da reprovação', 'taskplus')];
+        }
+
+        Comment::addFromValidation((int) $occ['id'], $usersId, $content);
+
+        $DB->update(
+            Occurrence::TABLE,
+            [
+                'is_done'           => 0,
+                'done_date'         => null,
+                'users_id_done'     => 0,
+                'validation'        => 0,
+                'users_id_validate' => 0,
+                'validation_date'   => null,
+                'date_mod'          => date('Y-m-d H:i:s'),
+            ],
+            [Occurrence::TABLE . '.id' => (int) $occ['id']]
+        );
+
+        return [
+            'success' => true,
+            'message' => sprintf(
+                __('Execução de %s reprovada — a tarefa voltou para aberta no dia original', 'taskplus'),
+                $tech['label']
+            ),
+        ];
     }
 
     // =====================================================================
@@ -670,6 +797,14 @@ class Team
             'can_edit'    => $isOwn && ($status === 'late' || $status === 'today'),
             'can_pend'    => $isOwn && ($status === 'late' || $status === 'today'),
             'can_unpend'  => $isOwn && $status === 'pending',
+            // 11b: estado da validação (0/1/2) e a ação, decidida no
+            // servidor como todo can_*. Quem VÊ esta tela já pode
+            // validar (a Equipe só mostra setores que o leitor
+            // administra — régua da decisão nº 61); o escopo real é
+            // revalidado no POST (awaitingRow — T18).
+            'validation'    => $isOwn ? (int) ($item['validation'] ?? 0) : 0,
+            'can_validate'  => $isOwn && $status === 'done'
+                && ((int) ($item['validation'] ?? 0)) === 1,
             'is_done'     => $status === 'done',
             // Campos do modal de edição (5b-2) — vazios nas nativas
             'description' => $isOwn ? (string) ($item['description'] ?? '') : '',

@@ -16,7 +16,7 @@ use Glpi\Plugin\Hooks;
 use GlpiPlugin\Taskplus\Home;
 use GlpiPlugin\Taskplus\Today;
 
-define('PLUGIN_TASKPLUS_VERSION', '0.2.1-beta');
+define('PLUGIN_TASKPLUS_VERSION', '0.2.2-beta');
 
 // Versões mínima/máxima do GLPI suportadas
 define('PLUGIN_TASKPLUS_MIN_GLPI', '11.0.0');

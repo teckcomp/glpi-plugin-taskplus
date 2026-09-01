@@ -799,6 +799,20 @@
         if (item.is_done && item.done_time) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--done', 'concluída às ' + item.done_time));
         }
+        // 11b: estado da validação da execução (decisão nº 61) — o
+        // técnico vê que a conclusão aguarda o gestor, ou que já foi
+        // validada. Payload antigo (sem a chave) cai no falsy e some.
+        // A reprovação não tem badge de propósito: ela devolve a tarefa
+        // para aberta e o aviso é o comentário obrigatório no diálogo,
+        // que acende o não lido (9a).
+        if (item.is_done && Number(item.validation) === 1) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--validate',
+                'aguardando validação'));
+        }
+        if (item.is_done && Number(item.validation) === 2) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--validated',
+                'execução validada'));
+        }
         // Auditoria (5b-1): a tarefa foi concluída pelo GESTOR na tela
         // Equipe — o técnico vê quem foi. Chaves novas do payload
         // (done_by_other/done_by_label); payload antigo cai no falsy.

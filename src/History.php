@@ -150,12 +150,12 @@ class History
         // 11a: trilha do diálogo — contagem de comentários e de anexos
         // por item, em UMA consulta para o recorte inteiro. É o que
         // decide se a linha ganha o botão "Diálogo".
-        $counts = [];
-        try {
-            $counts = self::dialogCountsFor(array_column($items, 'id'));
-        } catch (\Throwable $e) {
-            $counts = [];
-        }
+        //
+        // 11b (item 9 da fila): SEM try/catch. O silêncio daqui escondeu
+        // evidência durante a depuração da sessão 38 — se a consulta
+        // quebrar, a tela quebra e o erro aparece no php-errors.log,
+        // onde a régua diária do piloto (T96) o pega.
+        $counts = self::dialogCountsFor(array_column($items, 'id'));
         $items = self::applyDialog($items, $counts);
 
         $out             = self::assemble($items, $from, $to, $clamped, $today);

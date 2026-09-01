@@ -437,6 +437,7 @@ class Occurrence
                 self::TABLE . '.time_limit',
                 self::TABLE . '.is_done',
                 self::TABLE . '.done_date',
+                self::TABLE . '.validation',
                 self::TABLE . '.is_edited',
                 self::TABLE . '.plugin_taskplus_phases_id',
                 Routine::TABLE . '.name AS routine_name',
@@ -505,6 +506,10 @@ class Occurrence
             'time_limit'  => ($limit !== null && $limit !== '') ? substr((string) $limit, 0, 5) : null,
             'is_done'     => $isDone,
             'done_time'   => !empty($row['done_date']) ? substr((string) $row['done_date'], 11, 5) : null,
+            // 11b: estado da validação da execução (0 não se aplica ·
+            // 1 aguardando · 2 validada). Linha anterior à coluna cai
+            // em 0 — chave nova é inofensiva para os safeItem antigos.
+            'validation'  => (int) ($row['validation'] ?? 0),
             // Auditoria da 5b-1: quem concluiu (users_id_done, gravado
             // desde a Etapa 1). `done_by_other` = concluída por OUTRO
             // usuário (gestor pela tela Equipe); o nome é resolvido em
@@ -885,6 +890,13 @@ class Occurrence
                 'is_done'       => $done ? 1 : 0,
                 'done_date'     => $done ? date('Y-m-d H:i:s') : null,
                 'users_id_done' => $done ? $actorId : 0,
+                // 11b: concluir tarefa criada por gestor entra na fila
+                // de validação; desfazer sai dela. Auditoria da
+                // validação zera nos dois sentidos — validação antiga
+                // não sobrevive a uma nova conclusão.
+                'validation'        => $done ? self::validationOnDone($row) : 0,
+                'users_id_validate' => 0,
+                'validation_date'   => null,
                 'date_mod'      => date('Y-m-d H:i:s'),
             ],
             [self::TABLE . '.id' => (int) $row['id']]
@@ -896,6 +908,28 @@ class Occurrence
                 ? __('Tarefa concluída', 'taskplus')
                 : __('Conclusão desfeita', 'taskplus'),
         ];
+    }
+
+    /**
+     * 11b (decisão nº 61) — a conclusão desta linha entra na fila de
+     * validação do gestor?
+     *
+     * REGRA ÚNICA, PURA (o harness a exercita direto): entra quem foi
+     * CRIADA por gestor — `users_id_creator` > 0 e ≠ dono. É o mesmo
+     * corte que o A-1 deixou no dado e que já rege o badge "criada pelo
+     * gestor". Tarefa própria (criador = dono, ou 0 nas linhas antigas)
+     * devolve 0: a validação NÃO se aplica.
+     *
+     * Devolve o VALOR da coluna `validation` a gravar na conclusão
+     * (1 = aguardando, 0 = não se aplica). Usada pelo toggleFor (Hoje e
+     * Equipe) e pelo Board::done — todo caminho de conclusão carimba
+     * pela MESMA régua.
+     */
+    public static function validationOnDone(array $row): int
+    {
+        $owner   = (int) ($row['users_id'] ?? 0);
+        $creator = (int) ($row['users_id_creator'] ?? 0);
+        return ($creator > 0 && $creator !== $owner) ? 1 : 0;
     }
 
     // =====================================================================

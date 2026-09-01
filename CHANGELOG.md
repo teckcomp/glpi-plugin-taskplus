@@ -5,6 +5,33 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Adicionado
+
+- **Trilha do diálogo no Histórico** (11a): cada linha do recorte com
+  conversa mostra o botão `Diálogo (n) 📎` e abre a thread em leitura
+  pura — comentários e anexos de evidência ganharam porta de entrada
+  depois que o dia passa. Ler no Histórico **não** marca como lido
+  (auditar não é participar); tarefa excluída não oferece o botão.
+- **Validação da execução pelo gestor** (11b, decisão nº 61). Tarefa
+  **criada por gestor**, ao ser concluída (por qualquer caminho — Hoje,
+  Quadro ou Equipe), entra numa fila de validação: a tela Equipe ganha
+  a seção "Aguardando validação" no topo e os botões **Validar** e
+  **Reprovar** por item. Validam o criador ou qualquer gestor de setor
+  do dono. Reprovar exige **comentário obrigatório**, gravado no
+  diálogo da tarefa com o prefixo `[Reprovação]`, e devolve a tarefa
+  para **aberta no dia original** — ela reaparece atrasada, e o não
+  lido do sino avisa o técnico. O técnico vê "aguardando validação" /
+  "execução validada" na tela Hoje. Ocorrências concluídas **antes**
+  desta versão ficam fora da fila (sem varredura retroativa).
+
+### Alterado
+
+- **Schema**: a tabela de ocorrências ganhou `validation` (0 não se
+  aplica · 1 aguardando · 2 validada), `users_id_validate` e
+  `validation_date` — exige `plugin:install --force` + `plugin:activate`.
+- **Histórico**: a contagem da trilha do diálogo deixou de engolir
+  erro em silêncio (item 9 da fila) — falha agora aparece no log.
+
 ## [0.2.1-beta] — 2026-08-21
 
 Primeira correção de campo do piloto de 30 dias: quatro achados de uso
