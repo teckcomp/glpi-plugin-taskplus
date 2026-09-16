@@ -182,6 +182,12 @@ class Board
                 return self::unpending($input, $usersId);
             case 'update':
                 return self::update($input, $usersId);
+            case 'add':
+                // 12a: criar pelo Quadro = a MESMA criação própria da
+                // tela Hoje (dono = criador, campos pelo cleanFields,
+                // trava de duplicadas da 8d). Nasce sem fase gravada e
+                // cai na coluna padrão pelo resolveColumn.
+                return Occurrence::handle('add', $input, $usersId);
             case 'list':
                 // Só quer o payload atualizado (o endpoint já o inclui)
                 return ['success' => true, 'message' => ''];

@@ -27,6 +27,7 @@
         justDragged: false,
         pendingCard: null,
         editingCard: null,
+        creating: false, // 12a: modal de edição aberto em modo "nova"
         // 5b-2 p2: busca local + período (viaja em todo POST)
         search: '',
         period: { from: '', to: '' },
@@ -46,6 +47,88 @@
             e.textContent = text;
         }
         return e;
+    }
+
+    // ------------------------------------------------------------------
+    // 12a — links clicáveis no texto livre da tarefa
+    // ------------------------------------------------------------------
+
+    /**
+     * Preenche `node` com `text`, transformando URLs em <a> que abrem em
+     * NOVA GUIA. Seguro por construção: texto entra por createTextNode,
+     * o link por createElement + href atribuído — nunca innerHTML. Só
+     * http(s) e www. viram link (javascript:, data: e afins ficam texto,
+     * porque a regex nem os reconhece). Pontuação final colada na URL
+     * ("veja http://x.com/a.") fica fora do link.
+     */
+    function linkify(node, text) {
+        var s = String(text || '');
+        var re = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
+        var last = 0;
+        var m;
+        while ((m = re.exec(s)) !== null) {
+            var url = m[0];
+            var trail = '';
+            var t = url.match(/[.,;:!?)\]}]+$/);
+            if (t) {
+                trail = t[0];
+                url = url.slice(0, url.length - trail.length);
+            }
+            if (url === '' || /^(https?:\/\/|www\.)$/i.test(url)) {
+                continue;
+            }
+            if (m.index > last) {
+                node.appendChild(document.createTextNode(s.slice(last, m.index)));
+            }
+            var a = document.createElement('a');
+            a.href = /^www\./i.test(url) ? 'https://' + url : url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.className = 'taskplus-link';
+            a.textContent = url;
+            a.addEventListener('click', function (ev) {
+                ev.stopPropagation(); // clique no link não aciona o card
+            });
+            node.appendChild(a);
+            last = m.index + m[0].length - trail.length;
+            re.lastIndex = last;
+        }
+        if (last < s.length) {
+            node.appendChild(document.createTextNode(s.slice(last)));
+        }
+        return node;
+    }
+
+    /**
+     * 12c — links clicáveis DENTRO do modal de edição. Um <textarea> não
+     * aceita link, então os endereços da descrição aparecem logo abaixo
+     * dela, clicáveis, e acompanham a digitação. Some quando não há link.
+     */
+    function renderDescLinks(textareaId) {
+        var ta = $(textareaId);
+        if (!ta || !ta.parentNode) {
+            return;
+        }
+        var boxId = textareaId + '-links';
+        var box = $(boxId);
+        if (!box) {
+            box = el('div', 'taskplus-desc-links');
+            box.id = boxId;
+            ta.parentNode.parentNode.insertBefore(box, ta.parentNode.nextSibling);
+            ta.addEventListener('input', function () {
+                renderDescLinks(textareaId);
+            });
+        }
+        box.textContent = '';
+        var anchors = linkify(document.createElement('div'), ta.value).querySelectorAll('a');
+        box.hidden = anchors.length === 0;
+        if (anchors.length === 0) {
+            return;
+        }
+        box.appendChild(el('span', 'taskplus-desc-links__label', 'Links:'));
+        Array.prototype.forEach.call(anchors, function (a) {
+            box.appendChild(a); // o nó já sai do linkify com target/rel
+        });
     }
 
     /**
@@ -127,6 +210,17 @@
                     syncToolbar();
                 }
                 if (!res || !res.success) {
+                    // 12a — duplicada (mesmo contrato da 8d na tela Hoje):
+                    // confirmando, reenvia com force_duplicate (o CSRF já
+                    // foi rotacionado acima); cancelando, o modal fica.
+                    if (res && res.duplicate) {
+                        render();
+                        if (window.confirm(res.message + '\n\nCriar mesmo assim?')) {
+                            fields.force_duplicate = '1';
+                            post(fields, onSuccess);
+                        }
+                        return;
+                    }
                     toast((res && res.message) ? res.message : 'Erro ao processar a ação', true);
                     render();
                     return;
@@ -224,6 +318,15 @@
         clear.hidden = true;
         clear.addEventListener('click', clearPeriod);
         bar.appendChild(clear);
+
+        // 12a: criar tarefa direto do Quadro (mesmo modal da edição)
+        var add = el('button', 'btn btn-primary btn-sm taskplus-toolbar2__new');
+        add.type = 'button';
+        add.id = 'tp-bflt-new';
+        add.appendChild(el('i', 'ti ti-plus'));
+        add.appendChild(document.createTextNode('\u00a0Nova tarefa'));
+        add.addEventListener('click', openCreateModal);
+        bar.appendChild(add);
 
         var note = el('div', 'taskplus-toolbar2__note');
         note.id = 'tp-bflt-note';
@@ -497,6 +600,16 @@
             : 'Clique para editar; arraste entre as colunas';
 
         c.appendChild(el('div', 'taskplus-bcard__name', item.name || '(sem título)'));
+        // 12c: descrição no card, até 4 linhas (o CSS corta o resto).
+        // Link dentro de card arrastável não pode ser arrastável — o
+        // arrasto tem que levar o CARD, não a URL.
+        if (item.description) {
+            var desc = linkify(el('div', 'taskplus-bcard__desc'), item.description);
+            desc.querySelectorAll('a').forEach(function (a) {
+                a.draggable = false;
+            });
+            c.appendChild(desc);
+        }
 
         var badges = el('div', 'taskplus-card__badges');
         if (item.is_routine) {
@@ -589,7 +702,24 @@
     // Modal de edição (4d-2 — mesmas regras da tela Hoje / Etapa 4b)
     // ------------------------------------------------------------------
 
+    /** 12a: mesmo modal da edição, em modo criação (avulsa própria). */
+    function openCreateModal() {
+        state.editingCard = null;
+        state.creating = true;
+        $('tp-be-title').textContent = 'Nova tarefa avulsa';
+        $('tp-be-name').value = '';
+        $('tp-be-date').value = state.data.date || '';
+        $('tp-be-date').disabled = false;
+        $('tp-be-time').value = '';
+        $('tp-be-category').value = '';
+        $('tp-be-description').value = '';
+        renderDescLinks('tp-be-description'); // 12c
+        $('tp-be-modal').hidden = false;
+        $('tp-be-name').focus();
+    }
+
     function openEditModal(item) {
+        state.creating = false;
         state.editingCard = item;
         $('tp-be-title').textContent = item.is_routine
             ? 'Editar só a tarefa de hoje (a rotina não muda)'
@@ -604,6 +734,7 @@
         $('tp-be-time').value = item.time_limit || '';
         $('tp-be-category').value = item.category || '';
         $('tp-be-description').value = item.description || '';
+        renderDescLinks('tp-be-description'); // 12c
         $('tp-be-modal').hidden = false;
         $('tp-be-name').focus();
     }
@@ -611,11 +742,12 @@
     function closeEditModal() {
         $('tp-be-modal').hidden = true;
         state.editingCard = null;
+        state.creating = false;
     }
 
     function saveEdit() {
         var item = state.editingCard;
-        if (!item) {
+        if (!item && !state.creating) {
             return;
         }
         var name = $('tp-be-name').value.trim();
@@ -624,16 +756,19 @@
             $('tp-be-name').focus();
             return;
         }
-        post({
-            action: 'update',
-            id: String(item.id),
-            itemtype: 'Occurrence',
+        var fields = {
+            action: state.creating ? 'add' : 'update',
             name: name,
             date: $('tp-be-date').value,
             time_limit: $('tp-be-time').value,
             category: $('tp-be-category').value.trim(),
             description: $('tp-be-description').value.trim()
-        }, closeEditModal);
+        };
+        if (!state.creating) {
+            fields.id = String(item.id);
+            fields.itemtype = 'Occurrence';
+        }
+        post(fields, closeEditModal);
     }
 
     // ------------------------------------------------------------------
@@ -756,6 +891,8 @@
         allowedTargets: allowedTargets,
         dropOn: dropOn,
         openEditModal: openEditModal,
+        openCreateModal: openCreateModal,
+        saveEdit: saveEdit,
         state: state
     };
 

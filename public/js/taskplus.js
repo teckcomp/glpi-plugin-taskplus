@@ -62,6 +62,88 @@
     }
 
     /**
+     * 12c — links clicáveis DENTRO do modal de edição. Um <textarea> não
+     * aceita link, então os endereços da descrição aparecem logo abaixo
+     * dela, clicáveis, e acompanham a digitação. Some quando não há link.
+     */
+    function renderDescLinks(textareaId) {
+        var ta = $(textareaId);
+        if (!ta || !ta.parentNode) {
+            return;
+        }
+        var boxId = textareaId + '-links';
+        var box = $(boxId);
+        if (!box) {
+            box = el('div', 'taskplus-desc-links');
+            box.id = boxId;
+            ta.parentNode.parentNode.insertBefore(box, ta.parentNode.nextSibling);
+            ta.addEventListener('input', function () {
+                renderDescLinks(textareaId);
+            });
+        }
+        box.textContent = '';
+        var anchors = linkify(document.createElement('div'), ta.value).querySelectorAll('a');
+        box.hidden = anchors.length === 0;
+        if (anchors.length === 0) {
+            return;
+        }
+        box.appendChild(el('span', 'taskplus-desc-links__label', 'Links:'));
+        Array.prototype.forEach.call(anchors, function (a) {
+            box.appendChild(a); // o nó já sai do linkify com target/rel
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // 12a — links clicáveis no texto livre da tarefa
+    // ------------------------------------------------------------------
+
+    /**
+     * Preenche `node` com `text`, transformando URLs em <a> que abrem em
+     * NOVA GUIA. Seguro por construção: texto entra por createTextNode,
+     * o link por createElement + href atribuído — nunca innerHTML. Só
+     * http(s) e www. viram link (javascript:, data: e afins ficam texto,
+     * porque a regex nem os reconhece). Pontuação final colada na URL
+     * ("veja http://x.com/a.") fica fora do link.
+     */
+    function linkify(node, text) {
+        var s = String(text || '');
+        var re = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
+        var last = 0;
+        var m;
+        while ((m = re.exec(s)) !== null) {
+            var url = m[0];
+            var trail = '';
+            var t = url.match(/[.,;:!?)\]}]+$/);
+            if (t) {
+                trail = t[0];
+                url = url.slice(0, url.length - trail.length);
+            }
+            if (url === '' || /^(https?:\/\/|www\.)$/i.test(url)) {
+                continue;
+            }
+            if (m.index > last) {
+                node.appendChild(document.createTextNode(s.slice(last, m.index)));
+            }
+            var a = document.createElement('a');
+            a.href = /^www\./i.test(url) ? 'https://' + url : url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.className = 'taskplus-link';
+            a.textContent = url;
+            a.addEventListener('click', function (ev) {
+                ev.stopPropagation(); // clique no link não aciona o card
+            });
+            node.appendChild(a);
+            last = m.index + m[0].length - trail.length;
+            re.lastIndex = last;
+        }
+        if (last < s.length) {
+            node.appendChild(document.createTextNode(s.slice(last)));
+        }
+        return node;
+    }
+
+    /**
      * Normaliza o payload do servidor. Qualquer coisa fora do esperado
      * vira estrutura vazia — a tela nunca quebra por JSON ruim.
      */
@@ -327,7 +409,7 @@
             note.textContent = p.active
                 ? ('Período ativo ' + periodLabel()
                     + (hasSystemCols
-                        ? ' — KPIs e "Minhas tarefas" sobre o período; chamados e tarefas do sistema seguem no estado atual.'
+                        ? ' — KPIs e "Minhas tarefas" sobre o período; tickets e tarefas do sistema seguem no estado atual.'
                         : ' — KPIs e tarefas sobre o período.'))
                 : '';
         }
@@ -343,8 +425,8 @@
         ['weekly', 'Rotinas semanais'],
         ['monthly', 'Rotinas mensais'],
         ['avulsa', 'Avulsas'],
-        ['ticket', 'Chamados'],
-        ['project', 'Projetos']
+        ['ticket', 'Tarefas de tickets'],
+        ['project', 'Tarefas de projetos']
     ];
 
     /** Grupos que pertencem a cada bloco da tela (Etapa 4a). */
@@ -476,7 +558,7 @@
             var warn = el('div', 'taskplus-native-warn');
             warn.appendChild(el('i', 'ti ti-info-circle'));
             warn.appendChild(el('span', null,
-                'O período não se aplica às tarefas do sistema — abaixo está o estado atual.'));
+                'O período não se aplica aos tickets e às tarefas do sistema — abaixo está o estado atual.'));
             list.appendChild(warn);
         }
 
@@ -486,7 +568,16 @@
                 && matchesSearch(item);
         });
 
-        if (items.length === 0) {
+        // 12b/12c: os tickets (antiga coluna da 8a) moram neste bloco,
+        // mas SÓ na visão geral ("Tarefas de:"). Os botões Tickets e
+        // Projetos mostram apenas TAREFAS daquela origem — sem tarefa, o
+        // bloco fica vazio. Vêm DEPOIS das tarefas: as tarefas têm dia e
+        // ação; a lista de tickets é a visão de fundo.
+        var tickets = (state.source === 'all')
+            ? state.data.tickets.filter(matchesSearch)
+            : [];
+
+        if (items.length === 0 && tickets.length === 0) {
             list.appendChild(emptyNative());
             return;
         }
@@ -502,6 +593,10 @@
                 list.appendChild(section(group[1], ofGroup, false));
             }
         });
+
+        if (tickets.length > 0) {
+            list.appendChild(section('Tickets em aberto', tickets, false));
+        }
     }
 
     /**
@@ -524,7 +619,7 @@
             var warn = el('div', 'taskplus-native-warn');
             warn.appendChild(el('i', 'ti ti-info-circle'));
             warn.appendChild(el('span', null,
-                'O período não se aplica aos chamados — abaixo está o estado atual.'));
+                'O período não se aplica aos tickets — abaixo está o estado atual.'));
             list.appendChild(warn);
         }
 
@@ -546,7 +641,7 @@
         // Marca da origem no lugar do check (não existe conclusão aqui:
         // chamado se resolve na tela dele, nunca pelo Task+).
         var mark = el('span', 'taskplus-check taskplus-check--native');
-        mark.title = 'Chamado — abrir no GLPI';
+        mark.title = 'Ticket — abrir no GLPI';
         mark.setAttribute('aria-label', mark.title);
         mark.appendChild(el('i', 'ti ti-ticket'));
         c.appendChild(mark);
@@ -592,7 +687,7 @@
         if (item.url) {
             var open = el('a', 'taskplus-iconbtn');
             open.href = item.url;
-            open.title = 'Abrir o chamado';
+            open.title = 'Abrir o ticket';
             open.setAttribute('aria-label', open.title);
             open.appendChild(el('i', 'ti ti-external-link'));
             actions.appendChild(open);
@@ -608,14 +703,14 @@
             var sbox = el('div', 'taskplus-empty taskplus-empty--sm');
             sbox.appendChild(el('i', 'ti ti-zoom-cancel taskplus-empty__icon'));
             sbox.appendChild(el('h3', null, 'Nada encontrado'));
-            sbox.appendChild(el('p', null, 'Nenhum chamado casa com a busca.'));
+            sbox.appendChild(el('p', null, 'Nenhum ticket casa com a busca.'));
             return sbox;
         }
         var box = el('div', 'taskplus-empty taskplus-empty--sm');
         box.appendChild(el('i', 'ti ti-ticket taskplus-empty__icon'));
-        box.appendChild(el('h3', null, 'Sem chamados abertos'));
+        box.appendChild(el('h3', null, 'Sem tickets abertos'));
         box.appendChild(el('p', null,
-            'Chamados em que você é atribuído, observador ou requerente aparecem aqui.'));
+            'Tickets em que você é atribuído, observador ou requerente aparecem aqui.'));
         return box;
     }
 
@@ -673,8 +768,8 @@
             ? 'Nada nesta origem'
             : 'Nada vindo do sistema'));
         box.appendChild(el('p', null, filtering
-            ? 'Volte para "Todas" para ver as demais.'
-            : 'Tarefas de chamado e de projeto atribuídas a você aparecem aqui.'));
+            ? 'Nenhuma tarefa desta origem atribuída a você. Clique em "Tarefas de:" para ver tudo.'
+            : 'Tickets, tarefas de ticket e de projeto atribuídos a você aparecem aqui.'));
         return box;
     }
 
@@ -720,7 +815,7 @@
             var mark = el('span', 'taskplus-check taskplus-check--native');
             mark.title = isProject
                 ? 'Tarefa de projeto — concluir pela tarefa do projeto'
-                : 'Tarefa de chamado — concluir pelo chamado';
+                : 'Tarefa de ticket — concluir pelo ticket';
             mark.setAttribute('aria-label', mark.title);
             mark.appendChild(el('i', 'ti ' + (isProject ? 'ti-subtask' : 'ti-headset')));
             c.appendChild(mark);
@@ -741,7 +836,7 @@
         var body = el('div', 'taskplus-card__body');
         body.appendChild(el('div', 'taskplus-card__name', item.name || '(sem título)'));
         if (item.description) {
-            body.appendChild(el('div', 'taskplus-card__desc', item.description));
+            body.appendChild(linkify(el('div', 'taskplus-card__desc'), item.description));
         }
 
         var badges = el('div', 'taskplus-card__badges');
@@ -765,7 +860,7 @@
         }
         if (isNative && item.ticket_label) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--ticket',
-                'Chamado ' + item.ticket_label));
+                'Ticket ' + item.ticket_label));
         }
         if (isNative && item.project_name) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--project',
@@ -876,7 +971,7 @@
                 open.href = item.url;
                 open.title = (item.source === 'project')
                     ? 'Abrir a tarefa do projeto'
-                    : 'Abrir o chamado';
+                    : 'Abrir o ticket';
                 open.setAttribute('aria-label', open.title);
                 open.appendChild(el('i', 'ti ti-external-link'));
                 actions.appendChild(open);
@@ -932,6 +1027,7 @@
         $('tp-f-time').value = (item && item.time_limit) ? item.time_limit : '';
         $('tp-f-category').value = item ? item.category : '';
         $('tp-f-description').value = item ? item.description : '';
+        renderDescLinks('tp-f-description'); // 12c
         // 8e-1: diálogo só na EDIÇÃO — tarefa nova não tem id ainda.
         // Elementos podem faltar (template antigo em cache): tudo opcional.
         state.dialogOccId = item ? item.id : null;

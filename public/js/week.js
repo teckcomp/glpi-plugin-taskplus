@@ -54,6 +54,56 @@
         return e;
     }
 
+    // ------------------------------------------------------------------
+    // 12a — links clicáveis no texto livre da tarefa
+    // ------------------------------------------------------------------
+
+    /**
+     * Preenche `node` com `text`, transformando URLs em <a> que abrem em
+     * NOVA GUIA. Seguro por construção: texto entra por createTextNode,
+     * o link por createElement + href atribuído — nunca innerHTML. Só
+     * http(s) e www. viram link (javascript:, data: e afins ficam texto,
+     * porque a regex nem os reconhece). Pontuação final colada na URL
+     * ("veja http://x.com/a.") fica fora do link.
+     */
+    function linkify(node, text) {
+        var s = String(text || '');
+        var re = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
+        var last = 0;
+        var m;
+        while ((m = re.exec(s)) !== null) {
+            var url = m[0];
+            var trail = '';
+            var t = url.match(/[.,;:!?)\]}]+$/);
+            if (t) {
+                trail = t[0];
+                url = url.slice(0, url.length - trail.length);
+            }
+            if (url === '' || /^(https?:\/\/|www\.)$/i.test(url)) {
+                continue;
+            }
+            if (m.index > last) {
+                node.appendChild(document.createTextNode(s.slice(last, m.index)));
+            }
+            var a = document.createElement('a');
+            a.href = /^www\./i.test(url) ? 'https://' + url : url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.className = 'taskplus-link';
+            a.textContent = url;
+            a.addEventListener('click', function (ev) {
+                ev.stopPropagation(); // clique no link não aciona o card
+            });
+            node.appendChild(a);
+            last = m.index + m[0].length - trail.length;
+            re.lastIndex = last;
+        }
+        if (last < s.length) {
+            node.appendChild(document.createTextNode(s.slice(last)));
+        }
+        return node;
+    }
+
     /**
      * Normaliza o payload do servidor. Qualquer coisa fora do esperado
      * vira estrutura vazia — a tela nunca quebra por JSON ruim.
@@ -286,6 +336,10 @@
             + (item.is_late ? ' taskplus-wcard--late' : ''));
 
         c.appendChild(el('div', 'taskplus-wcard__name', item.name || '(sem título)'));
+        // 12c: descrição no card, até 4 linhas (o CSS corta o resto)
+        if (item.description) {
+            c.appendChild(linkify(el('div', 'taskplus-wcard__desc'), item.description));
+        }
 
         var badges = el('div', 'taskplus-card__badges');
         if (item.time_limit) {

@@ -3,6 +3,33 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.2.5-beta] — não publicada (homologação)
+
+### Adicionado
+
+- **Nova tarefa pelo Quadro** (12a): botão `+ Nova tarefa` na barra de
+  busca do Quadro. É a mesma criação própria da tela Hoje (mesmos
+  campos, mesma trava de duplicadas com confirmação); a tarefa nasce na
+  coluna padrão ("Para hoje") quando a data é hoje.
+- **Links clicáveis na descrição** (12a/12c): endereços `http://`,
+  `https://` e `www.` na descrição das tarefas viram link que abre em
+  nova guia — nos cards da Hoje, do Quadro, da Semana e do Histórico, e
+  logo abaixo da descrição no modal de edição (Hoje e Quadro). Outros
+  esquemas (`javascript:` etc.) continuam texto.
+- **Descrição nos cards do Quadro e da Semana** (12c), limitada a 4
+  linhas.
+
+### Alterado
+
+- **Tela Hoje em duas colunas, 60/40** (12a–12c): Minhas tarefas ·
+  **Tickets e Tarefas do Sistema**. A antiga coluna Chamados foi
+  embutida no bloco do sistema. Filtro `Tarefas de:` (visão geral:
+  tarefas e, depois delas, os tickets abertos) · `Tickets` (só tarefas
+  de ticket) · `Projetos` (só tarefas de projeto). Na tela Hoje,
+  "chamado" passou a se chamar "ticket".
+- **Quadro**: as colunas ocupam a largura toda da tela (sem teto de
+  largura); com muitas fases, a rolagem lateral continua.
+
 ## [0.2.2-beta] — 2026-09-01
 
 ### Adicionado

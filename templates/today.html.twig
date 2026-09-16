@@ -38,37 +38,11 @@
             </div>
         </div>
 
-        {# Três colunas IGUAIS (Etapa 8a, decisão nº 10): Chamados ·
-           Tarefas do GLPI · Minhas tarefas. Empilham em tela estreita. #}
-        <div class="taskplus-columns">
-
-            <section class="taskplus-block">
-                <header class="taskplus-block__head">
-                    <h3 class="taskplus-block__title">{{ __('Chamados', 'taskplus') }}</h3>
-                </header>
-                {# Cards somente leitura, ordenados por SLA, renderizados pelo JS.
-                   Clique abre a página nativa do chamado. #}
-                <div id="tp-list-tickets"></div>
-            </section>
-
-            <section class="taskplus-block">
-                <header class="taskplus-block__head">
-                    <h3 class="taskplus-block__title">{{ __('Tarefas do Sistema', 'taskplus') }}</h3>
-                    {# Filtro de origem em botões (antes era um select que
-                       passava despercebido) — vale só para este bloco. #}
-                    <div class="taskplus-segmented" id="tp-filter-source" role="group"
-                         aria-label="{{ __('Origem', 'taskplus') }}">
-                        <button type="button" class="taskplus-segmented__btn taskplus-segmented__btn--on"
-                                data-source="all">{{ __('Todas', 'taskplus') }}</button>
-                        <button type="button" class="taskplus-segmented__btn"
-                                data-source="ticket">{{ __('Chamados', 'taskplus') }}</button>
-                        <button type="button" class="taskplus-segmented__btn"
-                                data-source="project">{{ __('Projetos', 'taskplus') }}</button>
-                    </div>
-                </header>
-                {# Seções Chamados / Projetos, renderizadas pelo JS #}
-                <div id="tp-list-native"></div>
-            </section>
+        {# 12b: DUAS colunas — Minhas tarefas · Tickets e Tarefas do
+           Sistema. A antiga coluna Chamados (8a) foi embutida no bloco
+           do sistema e passou a obedecer ao mesmo filtro de origem.
+           Empilham em tela estreita. #}
+        <div class="taskplus-columns taskplus-columns--2">
 
             <section class="taskplus-block">
                 <header class="taskplus-block__head">
@@ -85,6 +59,26 @@
                 </header>
                 {# Seções Atrasadas / rotinas / avulsas, renderizadas pelo JS #}
                 <div id="tp-list-own"></div>
+            </section>
+
+            <section class="taskplus-block">
+                <header class="taskplus-block__head">
+                    <h3 class="taskplus-block__title">{{ __('Tickets e Tarefas do Sistema', 'taskplus') }}</h3>
+                    {# Filtro de origem em botões (antes era um select que
+                       passava despercebido) — vale só para este bloco. #}
+                    <div class="taskplus-segmented" id="tp-filter-source" role="group"
+                         aria-label="{{ __('Origem', 'taskplus') }}">
+                        <button type="button" class="taskplus-segmented__btn taskplus-segmented__btn--on"
+                                data-source="all">{{ __('Tarefas de:', 'taskplus') }}</button>
+                        <button type="button" class="taskplus-segmented__btn"
+                                data-source="ticket">{{ __('Tickets', 'taskplus') }}</button>
+                        <button type="button" class="taskplus-segmented__btn"
+                                data-source="project">{{ __('Projetos', 'taskplus') }}</button>
+                    </div>
+                </header>
+                {# Seções Tarefas de tickets / Tarefas de projetos /
+                   Tickets em aberto, renderizadas pelo JS (12b) #}
+                <div id="tp-list-native"></div>
             </section>
 
         </div>

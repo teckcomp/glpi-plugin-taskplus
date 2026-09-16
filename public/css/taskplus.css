@@ -248,6 +248,9 @@
 @media (max-width: 1500px) {
     .taskplus-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* 12b: tela Hoje com duas colunas (Minhas · Tickets e Tarefas do Sistema) */
+/* 12c: proporção 60/40 — Minhas tarefas é o núcleo (dec. nº 55) */
+.taskplus-columns--2 { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
 @media (max-width: 1100px) {
     .taskplus-columns { grid-template-columns: minmax(0, 1fr); }
 }
@@ -391,7 +394,9 @@
 }
 
 .taskplus-bcol {
-    flex: 1 1 0; min-width: 220px; max-width: 320px;
+    /* 12b: sem teto de largura — com poucas fases o quadro ocupa a
+       largura toda; com muitas, o min-width aciona a rolagem lateral */
+    flex: 1 1 0; min-width: 220px;
     background: #f7f9fb; border: 1px solid #dde5ec; border-radius: 8px;
     display: flex; flex-direction: column;
 }
@@ -907,3 +912,24 @@
 }
 .taskplus-team__queue-row:first-of-type { border-top: 0; }
 .taskplus-team__queue-tech { font-weight: 600; color: #2c3947; flex: 0 0 auto; }
+
+/* ===== 12a — links clicáveis na descrição · Nova tarefa no Quadro ===== */
+.taskplus-link {
+    color: #2a76a8; text-decoration: underline; overflow-wrap: anywhere;
+}
+.taskplus-link:hover { color: #1d5a82; }
+.taskplus-toolbar2__new { margin-left: auto; white-space: nowrap; }
+
+/* ===== 12c — descrição nos cards do Quadro e da Semana · links no modal ===== */
+.taskplus-bcard__desc,
+.taskplus-wcard__desc {
+    font-size: 0.76rem; color: #7a8894; margin-top: 2px;
+    white-space: pre-line; overflow-wrap: anywhere;
+    overflow: hidden; display: -webkit-box;
+    -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+}
+.taskplus-desc-links {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
+    margin: -4px 0 10px; font-size: 0.8rem;
+}
+.taskplus-desc-links__label { color: #6c7a89; }
