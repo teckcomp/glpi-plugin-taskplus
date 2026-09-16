@@ -10,7 +10,7 @@ Desenvolvido pela [Teckcomp I.T. Services](https://github.com/teckcomp).
 Derivado da base do [ProjectPlus](https://github.com/teckcomp/glpi-plugin-projectplus),
 sem os módulos de Projetos, Modelos, Orçamento, Custos e Relatórios.
 
-**Versão atual:** `0.2.2-beta` · **GLPI:** 11.0.x · **Licença:** GPL-2.0-or-later
+**Versão atual:** `0.2.5-beta` · **GLPI:** 11.0.x · **Licença:** GPL-2.0-or-later
 
 ---
 
@@ -28,17 +28,22 @@ As origens nativas (3–5) são sempre lidas do GLPI — o plugin nunca as
 duplica. Escrita em tabela nativa acontece exclusivamente pelos objetos
 do core (ex.: concluir uma tarefa de chamado pelo quadro).
 
-## A tela Hoje — 3 colunas
+## A tela Hoje — 2 colunas (60/40)
 
-1. **Chamados** — chamados onde o usuário é atribuído, observador ou
-   requerente (papéis somados no badge), todos os status exceto
-   Solucionado/Fechado, ordenados pelo **prazo de SLA mais próximo**
-   (TTO enquanto não assumido, senão TTR; estourado primeiro; sem SLA no
-   fim, por prioridade). Única ação: abrir o chamado.
-2. **Tarefas do Sistema** — tarefas de chamado e de projeto do usuário,
-   com filtro segmentado por origem.
-3. **Minhas tarefas** — rotinas do dia e avulsas, com conclusão em 1
+1. **Minhas tarefas** — rotinas do dia e avulsas, com conclusão em 1
    clique, pendência, pular hoje e a trava de duplicadas.
+2. **Tickets e Tarefas do Sistema** — tarefas de ticket e de projeto do
+   usuário, com o filtro **Tarefas de:** (visão geral) · **Tickets** ·
+   **Projetos**. Na visão geral, depois das tarefas, vêm os **tickets em
+   aberto** onde o usuário é atribuído, observador ou requerente (papéis
+   somados no badge), todos os status exceto Solucionado/Fechado,
+   ordenados pelo **prazo de SLA mais próximo** (TTO enquanto não
+   assumido, senão TTR; estourado primeiro; sem SLA no fim, por
+   prioridade). Única ação no ticket: abri-lo.
+
+Endereços `http(s)://` e `www.` na descrição das tarefas viram **link
+clicável** (nova guia) nos cards da Hoje, do Quadro, da Semana e do
+Histórico, e numa linha "Links:" sob a descrição nos modais de edição.
 
 Busca local (título, descrição, categoria e `#número` de chamado) e
 filtro por período cobrem a tela inteira.
@@ -47,10 +52,10 @@ filtro por período cobrem a tela inteira.
 
 | Tela | O que faz |
 |------|-----------|
-| **Hoje** | as 3 colunas acima + KPIs (Atrasadas · Para hoje · Pendentes · Concluídas) |
-| **Quadro** | kanban com as 4 colunas de sistema + fases por setor, arrastar e soltar |
+| **Hoje** | as 2 colunas acima + KPIs (Atrasadas · Para hoje · Pendentes · Concluídas) |
+| **Quadro** | kanban com as 4 colunas de sistema + fases por setor, arrastar e soltar, criar tarefa avulsa pelo botão `+ Nova tarefa`, descrição no card |
 | **Rotinas** | CRUD de rotinas (diária/só dias úteis, semanal, mensal por dia fixo ou posição) |
-| **Semana** | grade seg–dom somente leitura |
+| **Semana** | grade seg–dom somente leitura, com a descrição no card |
 | **Equipe** | (gestor) acompanhar técnicos, concluir/editar/pendenciar tarefas deles, criar avulsas e rotinas para técnico ou para todo o setor, dialogar nas tarefas, **validar ou reprovar** a execução das tarefas que criou |
 | **Painel** | indicadores pessoais: heatmap de conclusão, melhor dia da semana, taxa (feitas ÷ devidas) |
 | **Histórico** | trilha auditável por dia, leitura do diálogo de cada tarefa, com restauração de avulsa excluída (só o dono) |
@@ -149,7 +154,7 @@ plugin, e o GLPI não o reconhece sob outro nome.
 
 ```bash
 cd /var/www/html/glpi/plugins
-git clone --branch v0.2.2-beta \
+git clone --branch v0.2.5-beta \
   https://github.com/teckcomp/glpi-plugin-taskplus.git taskplus
 chown -R www-data:www-data taskplus
 sudo -u www-data php ../bin/console plugin:install taskplus
@@ -175,7 +180,7 @@ Por git:
 
 ```bash
 cd /var/www/html/glpi/plugins/taskplus
-git fetch --tags && git checkout v0.2.2-beta
+git fetch --tags && git checkout v0.2.5-beta
 chown -R www-data:www-data .
 cd /var/www/html/glpi
 sudo -u www-data php bin/console plugin:install --force taskplus
