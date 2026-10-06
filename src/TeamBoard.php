@@ -25,8 +25,8 @@ namespace GlpiPlugin\Taskplus;
  *  - Pessoal e equipe não se misturam: o Quadro pessoal filtra
  *    users_id = eu (a de equipe tem 0) e este filtra groups_id = setor.
  *
- *  - Permissões (nº 66): criar/editar = membro ou gestor do setor;
- *    excluir = criador ou gestor; MOVER (fase, concluir, pendenciar)
+ *  - Permissões (nº 66): criar = membro ou gestor do setor; editar =
+ *    colaborador ou gestor; excluir = criador ou gestor; MOVER (fase, concluir, pendenciar)
  *    = colaborador da tarefa ou gestor, SEMPRE com comentário, que
  *    vai ao diálogo como "[Movida para X] …" (13c).
  *
@@ -105,11 +105,52 @@ class TeamBoard
             ? self::rowsInPeriod($groupId, $from, $to)
             : self::rows($groupId, $today);
 
+        $items = self::decorate($rows, $usersId, $today, $nowTime, [$groupId => $groups[$groupId]['name']]);
+        foreach ($items as $i => $item) {
+            $items[$i]['column'] = Board::resolveColumn($item, $columns);
+        }
+
+        $members = [];
+        foreach (Team::membersOf([$groupId => $groups[$groupId]['name']]) as $uid => $m) {
+            $members[] = ['id' => (int) $uid, 'label' => (string) $m['label']];
+        }
+        usort($members, static function (array $a, array $b): int {
+            return strnatcasecmp($a['label'], $b['label']);
+        });
+
+        return [
+            'date'       => $today,
+            'groups'     => $list,
+            'group_id'   => $groupId,
+            'can_manage' => (bool) $groups[$groupId]['can_manage'],
+            'columns'    => $columns,
+            'cards'      => $items,
+            'members'    => $members,
+            'period'     => $periodEcho,
+        ];
+    }
+
+    /**
+     * Linhas → itens prontos para o JS (Quadro de Equipe, Hoje 13d e
+     * Semana 13d): formato da Hoje + `is_team`, `groups_id`/`group_name`,
+     * pendência DA TAREFA (users_id = 0), não lidos do leitor,
+     * colaboradores, nome de quem marcou/concluiu e `team_url`.
+     * $groupNames: [gid => nome] dos setores envolvidos.
+     */
+    private static function decorate(array $rows, int $usersId, string $today, string $nowTime, array $groupNames): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
         $items = [];
         foreach ($rows as $row) {
-            $item              = Occurrence::format($row, $today, $nowTime);
-            $item['groups_id'] = $groupId;
-            $items[]           = $item;
+            $item               = Occurrence::format($row, $today, $nowTime);
+            $gid                = (int) ($row['groups_id'] ?? 0);
+            $item['is_team']    = true;
+            $item['groups_id']  = $gid;
+            $item['group_name'] = (string) ($groupNames[$gid] ?? ('Setor #' . $gid));
+            $item['team_url']   = Url::to('front/teamboard.php') . '?groups_id=' . $gid;
+            $items[]            = $item;
         }
 
         // 13c: pendência DA TAREFA (users_id = 0) — mesma decoração da
@@ -133,11 +174,27 @@ class TeamBoard
             $unread = [];
         }
 
+        // 13d-2: quem olha pode AGIR em cada card? (colaborador ou gestor
+        // do setor — nº 66). Resolvido em lote: vínculos do leitor + os
+        // setores que ele gerencia. O JS só usa para não oferecer o que o
+        // servidor recusaria; cada POST revalida (T18).
+        $myLinks = [];
+        foreach ($DB->request([
+            'FROM'  => self::TABLE_USERS,
+            'WHERE' => [self::TABLE_USERS . '.users_id' => $usersId],
+        ]) as $l) {
+            $myLinks[(int) ($l['plugin_taskplus_occurrences_id'] ?? 0)] = true;
+        }
+        $myGroups = Access::teamBoardGroups($usersId);
+
         $actorIds = [];
         foreach ($items as $i => $item) {
-            $items[$i]['column']   = Board::resolveColumn($item, $columns);
+            $canAct = isset($myLinks[(int) $item['id']])
+                || !empty($myGroups[(int) ($item['groups_id'] ?? 0)]['can_manage']);
+            $items[$i]['can_act']  = $canAct;
             $items[$i]['card_key'] = 'Occurrence:' . (int) $item['id'];
-            $items[$i]['unread']   = (int) ($unread[(int) $item['id']] ?? 0);
+            // Não lido só faz sentido para quem alcança o diálogo
+            $items[$i]['unread']   = $canAct ? (int) ($unread[(int) $item['id']] ?? 0) : 0;
             foreach (['pending_by_id', 'done_by_id'] as $k) {
                 if ((int) ($item[$k] ?? 0) > 0) {
                     $actorIds[] = (int) $item[$k];
@@ -152,26 +209,117 @@ class TeamBoard
             $items[$i]['done_by_label']    = (string) ($labels[(int) ($item['done_by_id'] ?? 0)] ?? '');
             $items[$i]['done_by_other']    = !empty($item['is_done']) && (int) ($item['done_by_id'] ?? 0) > 0;
         }
-        $items = self::fillCollaborators($items);
+        return self::fillCollaborators($items);
+    }
 
-        $members = [];
-        foreach (Team::membersOf([$groupId => $groups[$groupId]['name']]) as $uid => $m) {
-            $members[] = ['id' => (int) $uid, 'label' => (string) $m['label']];
+    // =====================================================================
+    // 13d — tarefas de equipe DO COLABORADOR (Hoje e Semana)
+    // =====================================================================
+
+    /**
+     * Tarefas de equipe em que $usersId é COLABORADOR, decoradas como os
+     * cards do quadro. Sem período: do dia + atrasadas + concluídas hoje
+     * de dia anterior (mesmo recorte da Hoje). Com período: data no
+     * intervalo, qualquer estado (mesmo recorte da Semana). Ordenadas
+     * por data, horário-limite, id. Lista vazia quando não há vínculo.
+     */
+    public static function forUser(int $usersId, ?string $from = null, ?string $to = null): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $occIds = [];
+        foreach ($DB->request([
+            'FROM'  => self::TABLE_USERS,
+            'WHERE' => [self::TABLE_USERS . '.users_id' => $usersId],
+        ]) as $row) {
+            $occIds[] = (int) ($row['plugin_taskplus_occurrences_id'] ?? 0);
         }
-        usort($members, static function (array $a, array $b): int {
-            return strnatcasecmp($a['label'], $b['label']);
-        });
+        $occIds = array_values(array_filter($occIds));
+        if ($occIds === []) {
+            return [];
+        }
 
-        return [
-            'date'       => $today,
-            'groups'     => $list,
-            'group_id'   => $groupId,
-            'can_manage' => (bool) $groups[$groupId]['can_manage'],
-            'columns'    => $columns,
-            'cards'      => $items,
-            'members'    => $members,
-            'period'     => $periodEcho,
+        [$from, $to] = Occurrence::periodRange($from, $to);
+        $today   = date('Y-m-d');
+        $nowTime = date('H:i:s');
+
+        $base = Occurrence::baseQuery();
+        $base['SELECT'][] = Occurrence::TABLE . '.groups_id';
+        $common = [
+            Occurrence::TABLE . '.id'         => $occIds,
+            Occurrence::TABLE . '.groups_id'  => ['>', 0],
+            Occurrence::TABLE . '.is_deleted' => 0,
+            Occurrence::TABLE . '.is_skipped' => 0,
         ];
+
+        $rows = [];
+        if ($from !== null || $to !== null) {
+            $where = $common;
+            if ($from !== null) {
+                $where[] = [Occurrence::TABLE . '.date' => ['>=', $from]];
+            }
+            if ($to !== null) {
+                $where[] = [Occurrence::TABLE . '.date' => ['<=', $to]];
+            }
+            foreach ($DB->request($base + ['WHERE' => $where]) as $row) {
+                $rows[] = $row;
+            }
+        } else {
+            foreach ($DB->request($base + ['WHERE' => $common + [
+                Occurrence::TABLE . '.date' => $today,
+            ]]) as $row) {
+                $rows[] = $row;
+            }
+            foreach ($DB->request($base + ['WHERE' => $common + [
+                Occurrence::TABLE . '.is_done' => 0,
+                Occurrence::TABLE . '.date'    => ['<', $today],
+            ]]) as $row) {
+                $rows[] = $row;
+            }
+            foreach ($DB->request($base + ['WHERE' => $common + [
+                Occurrence::TABLE . '.is_done'   => 1,
+                Occurrence::TABLE . '.date'      => ['<', $today],
+                Occurrence::TABLE . '.done_date' => ['>=', $today . ' 00:00:00'],
+            ]]) as $row) {
+                $row['was_overdue_done'] = 1;
+                $rows[] = $row;
+            }
+        }
+        $rows = self::sortRows($rows);
+
+        $groupNames = [];
+        foreach ($DB->request(['FROM' => 'glpi_groups']) as $g) {
+            $groupNames[(int) ($g['id'] ?? 0)] = (string) ($g['name'] ?? '');
+        }
+
+        $items = self::decorate($rows, $usersId, $today, $nowTime, $groupNames);
+        foreach ($rows as $i => $row) {
+            if (!empty($row['was_overdue_done'])) {
+                $items[$i]['was_overdue'] = true;
+            }
+        }
+        return $items;
+    }
+
+    /**
+     * 13d — concluir pela tela Hoje: mesmo caminho do `move` para a
+     * coluna Concluídas (comentário obrigatório, permissão por
+     * colaborador/gestor, conclusão para a equipe toda).
+     */
+    public static function completeFromToday(array $input, int $usersId): array
+    {
+        $row = self::teamRow((int) ($input['id'] ?? 0));
+        if ($row === null) {
+            return ['success' => false, 'message' => __('Tarefa não encontrada', 'taskplus')];
+        }
+        $doneId = 0;
+        foreach (Phase::boardColumns([(int) $row['groups_id']]) as $col) {
+            if (!empty($col['is_system']) && ($col['system_key'] ?? '') === 'done') {
+                $doneId = (int) $col['id'];
+            }
+        }
+        return self::move(['id' => $row['id'], 'phases_id' => $doneId, 'comment' => $input['comment'] ?? ''], $usersId);
     }
 
     /**
@@ -472,6 +620,10 @@ class TeamBoard
         $scope = self::scopedGroup(['groups_id' => $row['groups_id']], $usersId);
         if (is_string($scope)) {
             return ['success' => false, 'message' => $scope];
+        }
+        // 13d-2: editar = mesma régua de mover (colaborador ou gestor)
+        if (!self::canAct($row, $usersId)) {
+            return ['success' => false, 'message' => __('Só colaboradores da tarefa ou o gestor do setor podem editá-la', 'taskplus')];
         }
         $fields = Occurrence::cleanFields($input);
         if (is_string($fields)) {

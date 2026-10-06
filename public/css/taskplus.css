@@ -970,3 +970,14 @@
 .taskplus-collab__list li.is-empty:hover { background: none; }
 .taskplus-modal__left { margin-right: auto; }
 .taskplus-bcard--team { cursor: pointer; }
+
+/* ===== 13d — tarefa de equipe na Hoje e na Semana ===== */
+.taskplus-section--team .taskplus-section__title { color: #1f5f8b; }
+.taskplus-card--team { border-left: 3px solid #2a76a8; }
+.taskplus-card--team.taskplus-card--late { border-left-color: #d9480f; }
+.taskplus-card--team.taskplus-card--pending { border-left-color: #e8a13c; }
+.taskplus-card--team .taskplus-bcard__collab { margin-top: 4px; }
+.taskplus-check:disabled { cursor: default; opacity: 0.8; }
+.taskplus-wcard__teamlink { display: block; margin-top: 4px; font-size: 0.7rem; color: #2a76a8; }
+.taskplus-bcard--readonly { cursor: default; opacity: 0.92; }
+.taskplus-bcard--readonly:active { cursor: default; }

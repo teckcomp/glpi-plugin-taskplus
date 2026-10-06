@@ -23,6 +23,7 @@
 
     var state = {
         root: null,
+        userId: 0, // 13d
         ajaxUrl: '',
         todayUrl: '',
         csrf: '',
@@ -353,6 +354,10 @@
         if (item.is_routine) {
             badges.appendChild(el('span', 'taskplus-badge', 'rotina'));
         }
+        if (item.is_team) {
+            // 13d: tarefa de equipe do colaborador (decisão nº 65)
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--sector', 'equipe · ' + (item.group_name || 'setor')));
+        }
         if (item.category) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--category', item.category));
         }
@@ -382,6 +387,23 @@
             c.appendChild(badges);
         }
 
+        if (item.is_team) {
+            var collab = el('div', 'taskplus-bcard__collab');
+            (Array.isArray(item.collaborators) ? item.collaborators : []).forEach(function (p) {
+                collab.appendChild(el('span', 'taskplus-chip' + (Number(p.id) === state.userId ? ' taskplus-chip--me' : ''), p.label || ''));
+            });
+            if (collab.childNodes.length > 0) {
+                c.appendChild(collab);
+            }
+            if (item.team_url) {
+                var link = document.createElement('a');
+                link.className = 'taskplus-wcard__teamlink';
+                link.href = item.team_url;
+                link.textContent = 'abrir no Quadro de Equipe';
+                c.appendChild(link);
+            }
+        }
+
         return c;
     }
 
@@ -395,6 +417,7 @@
             return; // não está na tela Semana
         }
         state.csrf = state.root.getAttribute('data-csrf') || '';
+        state.userId = Number(state.root.getAttribute('data-user-id')) || 0; // 13d
         state.ajaxUrl = state.root.getAttribute('data-ajax-url') || '';
         state.todayUrl = state.root.getAttribute('data-today-url') || '';
 

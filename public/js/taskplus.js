@@ -31,6 +31,8 @@
         pendingItem: null,
         skipItem: null,
         editingId: null,
+        userId: 0,        // 13d: para destacar o próprio chip
+        teamDoneId: null, // 13d: tarefa de equipe no modal de conclusão
         dialogOccId: null,
         commentsUrl: '',
         attachUrl: '',
@@ -164,6 +166,8 @@
             overdue: Array.isArray(d.overdue) ? d.overdue : [],
             // 8a: payload antigo (sem a chave) vira lista vazia
             tickets: Array.isArray(d.tickets) ? d.tickets : [],
+            // 13d: tarefas de equipe do colaborador (payload antigo vira vazio)
+            team: Array.isArray(d.team) ? d.team : [],
             // 5b-2 p2: eco do período (o servidor normaliza as datas)
             period: {
                 from: (typeof p.from === 'string') ? p.from : '',
@@ -494,8 +498,18 @@
                 && matchesSearch(item);
         });
 
+        // 13d: tarefas de EQUIPE em que sou colaborador (decisão nº 65):
+        // seção própria no fim do bloco, com conclusão via comentário.
+        var teamItems = state.data.team.filter(function (item) {
+            return (state.showDone || !item.is_done) && matchesSearch(item);
+        });
+
         if (overdueItems.length === 0 && todayItems.length === 0) {
-            list.appendChild(emptyOwn());
+            if (teamItems.length === 0) {
+                list.appendChild(emptyOwn());
+                return;
+            }
+            list.appendChild(teamSection(teamItems));
             return;
         }
 
@@ -504,6 +518,9 @@
         // não fazem sentido num intervalo (a data vira badge no card).
         if (periodActive()) {
             list.appendChild(section('Período ' + periodLabel(), todayItems, false));
+            if (teamItems.length > 0) {
+                list.appendChild(teamSection(teamItems));
+            }
             return;
         }
 
@@ -534,6 +551,138 @@
                 });
             }
         }
+        if (teamItems.length > 0) {
+            list.appendChild(teamSection(teamItems));
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 13d — tarefas de equipe na Hoje (decisões nº 65/66)
+    // ------------------------------------------------------------------
+
+    function teamSection(items) {
+        var sec = el('div', 'taskplus-section taskplus-section--team');
+        var head = el('div', 'taskplus-section__title');
+        head.appendChild(el('span', null, 'Da equipe'));
+        head.appendChild(el('span', 'taskplus-section__count', String(items.length)));
+        sec.appendChild(head);
+        items.forEach(function (item) {
+            sec.appendChild(teamCard(item));
+        });
+        return sec;
+    }
+
+    /**
+     * Card de tarefa de equipe: check conclui PARA TODOS via comentário
+     * obrigatório (modal); sem editar/excluir aqui — isso é do Quadro de
+     * Equipe, aberto pelo ícone. Chips dos colaboradores (eu em destaque).
+     */
+    function teamCard(item) {
+        var c = el('div', 'taskplus-card taskplus-card--team'
+            + (item.is_pending ? ' taskplus-card--pending' : '')
+            + (item.is_done ? ' taskplus-card--done' : '')
+            + (item.is_late ? ' taskplus-card--late' : ''));
+
+        var check = el('button', 'taskplus-check' + (item.is_done ? ' taskplus-check--on' : ''));
+        check.type = 'button';
+        check.title = item.is_done ? 'Concluída para a equipe — desfazer pelo Quadro de Equipe' : 'Concluir para a equipe';
+        check.setAttribute('aria-label', check.title);
+        check.appendChild(el('i', 'ti ' + (item.is_done ? 'ti-check' : '')));
+        check.disabled = !!item.is_done;
+        check.addEventListener('click', function () {
+            openTeamDoneModal(item);
+        });
+        c.appendChild(check);
+
+        var body = el('div', 'taskplus-card__body');
+        body.appendChild(el('div', 'taskplus-card__name', item.name || '(sem título)'));
+        if (item.description) {
+            body.appendChild(linkify(el('div', 'taskplus-card__desc'), item.description));
+        }
+
+        var badges = el('div', 'taskplus-card__badges');
+        badges.appendChild(el('span', 'taskplus-badge taskplus-badge--sector', 'equipe · ' + (item.group_name || 'setor')));
+        if (item.date && state.data.date && item.date !== state.data.date && item.date_label) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--late', item.date_label));
+        }
+        if (item.time_limit) {
+            badges.appendChild(el('span',
+                'taskplus-badge' + (item.is_late ? ' taskplus-badge--late' : ' taskplus-badge--limit'),
+                'até ' + item.time_limit));
+        }
+        if (item.category) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--category', item.category));
+        }
+        if (item.is_pending) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--pending', item.pending_label || 'pendente'));
+            if (item.pending_reason) {
+                badges.appendChild(el('span', 'taskplus-badge', item.pending_reason));
+            }
+            if (item.pending_by_label) {
+                badges.appendChild(el('span', 'taskplus-badge', 'por ' + item.pending_by_label));
+            }
+        }
+        if (item.is_done && item.done_time) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--done',
+                'concluída às ' + item.done_time + (item.done_by_label ? ' por ' + item.done_by_label : '')));
+        }
+        var unread = Number(item.unread) || 0;
+        if (unread > 0) {
+            var ub = el('span', 'taskplus-badge taskplus-badge--unread',
+                '\uD83D\uDCAC ' + (unread > 9 ? '9+' : String(unread)));
+            ub.title = unread + ' comentário(s) não lido(s) — abrir no Quadro de Equipe';
+            badges.appendChild(ub);
+        }
+        body.appendChild(badges);
+
+        var collab = el('div', 'taskplus-bcard__collab');
+        (Array.isArray(item.collaborators) ? item.collaborators : []).forEach(function (p) {
+            var chip = el('span', 'taskplus-chip' + (Number(p.id) === state.userId ? ' taskplus-chip--me' : ''), p.label || '');
+            chip.title = p.label || '';
+            collab.appendChild(chip);
+        });
+        if (collab.childNodes.length > 0) {
+            body.appendChild(collab);
+        }
+        c.appendChild(body);
+
+        var actions = el('div', 'taskplus-card__actions');
+        var open = document.createElement('a');
+        open.className = 'taskplus-iconbtn';
+        open.href = item.team_url || '#';
+        open.title = 'Abrir no Quadro de Equipe (mover, diálogo, editar)';
+        open.setAttribute('aria-label', open.title);
+        open.appendChild(el('i', 'ti ti-users-group'));
+        actions.appendChild(open);
+        c.appendChild(actions);
+
+        return c;
+    }
+
+    function openTeamDoneModal(item) {
+        state.teamDoneId = item.id;
+        $('tp-tc-title').textContent = item.name || '(sem título)';
+        $('tp-tc-comment').value = '';
+        $('tp-tc-modal').hidden = false;
+        $('tp-tc-comment').focus();
+    }
+
+    function closeTeamDoneModal() {
+        $('tp-tc-modal').hidden = true;
+        state.teamDoneId = null;
+    }
+
+    function saveTeamDone() {
+        if (!state.teamDoneId) {
+            return;
+        }
+        var comment = $('tp-tc-comment').value.trim();
+        if (comment === '') {
+            toast('Escreva um comentário para concluir', true);
+            $('tp-tc-comment').focus();
+            return;
+        }
+        post({ action: 'team_done', id: String(state.teamDoneId), comment: comment }, closeTeamDoneModal);
     }
 
     /**
@@ -1332,6 +1481,7 @@
             return; // não está na tela Hoje
         }
         state.csrf = state.root.getAttribute('data-csrf') || '';
+        state.userId = Number(state.root.getAttribute('data-user-id')) || 0; // 13d
         state.ajaxUrl = state.root.getAttribute('data-ajax-url') || '';
         state.commentsUrl = state.root.getAttribute('data-comments-url') || '';
         state.attachUrl = state.root.getAttribute('data-attachments-url') || '';
@@ -1380,6 +1530,17 @@
                 renderNative(); // o filtro não toca no bloco de tarefas próprias
             });
         }
+        // 13d: modal de concluir tarefa de equipe (elementos opcionais —
+        // template antigo em cache)
+        if ($('tp-tc-cancel')) {
+            $('tp-tc-cancel').addEventListener('click', closeTeamDoneModal);
+            $('tp-tc-save').addEventListener('click', saveTeamDone);
+            $('tp-tc-modal').addEventListener('click', function (ev) {
+                if (ev.target === $('tp-tc-modal')) {
+                    closeTeamDoneModal();
+                }
+            });
+        }
         $('tp-p-cancel').addEventListener('click', closePendingModal);
         $('tp-p-save').addEventListener('click', savePending);
         $('tp-s-cancel').addEventListener('click', closeSkipModal);
@@ -1412,6 +1573,9 @@
             if (!$('tp-skip-modal').hidden) {
                 closeSkipModal();
             }
+            if ($('tp-tc-modal') && !$('tp-tc-modal').hidden) {
+                closeTeamDoneModal();
+            }
         });
 
         render();
@@ -1422,6 +1586,8 @@
         init: init,
         render: render,
         safeData: safeData,
+        openTeamDoneModal: openTeamDoneModal,
+        saveTeamDone: saveTeamDone,
         state: state
     };
 

@@ -50,6 +50,7 @@ use Glpi\Exception\Http\HttpException;
 use GlpiPlugin\Taskplus\Access;
 use GlpiPlugin\Taskplus\Comment;
 use GlpiPlugin\Taskplus\Occurrence;
+use GlpiPlugin\Taskplus\TeamBoard;
 use GlpiPlugin\Taskplus\Tickets;
 
 include('../../../inc/includes.php');
@@ -83,6 +84,15 @@ try {
     $result['data']['tickets'] = Tickets::forUser($usersId);
 } catch (\Throwable $e) {
     // origem indisponível: re-render segue sem a coluna preenchida
+}
+
+// 13d: tarefas de equipe do colaborador acompanham o re-render (mesmo
+// recorte de período da tela).
+$result['data']['team'] = [];
+try {
+    $result['data']['team'] = TeamBoard::forUser($usersId, $pf, $pt);
+} catch (\Throwable $e) {
+    // origem indisponível: re-render segue sem a seção
 }
 
 // Etapa 9a-1: o contador de não lidos acompanha TODO re-render (mesma

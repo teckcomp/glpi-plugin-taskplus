@@ -12,6 +12,7 @@ use Glpi\Application\View\TemplateRenderer;
 use GlpiPlugin\Taskplus\Access;
 use GlpiPlugin\Taskplus\Comment;
 use GlpiPlugin\Taskplus\Occurrence;
+use GlpiPlugin\Taskplus\TeamBoard;
 use GlpiPlugin\Taskplus\Tickets;
 use GlpiPlugin\Taskplus\Today;
 use GlpiPlugin\Taskplus\Url;
@@ -38,6 +39,15 @@ try {
     $payload['tickets'] = Tickets::forUser((int) Session::getLoginUserID());
 } catch (\Throwable $e) {
     // origem indisponível: a tela segue sem a coluna preenchida
+}
+
+// 13d: tarefas de EQUIPE em que o usuário é colaborador (decisão nº 65).
+// Chave própria, fora do Occurrence::payload (T32). Falha não derruba.
+$payload['team'] = [];
+try {
+    $payload['team'] = TeamBoard::forUser((int) Session::getLoginUserID());
+} catch (\Throwable $e) {
+    // origem indisponível: a tela segue sem a seção
 }
 
 // Etapa 9a-1: contador de comentário não lido por tarefa, do ponto de

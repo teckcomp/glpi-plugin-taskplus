@@ -598,6 +598,10 @@ class Occurrence
                 return self::setPending($input, $usersId);
             case 'unpending':
                 return self::clearPending($input, $usersId);
+            case 'team_done':
+                // 13d: concluir tarefa de EQUIPE pela Hoje — comentário
+                // obrigatório e régua do Quadro de Equipe (nº 66).
+                return TeamBoard::completeFromToday($input, $usersId);
             case 'list':
                 // Só quer o payload atualizado (o endpoint já o inclui)
                 return ['success' => true, 'message' => ''];

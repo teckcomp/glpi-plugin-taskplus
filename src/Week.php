@@ -54,6 +54,14 @@ class Week
         // fora do recorte) e o assemble() as descarta da grade.
         $base = Occurrence::payload($usersId, $start, $end);
 
+        // 13d: tarefas de EQUIPE do colaborador entram na grade (decisão
+        // nº 65), com is_team/group_name — o assemble distribui por dia.
+        try {
+            $base['today'] = array_merge((array) ($base['today'] ?? []), TeamBoard::forUser($usersId, $start, $end));
+        } catch (\Throwable $e) {
+            // origem indisponível: a semana segue só com as próprias
+        }
+
         return self::assemble($base, $start, $end);
     }
 

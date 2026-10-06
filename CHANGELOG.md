@@ -34,6 +34,18 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - **Quadro de Equipe — período** (13c-2): filtro De/Até como no Quadro
   pessoal; com período ativo o quadro mostra todas as tarefas de equipe
   do intervalo, inclusive as concluídas em outros dias.
+- **Tarefa de equipe na Hoje e na Semana** (13d, decisão nº 65): o
+  colaborador vê as tarefas de equipe de que participa numa seção "Da
+  equipe" na tela Hoje (badge do setor, colaboradores, pendência, quem
+  concluiu, não lidos; ícone abre o Quadro de Equipe) e na grade da
+  Semana. Concluir pela Hoje pede comentário e conclui para a equipe
+  toda (mesma régua do Quadro de Equipe). Os KPIs da Hoje continuam só
+  com as tarefas próprias. Alertas e e-mail para tarefa de equipe ficam
+  para um bloco próprio (os crons seguem ignorando-as).
+- **Quadro de Equipe — leitura para quem não participa** (13d-2): todo
+  membro do setor vê as tarefas de equipe, mas só colaborador e gestor
+  movem, editam e dialogam — o card dos outros não arrasta, abre em modo
+  leitura e não mostra não lidos.
 
 ## [0.2.5-beta] — 2026-09-16
 

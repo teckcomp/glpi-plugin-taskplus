@@ -627,8 +627,15 @@
             + (item.is_pending ? ' taskplus-bcard--pending' : '')
             + (item.is_late ? ' taskplus-bcard--late' : ''));
         c.setAttribute('data-card-key', String(item.card_key || ''));
-        c.draggable = true; // 13c
-        c.title = 'Clique para ver ou editar; arraste entre as fases';
+        // 13d-2: só arrasta quem pode agir (colaborador ou gestor — nº 66)
+        var canAct = (item.can_act === undefined) ? true : !!item.can_act;
+        c.draggable = canAct;
+        if (!canAct) {
+            c.classList.add('taskplus-bcard--readonly');
+        }
+        c.title = canAct
+            ? 'Clique para ver ou editar; arraste entre as fases'
+            : 'Tarefa de outros colaboradores — clique para ver';
 
         c.appendChild(el('div', 'taskplus-bcard__name', item.name || '(sem título)'));
         if (item.description) {
@@ -697,6 +704,10 @@
             openEditModal(item);
         });
         c.addEventListener('dragstart', function (ev) {
+            if (!canAct) {
+                ev.preventDefault();
+                return;
+            }
             state.dragKey = String(item.card_key || '');
             c.classList.add('taskplus-bcard--dragging');
             var targets = allowedTargets(item);
@@ -951,6 +962,7 @@
         renderDescLinks('tp-te-description');
         // Quem cria já entra como colaborador, se for membro
         renderCollab([state.userId]);
+        setReadOnly(false);
         setDialog(null); // 13c: tarefa nova não tem diálogo
         $('tp-te-delete').hidden = true;
         $('tp-te-modal').hidden = false;
@@ -968,11 +980,33 @@
         $('tp-te-description').value = item.description || '';
         renderDescLinks('tp-te-description');
         renderCollab(Array.isArray(item.collaborator_ids) ? item.collaborator_ids.map(Number) : []);
+        // 13d-2: quem não pode agir só LÊ (campos travados, sem Salvar)
+        var canAct = (item.can_act === undefined) ? true : !!item.can_act;
+        setReadOnly(!canAct);
+        $('tp-te-title').textContent = canAct ? 'Editar tarefa de equipe' : 'Tarefa de equipe';
         // Excluir: criador ou gestor (o servidor revalida — T18)
         $('tp-te-delete').hidden = !(state.data.can_manage || Number(item.created_by_id) === state.userId);
         setDialog(item); // 13c
         $('tp-te-modal').hidden = false;
         $('tp-te-name').focus();
+    }
+
+    /** 13d-2: modo leitura do modal (tarefa de outros colaboradores). */
+    function setReadOnly(ro) {
+        ['tp-te-name', 'tp-te-date', 'tp-te-time', 'tp-te-category', 'tp-te-description', 'tp-te-collab-search'].forEach(function (id) {
+            if ($(id)) {
+                $(id).disabled = ro;
+            }
+        });
+        ['tp-te-collab-all', 'tp-te-collab-none'].forEach(function (id) {
+            if ($(id)) {
+                $(id).hidden = ro;
+            }
+        });
+        $('tp-te-save').hidden = ro;
+        document.querySelectorAll('#tp-te-collab-chips .taskplus-chip__x').forEach(function (x) {
+            x.hidden = ro;
+        });
     }
 
     function closeModal() {
@@ -988,12 +1022,20 @@
     // ------------------------------------------------------------------
 
     function setDialog(item) {
-        state.dialogOccId = item ? item.id : null;
+        var canAct = !item || item.can_act === undefined || !!item.can_act;
+        state.dialogOccId = (item && canAct) ? item.id : null;
         var dlg = $('tp-td-dialog');
+        var note = $('tp-td-note');
+        if (note) {
+            note.hidden = !(item && !canAct);
+        }
         if (!dlg) {
             return;
         }
-        dlg.hidden = !item;
+        dlg.hidden = !item || !canAct;
+        if (!canAct) {
+            return;
+        }
         renderDialog([]);
         var dTxt = $('tp-td-text');
         if (dTxt) {
