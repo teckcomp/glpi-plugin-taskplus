@@ -10,7 +10,7 @@ Desenvolvido pela [Teckcomp I.T. Services](https://github.com/teckcomp).
 Derivado da base do [ProjectPlus](https://github.com/teckcomp/glpi-plugin-projectplus),
 sem os módulos de Projetos, Modelos, Orçamento, Custos e Relatórios.
 
-**Versão atual:** `0.2.5-beta` · **GLPI:** 11.0.x · **Licença:** GPL-2.0-or-later
+**Versão atual:** `0.2.6-beta` · **GLPI:** 11.0.x · **Licença:** GPL-2.0-or-later
 
 ---
 
@@ -48,14 +48,15 @@ Histórico, e numa linha "Links:" sob a descrição nos modais de edição.
 Busca local (título, descrição, categoria e `#número` de chamado) e
 filtro por período cobrem a tela inteira.
 
-## As 8 telas
+## As 9 telas
 
 | Tela | O que faz |
 |------|-----------|
-| **Hoje** | as 2 colunas acima + KPIs (Atrasadas · Para hoje · Pendentes · Concluídas) |
-| **Quadro** | kanban com as 4 colunas de sistema + fases por setor, arrastar e soltar, criar tarefa avulsa pelo botão `+ Nova tarefa`, descrição no card |
+| **Hoje** | as 2 colunas acima + KPIs (Atrasadas · Para hoje · Pendentes · Concluídas); seção "Da equipe" com as tarefas de equipe do colaborador |
+| **Quadro** | kanban pessoal com as 4 colunas de sistema + fases por setor, arrastar e soltar, criar tarefa avulsa pelo botão `+ Nova tarefa`, descrição no card, diálogo no modal |
+| **Quadro de Equipe** | kanban **por setor** com **tarefas de equipe** (uma tarefa, vários colaboradores): todo membro vê, colaborador e gestor movem — todo movimento pede um comentário, que vai ao diálogo; Concluídas conclui para todos; Pendentes com motivo/data/hora; seletor de setor para quem tem mais de um; filtro por período |
 | **Rotinas** | CRUD de rotinas (diária/só dias úteis, semanal, mensal por dia fixo ou posição) |
-| **Semana** | grade seg–dom somente leitura, com a descrição no card |
+| **Semana** | grade seg–dom somente leitura, com a descrição no card e as tarefas de equipe do colaborador |
 | **Equipe** | (gestor) acompanhar técnicos, concluir/editar/pendenciar tarefas deles, criar avulsas e rotinas para técnico ou para todo o setor, dialogar nas tarefas, **validar ou reprovar** a execução das tarefas que criou |
 | **Painel** | indicadores pessoais: heatmap de conclusão, melhor dia da semana, taxa (feitas ÷ devidas) |
 | **Histórico** | trilha auditável por dia, leitura do diálogo de cada tarefa, com restauração de avulsa excluída (só o dono) |
@@ -81,7 +82,7 @@ vive no próprio GLPI.
 
 | Direito | Quem | O que libera |
 |---------|------|--------------|
-| `plugin_taskplus_task` | usuário | tarefas próprias: Hoje, Quadro, Rotinas, Semana, Painel, Histórico; e-mail de fim de dia |
+| `plugin_taskplus_task` | usuário | tarefas próprias: Hoje, Quadro, Rotinas, Semana, Painel, Histórico; Quadro de Equipe dos setores de que é membro; e-mail de fim de dia |
 | `plugin_taskplus_manage` | gestor (exige "Gerente" no grupo do GLPI) | tela Equipe, fases dos setores geridos, alerta no sino sobre a equipe, resumo matinal por e-mail |
 | `plugin_taskplus_home` | qualquer perfil | **página inicial**: o login cai direto na tela Hoje, no lugar da Visão Geral do GLPI (o link "Visão Geral" no fim da sidebar volta ao painel nativo por clique; dashboards embutidos não são afetados) |
 
@@ -154,7 +155,7 @@ plugin, e o GLPI não o reconhece sob outro nome.
 
 ```bash
 cd /var/www/html/glpi/plugins
-git clone --branch v0.2.5-beta \
+git clone --branch v0.2.6-beta \
   https://github.com/teckcomp/glpi-plugin-taskplus.git taskplus
 chown -R www-data:www-data taskplus
 sudo -u www-data php ../bin/console plugin:install taskplus
@@ -180,7 +181,7 @@ Por git:
 
 ```bash
 cd /var/www/html/glpi/plugins/taskplus
-git fetch --tags && git checkout v0.2.5-beta
+git fetch --tags && git checkout v0.2.6-beta
 chown -R www-data:www-data .
 cd /var/www/html/glpi
 sudo -u www-data php bin/console plugin:install --force taskplus
