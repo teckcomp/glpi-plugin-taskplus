@@ -389,7 +389,13 @@
 .taskplus-board-hint i { font-size: 1rem; color: #2a76a8; margin-top: 1px; }
 
 .taskplus-board {
-    display: flex; gap: 12px; align-items: flex-start;
+    display: flex; gap: 12px;
+    /* 13e: colunas com a MESMA altura (a da área visível) e rolagem
+       DENTRO de cada uma — com uma fila longa, a página rolava e o alvo
+       do solte (Concluídas, fase seguinte) sumia da tela. Agora o alvo
+       está sempre ao lado do card, qualquer que seja o tamanho da fila. */
+    align-items: stretch;
+    height: calc(100vh - 300px); min-height: 420px;
     overflow-x: auto; padding-bottom: 8px;
 }
 
@@ -417,6 +423,9 @@
 .taskplus-bcol__body {
     display: flex; flex-direction: column; gap: 8px;
     padding: 4px 8px 10px; min-height: 90px;
+    /* 13e: a coluna rola por dentro; o navegador rola o container
+       sozinho ao arrastar perto da borda */
+    flex: 1 1 auto; overflow-y: auto;
 }
 .taskplus-bcol__empty {
     border: 1px dashed #c6d0d9; border-radius: 6px;

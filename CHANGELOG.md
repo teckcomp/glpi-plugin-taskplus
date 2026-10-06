@@ -3,6 +3,16 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.2.7-beta] — 2026-10-06
+
+### Corrigido
+
+- **Quadro e Quadro de Equipe — arrastar com fila longa** (13e): quando
+  uma coluna crescia, a página rolava e as colunas-alvo (Concluídas,
+  fase seguinte) saíam da tela — não dava para soltar. As colunas agora
+  têm a altura da área visível e rolam por dentro; o alvo fica sempre ao
+  lado do card.
+
 ## [0.2.6-beta] — 2026-10-06
 
 ### Adicionado
