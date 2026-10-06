@@ -196,6 +196,7 @@ class Emails
                 Occurrence::TABLE . '.is_skipped' => 0,
                 Occurrence::TABLE . '.is_deleted' => 0,
                 Occurrence::TABLE . '.date'       => ['<=', $today],
+                Occurrence::TABLE . '.groups_id'  => 0, // 13b: equipe fora (13d)
             ],
         ]) as $row) {
             $uid = (int) ($row['users_id'] ?? 0);

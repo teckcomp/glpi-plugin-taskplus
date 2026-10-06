@@ -3,6 +3,38 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.2.6-beta] — em andamento
+
+### Adicionado
+
+- **Diálogo no modal do Quadro** (13a): o modal de edição do Quadro
+  passa a ter a seção Diálogo da tela Hoje — comentários, anexo e
+  exclusão do próprio comentário, pelo mesmo endpoint. O card do Quadro
+  ganha o badge de comentários não lidos, que some ao abrir o diálogo.
+- **Quadro de Equipe** (13b, decisões nº 65/66): tela nova, por setor,
+  com tarefas de equipe — uma tarefa com um ou mais colaboradores
+  (membros do setor com direito de tarefa). Seletor de setor para quem
+  participa ou gerencia mais de um; colunas = fases de sistema + fases
+  do setor; criar/editar por membro ou gestor; excluir pelo criador ou
+  gestor. Colaboradores escolhidos num seletor com busca (chips +
+  campo que filtra os membros, com teto de sugestões — serve a setores
+  grandes). Busca também pelo nome do colaborador. Tarefa de equipe não
+  aparece no Quadro pessoal (que segue só com as próprias). Mover com
+  comentário obrigatório, concluir, pendência e diálogo: próximo bloco.
+  Schema: coluna `groups_id` na ocorrência e tabela
+  `glpi_plugin_taskplus_occurrence_users`.
+- **Quadro de Equipe — mover com comentário** (13c, decisão nº 66): os
+  cards arrastam entre as fases e todo solte pede um comentário, que vai
+  ao diálogo da tarefa como "[Movida para X] …" (trilha no Histórico).
+  Soltar em Concluídas conclui para a equipe toda (registra quem); em
+  Pendentes pede motivo, data e hora — a pendência é da tarefa, não de
+  um usuário. Pode mover: colaborador da tarefa ou gestor do setor. O
+  modal de edição ganha o Diálogo (comentários e anexos, mesmo endpoint
+  da Hoje); o card mostra pendência, quem concluiu e não lidos.
+- **Quadro de Equipe — período** (13c-2): filtro De/Até como no Quadro
+  pessoal; com período ativo o quadro mostra todas as tarefas de equipe
+  do intervalo, inclusive as concluídas em outros dias.
+
 ## [0.2.5-beta] — 2026-09-16
 
 ### Adicionado

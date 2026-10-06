@@ -113,7 +113,7 @@ class Board
      * ("Para hoje" ou customizada de setor do usuário); fase de setor
      * alheio ou excluída cai na padrão, sem sumir com o card.
      */
-    private static function resolveColumn(array $item, array $columns): int
+    public static function resolveColumn(array $item, array $columns): int
     {
         $byKey     = [];
         $customIds = [];

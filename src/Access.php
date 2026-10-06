@@ -85,6 +85,9 @@ class Access
         return [
             'today'    => $task,
             'board'    => $task,
+            // 13b: Quadro de Equipe — quem tem direito de tarefa E está
+            // em algum setor (membro ou gestor); admin sempre.
+            'teamboard' => self::canTeamBoard(),
             // 8b-2: link "Visão Geral" na sidebar — só faz sentido para
             // quem tem a página inicial trocada (para os demais, a Visão
             // Geral JÁ é a entrada do GLPI e o link seria redundante).
@@ -203,6 +206,48 @@ class Access
             return false;
         }
         return self::managedGroups((int) Session::getLoginUserID(), false) !== [];
+    }
+
+    // =====================================================================
+    // Quadro de Equipe (13b)
+    // =====================================================================
+
+    /**
+     * Setores que o usuário ENXERGA no Quadro de Equipe: os que ele
+     * gerencia (admin: todos) UNIDOS aos de que é membro. Mapa
+     * [groups_id => ['name' => ..., 'can_manage' => bool]], em ordem
+     * de nome. `can_manage` é a régua do gestor (decisão nº 66): admin
+     * ou is_manager no grupo.
+     */
+    public static function teamBoardGroups(int $usersId): array
+    {
+        $isAdmin = self::isPhaseAdmin();
+        $managed = self::managedGroups($usersId, $isAdmin);
+        $member  = self::memberGroups($usersId);
+
+        $groups = [];
+        foreach ($managed as $gid => $name) {
+            $groups[(int) $gid] = ['name' => (string) $name, 'can_manage' => true];
+        }
+        foreach ($member as $gid => $name) {
+            if (!isset($groups[(int) $gid])) {
+                $groups[(int) $gid] = ['name' => (string) $name, 'can_manage' => false];
+            }
+        }
+        uasort($groups, static function (array $a, array $b): int {
+            return strnatcasecmp($a['name'], $b['name']);
+        });
+
+        return $groups;
+    }
+
+    /** Gate da tela/sidebar do Quadro de Equipe. */
+    public static function canTeamBoard(): bool
+    {
+        if (!self::can('task')) {
+            return false;
+        }
+        return self::teamBoardGroups((int) Session::getLoginUserID()) !== [];
     }
 
     // =====================================================================

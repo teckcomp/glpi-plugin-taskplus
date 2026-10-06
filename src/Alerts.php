@@ -67,6 +67,10 @@ class Alerts
                 Occurrence::TABLE . '.is_skipped'       => 0,
                 Occurrence::TABLE . '.is_deleted'       => 0,
                 Occurrence::TABLE . '.date_alert_limit' => null,
+                // 13b: tarefa de EQUIPE (users_id = 0) fica fora até o
+                // alerta por colaborador existir (13d) — sem isto o sino
+                // gravaria alerta para o usuário 0.
+                Occurrence::TABLE . '.groups_id'        => 0,
                 // Duas restrições sobre a MESMA coluna: entradas
                 // separadas (T21) — nunca duas chaves iguais no array.
                 ['NOT' => [Occurrence::TABLE . '.time_limit' => null]],

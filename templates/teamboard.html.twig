@@ -1,0 +1,121 @@
+{# Task+ — tela "Quadro de Equipe" (13b: kanban por setor, tarefas com vários colaboradores) #}
+
+<link rel="stylesheet" href="{{ plugin_web_dir }}/css/taskplus.css?v={{ plugin_version }}">
+
+<div class="taskplus-app" id="taskplus-teamboard"
+     data-csrf="{{ csrf_token }}"
+     data-user-id="{{ current_user_id }}"
+     data-ajax-url="{{ plugin_web_dir }}/ajax/teamboard.php"
+     data-comments-url="{{ plugin_web_dir }}/ajax/comment.php"
+     data-attachments-url="{{ plugin_web_dir }}/ajax/attachment.php">
+
+    {# ================= COLUNA ESQUERDA: título + sidebar ================= #}
+    {% include '@taskplus/_sidebar.html.twig' with {'active': 'teamboard'} %}
+
+    {# ================= ÁREA PRINCIPAL ================= #}
+    <div class="taskplus-main">
+
+        <div class="taskplus-board-hint">
+            <i class="ti ti-users-group"></i>
+            <span>{{ __('Tarefas da equipe do setor, com um ou mais colaboradores por tarefa. Arraste entre as fases — todo movimento pede um comentário, que vai para o diálogo da tarefa. Clique no card para ver ou editar.', 'taskplus') }}</span>
+        </div>
+
+        {# Seletor de setor + busca + Nova tarefa, montados pelo JS #}
+        <div class="taskplus-toolbar2" id="tp-tb-toolbar"></div>
+
+        {# Colunas + cards, renderizados pelo JS a partir do payload #}
+        <div class="taskplus-board" id="tp-tboard"></div>
+    </div>
+</div>
+
+{# ================= MODAL de nova/edição de tarefa de equipe ================= #}
+<div class="taskplus-modal" id="tp-te-modal" hidden>
+    <div class="taskplus-modal__box">
+        <h3 id="tp-te-title">{{ __('Nova tarefa de equipe', 'taskplus') }}</h3>
+        <label class="taskplus-field">
+            <span>{{ __('Título', 'taskplus') }} *</span>
+            <input type="text" id="tp-te-name" maxlength="255" autocomplete="off">
+        </label>
+        <div class="taskplus-modal__row">
+            <label class="taskplus-field">
+                <span>{{ __('Data', 'taskplus') }}</span>
+                <input type="date" id="tp-te-date">
+            </label>
+            <label class="taskplus-field">
+                <span>{{ __('Horário-limite', 'taskplus') }}</span>
+                <input type="time" id="tp-te-time">
+            </label>
+        </div>
+        <label class="taskplus-field">
+            <span>{{ __('Categoria', 'taskplus') }}</span>
+            <input type="text" id="tp-te-category" maxlength="255" autocomplete="off">
+        </label>
+        <label class="taskplus-field">
+            <span>{{ __('Descrição', 'taskplus') }}</span>
+            <textarea id="tp-te-description" rows="3"></textarea>
+        </label>
+        {# Colaboradores: caixas de seleção com os membros do setor,
+           montadas pelo JS a partir de `members` do payload #}
+        {# 13b-2: seletor com busca — chips dos escolhidos + campo que
+           filtra os membros do setor (escala para 20+ pessoas) #}
+        <div class="taskplus-field taskplus-collab">
+            <span class="taskplus-collab__label">{{ __('Colaboradores', 'taskplus') }} *
+                <button type="button" class="taskplus-collab__link" id="tp-te-collab-all">{{ __('Todos do setor', 'taskplus') }}</button>
+                <button type="button" class="taskplus-collab__link" id="tp-te-collab-none">{{ __('Limpar', 'taskplus') }}</button>
+            </span>
+            <div class="taskplus-collab__chips" id="tp-te-collab-chips"></div>
+            <input type="text" id="tp-te-collab-search" autocomplete="off"
+                   placeholder="{{ __('Digite um nome para adicionar…', 'taskplus') }}">
+            <ul class="taskplus-collab__list" id="tp-te-collab-list" hidden></ul>
+        </div>
+        {# 13c: diálogo da tarefa — mesmo contrato da Hoje (8e-1/8e-3),
+           mesmo endpoint; participam colaboradores e gestor. #}
+        <div class="taskplus-dialog" id="tp-td-dialog" hidden>
+            <h4>{{ __('Diálogo', 'taskplus') }}</h4>
+            <ul class="taskplus-dialog__list" id="tp-td-list"></ul>
+            <p class="taskplus-dialog__empty" id="tp-td-empty" hidden>{{ __('Nenhum comentário ainda.', 'taskplus') }}</p>
+            <div class="taskplus-dialog__composer">
+                <textarea id="tp-td-text" rows="2" maxlength="2000"
+                          placeholder="{{ __('Escreva um comentário…', 'taskplus') }}"></textarea>
+                <input type="file" id="tp-td-file" class="taskplus-dialog__file">
+                <button type="button" class="btn btn-primary" id="tp-td-send">{{ __('Enviar', 'taskplus') }}</button>
+            </div>
+        </div>
+        <div class="taskplus-modal__actions">
+            <button type="button" class="btn btn-ghost-danger taskplus-modal__left" id="tp-te-delete" hidden>{{ __('Excluir', 'taskplus') }}</button>
+            <button type="button" class="btn btn-ghost-secondary" id="tp-te-cancel">{{ __('Cancelar', 'taskplus') }}</button>
+            <button type="button" class="btn btn-primary" id="tp-te-save">{{ __('Salvar', 'taskplus') }}</button>
+        </div>
+    </div>
+</div>
+
+{# ================= MODAL de movimento (13c: comentário obrigatório) ================= #}
+<div class="taskplus-modal" id="tp-tm-modal" hidden>
+    <div class="taskplus-modal__box">
+        <h3 id="tp-tm-title">{{ __('Mover tarefa', 'taskplus') }}</h3>
+        <p class="taskplus-modal__subject" id="tp-tm-subject"></p>
+        <label class="taskplus-field">
+            <span id="tp-tm-label">{{ __('Comentário', 'taskplus') }} *</span>
+            <textarea id="tp-tm-comment" rows="3"
+                      placeholder="{{ __('O que mudou? Vai para o diálogo da tarefa, visível à equipe', 'taskplus') }}"></textarea>
+        </label>
+        {# Só para Pendentes: data/hora de retorno (mesmo contrato da 4b) #}
+        <div class="taskplus-modal__row" id="tp-tm-pending" hidden>
+            <label class="taskplus-field">
+                <span>{{ __('Volta ao fluxo em', 'taskplus') }} *</span>
+                <input type="date" id="tp-tm-until">
+            </label>
+            <label class="taskplus-field">
+                <span>{{ __('Hora', 'taskplus') }} *</span>
+                <input type="time" id="tp-tm-time">
+            </label>
+        </div>
+        <div class="taskplus-modal__actions">
+            <button type="button" class="btn btn-ghost-secondary" id="tp-tm-cancel">{{ __('Cancelar', 'taskplus') }}</button>
+            <button type="button" class="btn btn-primary" id="tp-tm-save">{{ __('Mover', 'taskplus') }}</button>
+        </div>
+    </div>
+</div>
+
+<script type="application/json" id="taskplus-teamboard-data">{{ payload_json|raw }}</script>
+<script src="{{ plugin_web_dir }}/js/teamboard.js?v={{ plugin_version }}"></script>

@@ -878,6 +878,16 @@ class Team
         ];
     }
 
+    /**
+     * 13b: membros COM direito de tarefa dos setores $groupIds (mapa
+     * id => nome), no mesmo formato de members(). É a lista de
+     * colaboradores possíveis do Quadro de Equipe.
+     */
+    public static function membersOf(array $groupNames): array
+    {
+        return self::members(array_map('intval', array_keys($groupNames)), $groupNames);
+    }
+
     /** Atalho para quem só quer os técnicos (contrato do 6b-2 p1). */
     public static function scopeMembers(int $usersId): array
     {

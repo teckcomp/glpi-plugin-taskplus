@@ -366,7 +366,7 @@ class Occurrence
      * (5b-2) é o DONO do payload: pendência com criador diferente dele
      * ganha a marca de autoria (gestor pela Equipe).
      */
-    private static function applyPendings(array $items, array $pendings, ?string $forceType, int $ownerId = 0): array
+    public static function applyPendings(array $items, array $pendings, ?string $forceType, int $ownerId = 0): array
     {
         $sourceMap = [
             'ticket'  => Pending::TYPE_TICKET_TASK,
@@ -421,7 +421,7 @@ class Occurrence
      * `SELECT *` num JOIN devolveria a coluna errada e o WHERE sem
      * qualificar daria erro 1052 ("Column ... is ambiguous").
      */
-    private static function baseQuery(): array
+    public static function baseQuery(): array
     {
         return [
             'SELECT' => [
@@ -458,7 +458,7 @@ class Occurrence
     /**
      * Linha do banco → item do payload (formatos prontos para o JS).
      */
-    private static function format(array $row, string $today, string $nowTime): array
+    public static function format(array $row, string $today, string $nowTime): array
     {
         $isDone = ((int) ($row['is_done'] ?? 0)) === 1;
         $date   = (string) ($row['date'] ?? $today);
@@ -998,7 +998,7 @@ class Occurrence
         return preg_replace('/\s+/u', ' ', $s) ?? $s;
     }
 
-    private static function cleanFields(array $input): array|string
+    public static function cleanFields(array $input): array|string
     {
         $name = trim((string) ($input['name'] ?? ''));
         if ($name === '') {
@@ -1092,6 +1092,11 @@ class Occurrence
                 self::TABLE . '.is_deleted' => 0,
             ],
         ]) as $row) {
+            // 13b: tarefa de equipe (groups_id > 0) tem users_id = 0 e
+            // nunca casa aqui; a guarda fica explícita por higiene.
+            if ((int) ($row['groups_id'] ?? 0) > 0) {
+                return null;
+            }
             return $row;
         }
 

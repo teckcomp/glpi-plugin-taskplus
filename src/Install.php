@@ -38,6 +38,8 @@ class Install
         'glpi_plugin_taskplus_alerts',
         'glpi_plugin_taskplus_comments',
         'glpi_plugin_taskplus_comment_reads',
+        // 13b: colaboradores da tarefa de equipe
+        'glpi_plugin_taskplus_occurrence_users',
     ];
 
     /**
@@ -108,8 +110,18 @@ class Install
             'date_creation'    => 'TIMESTAMP NULL DEFAULT NULL',
             'date_mod'         => 'TIMESTAMP NULL DEFAULT NULL',
         ],
+        // 13b: vínculo (tarefa de equipe, colaborador). A UNIQUE fica
+        // só no CREATE TABLE (regra do topo).
+        'glpi_plugin_taskplus_occurrence_users' => [
+            'plugin_taskplus_occurrences_id' => 'INT %SIGN% NOT NULL DEFAULT 0',
+            'users_id'                       => 'INT %SIGN% NOT NULL DEFAULT 0',
+        ],
         'glpi_plugin_taskplus_occurrences' => [
             'plugin_taskplus_routines_id' => 'INT %SIGN% NULL DEFAULT NULL',
+            // 13b: 0 = tarefa pessoal (dono em users_id); > 0 = tarefa
+            // DE EQUIPE do setor (users_id = 0, colaboradores na
+            // occurrence_users). Chave do Quadro de Equipe.
+            'groups_id'        => 'INT %SIGN% NOT NULL DEFAULT 0',
             'name'             => "VARCHAR(255) NOT NULL DEFAULT ''",
             'description'      => 'TEXT',
             'category'         => "VARCHAR(255) NOT NULL DEFAULT ''",
@@ -433,6 +445,29 @@ class Install
                     `date_read`     TIMESTAMP NULL DEFAULT NULL COMMENT 'ultima abertura da thread',
                     PRIMARY KEY (`id`),
                     UNIQUE KEY `occ_user` (`plugin_taskplus_occurrences_id`, `users_id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collation}
+            ");
+        }
+
+        // ------------------------------------------------------------------
+        // 8) Colaboradores da tarefa de equipe (13b, decisões nº 65/66).
+        //
+        //    A tarefa de equipe é UMA ocorrência (groups_id > 0, users_id
+        //    = 0) com N colaboradores — diferente da "criar para o setor"
+        //    da Equipe (5c-3), que gera uma cópia por membro. Linha por
+        //    (ocorrência, colaborador); a UNIQUE evita vínculo duplicado.
+        //    O índice por users_id é o que a Hoje/Semana do colaborador
+        //    usa (13d) para achar as tarefas de equipe dele.
+        // ------------------------------------------------------------------
+        if (!$DB->tableExists('glpi_plugin_taskplus_occurrence_users')) {
+            $DB->doQuery("
+                CREATE TABLE `glpi_plugin_taskplus_occurrence_users` (
+                    `id`            INT {$sign} NOT NULL AUTO_INCREMENT,
+                    `plugin_taskplus_occurrences_id` INT {$sign} NOT NULL DEFAULT 0,
+                    `users_id`      INT {$sign} NOT NULL DEFAULT 0 COMMENT 'colaborador',
+                    PRIMARY KEY (`id`),
+                    UNIQUE KEY `occ_user` (`plugin_taskplus_occurrences_id`, `users_id`),
+                    KEY `users_id` (`users_id`)
                 ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collation}
             ");
         }

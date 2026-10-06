@@ -5,7 +5,9 @@
 <div class="taskplus-app" id="taskplus-board"
      data-csrf="{{ csrf_token }}"
      data-user-id="{{ current_user_id }}"
-     data-ajax-url="{{ plugin_web_dir }}/ajax/board.php">
+     data-ajax-url="{{ plugin_web_dir }}/ajax/board.php"
+     data-comments-url="{{ plugin_web_dir }}/ajax/comment.php"
+     data-attachments-url="{{ plugin_web_dir }}/ajax/attachment.php">
 
     {# ================= COLUNA ESQUERDA: título + sidebar ================= #}
     {% include '@taskplus/_sidebar.html.twig' with {'active': 'board'} %}
@@ -49,6 +51,21 @@
             <span>{{ __('Descrição', 'taskplus') }}</span>
             <textarea id="tp-be-description" rows="3"></textarea>
         </label>
+        {# 13a: diálogo da tarefa no Quadro — mesmo contrato da tela Hoje
+           (8e-1/8e-3): só na EDIÇÃO (tarefa nova não tem id); a thread é
+           renderizada pelo JS (textContent sempre); comentário e anexo
+           vão ao ajax/comment.php, o mesmo endpoint da Hoje. #}
+        <div class="taskplus-dialog" id="tp-bd-dialog" hidden>
+            <h4>{{ __('Diálogo', 'taskplus') }}</h4>
+            <ul class="taskplus-dialog__list" id="tp-bd-list"></ul>
+            <p class="taskplus-dialog__empty" id="tp-bd-empty" hidden>{{ __('Nenhum comentário ainda.', 'taskplus') }}</p>
+            <div class="taskplus-dialog__composer">
+                <textarea id="tp-bd-text" rows="2" maxlength="2000"
+                          placeholder="{{ __('Escreva um comentário…', 'taskplus') }}"></textarea>
+                <input type="file" id="tp-bd-file" class="taskplus-dialog__file">
+                <button type="button" class="btn btn-primary" id="tp-bd-send">{{ __('Enviar', 'taskplus') }}</button>
+            </div>
+        </div>
         <div class="taskplus-modal__actions">
             <button type="button" class="btn btn-ghost-secondary" id="tp-be-cancel">{{ __('Cancelar', 'taskplus') }}</button>
             <button type="button" class="btn btn-primary" id="tp-be-save">{{ __('Salvar', 'taskplus') }}</button>

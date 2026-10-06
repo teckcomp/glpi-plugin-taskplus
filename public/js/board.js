@@ -28,6 +28,10 @@
         pendingCard: null,
         editingCard: null,
         creating: false, // 12a: modal de edição aberto em modo "nova"
+        // 13a: diálogo no modal do Quadro (mesmo contrato da Hoje, 8e-1)
+        commentsUrl: '',
+        attachUrl: '',
+        dialogOccId: null,
         // 5b-2 p2: busca local + período (viaja em todo POST)
         search: '',
         period: { from: '', to: '' },
@@ -645,6 +649,17 @@
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--done',
                 'concluída às ' + item.done_time));
         }
+        // 13a: comentários não lidos (9a-1) — o card inteiro já abre o
+        // modal com o diálogo, então aqui o badge é só indicador.
+        var unread = Number(item.unread) || 0;
+        if (!item.is_native && unread > 0) {
+            var ub = el('span', 'taskplus-badge taskplus-badge--unread',
+                '\uD83D\uDCAC ' + (unread > 9 ? '9+' : String(unread)));
+            ub.title = (unread === 1)
+                ? '1 comentário não lido — abrir diálogo'
+                : unread + ' comentários não lidos — abrir diálogo';
+            badges.appendChild(ub);
+        }
         if (badges.childNodes.length > 0) {
             c.appendChild(badges);
         }
@@ -714,6 +729,7 @@
         $('tp-be-category').value = '';
         $('tp-be-description').value = '';
         renderDescLinks('tp-be-description'); // 12c
+        setDialog(null); // 13a: tarefa nova não tem diálogo
         $('tp-be-modal').hidden = false;
         $('tp-be-name').focus();
     }
@@ -735,6 +751,7 @@
         $('tp-be-category').value = item.category || '';
         $('tp-be-description').value = item.description || '';
         renderDescLinks('tp-be-description'); // 12c
+        setDialog(item); // 13a
         $('tp-be-modal').hidden = false;
         $('tp-be-name').focus();
     }
@@ -743,6 +760,161 @@
         $('tp-be-modal').hidden = true;
         state.editingCard = null;
         state.creating = false;
+        state.dialogOccId = null;
+    }
+
+    // ------------------------------------------------------------------
+    // 13a — Diálogo da tarefa no modal do Quadro
+    //
+    // Cópia do contrato da tela Hoje (8e-1/8e-3/9a-1): mesmo endpoint
+    // (ajax/comment.php), mesma rotação do csrf, mesma trava de busy,
+    // textContent sempre. Só os ids dos elementos mudam (tp-bd-*).
+    // ------------------------------------------------------------------
+
+    /** Prepara a seção do diálogo para o item (null = esconde). */
+    function setDialog(item) {
+        state.dialogOccId = item ? item.id : null;
+        var dlg = $('tp-bd-dialog');
+        if (!dlg) {
+            return; // template antigo em cache: modal segue sem diálogo
+        }
+        dlg.hidden = !item;
+        renderDialog([]);
+        var dTxt = $('tp-bd-text');
+        if (dTxt) {
+            dTxt.value = '';
+        }
+        var dFile = $('tp-bd-file');
+        if (dFile) {
+            dFile.value = '';
+        }
+        if (item) {
+            postComment({ action: 'list' });
+        }
+    }
+
+    function postComment(fields, file) {
+        if (state.busy || !state.dialogOccId) {
+            return;
+        }
+        state.busy = true;
+        // Fixado ANTES do fetch: o modal pode ter fechado (dialogOccId
+        // vira null) quando a resposta chegar.
+        var occId = state.dialogOccId;
+
+        var fd = new FormData();
+        Object.keys(fields).forEach(function (key) {
+            fd.append(key, fields[key]);
+        });
+        if (file) {
+            fd.append('file', file); // tipo/tamanho valida o SERVIDOR
+        }
+        fd.append('occurrences_id', String(occId));
+        fd.append('_glpi_csrf_token', state.csrf);
+
+        fetch(state.commentsUrl, {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        })
+            .then(function (resp) { return resp.json(); })
+            .then(function (res) {
+                state.busy = false;
+                if (res && typeof res.csrf === 'string' && res.csrf !== '') {
+                    state.csrf = res.csrf;
+                }
+                if (!res || !res.success) {
+                    toast((res && res.message) ? res.message : 'Erro no diálogo', true);
+                }
+                renderDialog((res && Array.isArray(res.comments)) ? res.comments : []);
+                if (res && res.success) {
+                    clearUnread(occId);
+                }
+            })
+            .catch(function () {
+                state.busy = false;
+                toast('Falha de comunicação com o servidor', true);
+            });
+    }
+
+    /** 9a-1 no Quadro: zera o não lido do card no estado e repinta. */
+    function clearUnread(occId) {
+        var changed = false;
+        state.data.cards.forEach(function (it) {
+            if (it && !it.is_native && Number(it.id) === Number(occId)
+                && (Number(it.unread) || 0) > 0) {
+                it.unread = 0;
+                changed = true;
+            }
+        });
+        if (changed) {
+            render();
+        }
+    }
+
+    /** Thread do modal — textContent SEMPRE (nada de HTML do usuário). */
+    function renderDialog(comments) {
+        var list = $('tp-bd-list');
+        var empty = $('tp-bd-empty');
+        if (!list || !empty) {
+            return;
+        }
+        list.textContent = '';
+        empty.hidden = comments.length > 0;
+        comments.forEach(function (c) {
+            var li = el('li', 'taskplus-dialog__item');
+
+            var head = el('div', 'taskplus-dialog__meta');
+            head.appendChild(el('strong', '', c.author || '(usuário removido)'));
+            head.appendChild(el('span', '', c.date || ''));
+            if (c.own) {
+                var del = el('button', 'taskplus-dialog__del', '\u00D7');
+                del.type = 'button';
+                del.title = 'Excluir comentário';
+                del.addEventListener('click', function () {
+                    if (window.confirm('Excluir este comentário?')) {
+                        postComment({ action: 'delete', id: String(c.id) });
+                    }
+                });
+                head.appendChild(del);
+            }
+            li.appendChild(head);
+
+            li.appendChild(el('div', 'taskplus-dialog__text', c.content || ''));
+
+            if (c.file_name) {
+                var fl = el('a', 'taskplus-dialog__attach', '\uD83D\uDCCE ' + c.file_name);
+                fl.href = state.attachUrl + '?comment=' + encodeURIComponent(String(c.id));
+                fl.target = '_blank';
+                fl.rel = 'noopener';
+                li.appendChild(fl);
+            }
+
+            list.appendChild(li);
+        });
+        list.scrollTop = list.scrollHeight;
+    }
+
+    function sendComment() {
+        var txt = $('tp-bd-text');
+        var fileInput = $('tp-bd-file');
+        if (!txt) {
+            return;
+        }
+        var text = txt.value.trim();
+        var file = (fileInput && fileInput.files && fileInput.files.length > 0)
+            ? fileInput.files[0] : null;
+        if (text === '' && !file) {
+            toast('Escreva o comentário ou anexe um arquivo', true);
+            txt.focus();
+            return;
+        }
+        txt.value = '';
+        postComment({ action: 'add', content: text }, file);
+        if (fileInput) {
+            fileInput.value = '';
+        }
     }
 
     function saveEdit() {
@@ -838,6 +1010,9 @@
         }
         state.csrf = state.root.getAttribute('data-csrf') || '';
         state.ajaxUrl = state.root.getAttribute('data-ajax-url') || '';
+        // 13a: endpoints do diálogo (mesmos da tela Hoje)
+        state.commentsUrl = state.root.getAttribute('data-comments-url') || '';
+        state.attachUrl = state.root.getAttribute('data-attachments-url') || '';
 
         var raw = null;
         var dataEl = $('taskplus-board-data');
@@ -856,6 +1031,11 @@
 
         $('tp-be-cancel').addEventListener('click', closeEditModal);
         $('tp-be-save').addEventListener('click', saveEdit);
+        // 13a: diálogo — elementos opcionais (template antigo em cache)
+        var bdSend = $('tp-bd-send');
+        if (bdSend) {
+            bdSend.addEventListener('click', sendComment);
+        }
         $('tp-be-modal').addEventListener('click', function (ev) {
             if (ev.target === $('tp-be-modal')) {
                 closeEditModal(); // clique no fundo fecha
@@ -893,6 +1073,8 @@
         openEditModal: openEditModal,
         openCreateModal: openCreateModal,
         saveEdit: saveEdit,
+        renderDialog: renderDialog,
+        sendComment: sendComment,
         state: state
     };
 

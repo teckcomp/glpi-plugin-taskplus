@@ -56,6 +56,12 @@ class Comment
         if ($userId <= 0) {
             return false;
         }
+        // 13c: tarefa de EQUIPE (groups_id > 0) — participam os
+        // colaboradores e os gestores do setor (decisão nº 66). O
+        // criador também, pela régua geral abaixo.
+        if ((int) ($occ['groups_id'] ?? 0) > 0 && TeamBoard::canAct($occ, $userId)) {
+            return true;
+        }
         return $userId === (int) ($occ['users_id'] ?? 0)
             || $userId === (int) ($occ['users_id_creator'] ?? 0);
     }
@@ -513,17 +519,30 @@ class Comment
      */
     public static function addFromValidation(int $occId, int $authorId, string $content): void
     {
+        self::addSystem($occId, $authorId, __('[Reprovação] ', 'taskplus') . $content);
+    }
+
+    /**
+     * 13c — comentário de MOVIMENTO no Quadro de Equipe (decisão nº 66:
+     * mover exige comentário). O prefixo "[Movida para X]" deixa a
+     * trilha autoexplicativa no diálogo e no Histórico. O escopo
+     * (colaborador ou gestor) já foi revalidado pelo TeamBoard::move.
+     */
+    public static function addFromMove(int $occId, int $authorId, string $phaseName, string $content): void
+    {
+        self::addSystem($occId, $authorId, sprintf(__('[Movida para %s] ', 'taskplus'), $phaseName) . $content);
+    }
+
+    /** Inserção de comentário de sistema (sem anexo), fora da régua do add(). */
+    private static function addSystem(int $occId, int $authorId, string $content): void
+    {
         /** @var \DBmysql $DB */
         global $DB;
 
         $DB->insert(self::TABLE, [
             'plugin_taskplus_occurrences_id' => $occId,
             'users_id'                       => $authorId,
-            'content'                        => mb_substr(
-                __('[Reprovação] ', 'taskplus') . $content,
-                0,
-                self::MAX_LENGTH
-            ),
+            'content'                        => mb_substr($content, 0, self::MAX_LENGTH),
             'documents_id'                   => 0,
             'is_deleted'                     => 0,
             'date_creation'                  => date('Y-m-d H:i:s'),
