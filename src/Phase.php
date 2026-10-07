@@ -33,8 +33,14 @@ namespace GlpiPlugin\Taskplus;
  *
  * ORDEM CANÔNICA das colunas do quadro:
  *
- *     Atrasadas · Para hoje · [setores em ordem de nome, cada um com a
- *     própria ordem interna] · Pendentes · Concluídas
+ *     Para hoje · [setores em ordem de nome, cada um com a própria
+ *     ordem interna] · Pendentes · Concluídas
+ *
+ * 14a (decisão nº 69): a fase de sistema `late` ("Atrasadas") CONTINUA
+ * no banco (âncora do seed, idempotente) mas NÃO É MAIS COLUNA: o atraso
+ * virou estado do card (faixa "Atrasada há …" na fase onde ele está).
+ * boardColumns() e payload() a pulam; o KPI "Atrasadas" da Hoje/Semana/
+ * Histórico não depende da fase e segue igual.
  *
  * As legadas "sem setor" (nome de setor vazio) ordenam antes dos setores
  * nomeados — efeito colateral natural do sort por nome, e suficiente,
@@ -84,6 +90,9 @@ class Phase
 
             if (!$isSystem && !in_array($gid, $memberGroupIds, true)) {
                 continue; // setor alheio (e legadas gid=0) fora do quadro
+            }
+            if ($isSystem && (string) ($row['system_key'] ?? '') === 'late') {
+                continue; // 14a: Atrasadas não é mais coluna (nº 69)
             }
 
             $columns[] = [
@@ -136,6 +145,9 @@ class Phase
             // âncoras de contexto, sem botões — can_edit abaixo).
             if (!$isAdmin && !$isSystem && !in_array($gid, $managedIds, true)) {
                 continue;
+            }
+            if ($isSystem && (string) ($row['system_key'] ?? '') === 'late') {
+                continue; // 14a: não há mais coluna para configurar
             }
 
             $phases[] = self::format($row, $groupNames, $isAdmin, $managedIds);

@@ -704,10 +704,11 @@ class TeamBoard
      * (`comment`, obrigatório) — decisão nº 66. Roteia pelo tipo da
      * coluna alvo, com as mesmas regras do Quadro pessoal (Board):
      *
-     *   · Atrasadas: nunca recebe (é calculada);
-     *   · Para hoje / fase do setor: grava a fase; desfaz conclusão se
-     *     vinha de Concluídas; encerra a pendência se vinha de
-     *     Pendentes; recusa card atrasado;
+     *   · Para hoje / fase do setor: grava a fase E o novo prazo
+     *     (`date` obrigatória + `time_limit` opcional — 14b, nº 70;
+     *     Board::deadlineFields); desfaz conclusão se vinha de
+     *     Concluídas; encerra a pendência se vinha de Pendentes;
+     *     atrasada se move livremente (nº 69);
      *   · Concluídas: conclui PARA A EQUIPE TODA (users_id_done = quem
      *     soltou); encerra pendência ativa;
      *   · Pendentes: pede também `pending_until` + `pending_time`; o
@@ -753,10 +754,6 @@ class TeamBoard
         $now       = date('Y-m-d H:i:s');
         $occId     = (int) $row['id'];
 
-        if ($key === 'late') {
-            return ['success' => false, 'message' => __('Atrasadas é automática — não recebe tarefas', 'taskplus')];
-        }
-
         if ($key === 'done') {
             if ($isDone) {
                 return ['success' => true, 'message' => __('Tarefa já estava concluída', 'taskplus')];
@@ -795,14 +792,17 @@ class TeamBoard
             return ['success' => true, 'message' => __('Tarefa marcada como pendente para a equipe', 'taskplus')];
         }
 
-        // Fase de trabalho (Para hoje ou fase do setor)
-        if (!$isDone && !$isPending && self::isLateRow($row)) {
-            return ['success' => false, 'message' => __('Tarefa atrasada: conclua, marque como pendente ou dê nova data', 'taskplus')];
+        // Fase de trabalho (Para hoje ou fase do setor) — 14b: sempre
+        // com o novo prazo. Tarefa de equipe nunca é de rotina, mas a
+        // régua é a mesma do Board (defesa em profundidade).
+        $deadline = Board::deadlineFields($input, ($row['plugin_taskplus_routines_id'] ?? null) !== null);
+        if (is_string($deadline)) {
+            return ['success' => false, 'message' => $deadline];
         }
         if ($isPending) {
             Pending::clear(Pending::TYPE_OCCURRENCE, $occId, self::TEAM_PENDING_USER);
         }
-        $fields = ['plugin_taskplus_phases_id' => $targetId, 'date_mod' => $now];
+        $fields = $deadline + ['plugin_taskplus_phases_id' => $targetId, 'date_mod' => $now];
         if ($isDone) {
             $fields += [
                 'is_done'           => 0,
@@ -814,12 +814,26 @@ class TeamBoard
             ];
         }
         $DB->update(Occurrence::TABLE, $fields, [Occurrence::TABLE . '.id' => $occId]);
-        Comment::addFromMove($occId, $usersId, (string) $target['name'], $comment);
 
-        if ($isDone && self::isLateRow($row)) {
-            return ['success' => true, 'message' => __('Conclusão desfeita — a tarefa venceu e voltou para Atrasadas', 'taskplus')];
+        // O prazo vai ao diálogo junto com o comentário, só quando mudou
+        // — a equipe vê "[Movida para X] texto · prazo 08/10 até 13:00".
+        $newDate  = (string) ($fields['date'] ?? $row['date'] ?? $now);
+        $newTime  = $fields['time_limit'] ?? null;
+        $label    = Board::deadlineLabel($newDate, $newTime);
+        $oldTime  = ($row['time_limit'] ?? null);
+        $changed  = $newDate !== (string) ($row['date'] ?? '')
+            || (string) ($newTime ?? '') !== (string) ($oldTime ?? '');
+        Comment::addFromMove(
+            $occId,
+            $usersId,
+            (string) $target['name'],
+            $changed ? ($comment . ' · prazo ' . $label) : $comment
+        );
+
+        if (self::isLateRow(['date' => $newDate, 'time_limit' => $newTime])) {
+            return ['success' => true, 'message' => sprintf(__('Tarefa movida para "%s" (prazo %s) — segue atrasada', 'taskplus'), (string) $target['name'], $label)];
         }
-        return ['success' => true, 'message' => sprintf(__('Tarefa movida para "%s"', 'taskplus'), (string) $target['name'])];
+        return ['success' => true, 'message' => sprintf(__('Tarefa movida para "%s" (prazo %s)', 'taskplus'), (string) $target['name'], $label)];
     }
 
     /** A tarefa tem pendência de EQUIPE ativa (e não vencida)? */

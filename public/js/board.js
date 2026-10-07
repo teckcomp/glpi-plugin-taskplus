@@ -26,6 +26,8 @@
         dragKey: null,
         justDragged: false,
         pendingCard: null,
+        moveCard: null,   // 14b
+        moveColId: 0,     // 14b
         editingCard: null,
         creating: false, // 12a: modal de edição aberto em modo "nova"
         // 13a: diálogo no modal do Quadro (mesmo contrato da Hoje, 8e-1)
@@ -425,21 +427,19 @@
     }
 
     /**
-     * Ids das colunas onde o card PODE ser solto:
-     *  - Atrasadas nunca recebe (é automática);
-     *  - card atrasado só vai para Concluídas ou Pendentes;
+     * Ids das colunas onde o card PODE ser solto (14b — nº 69: não há
+     * mais coluna Atrasadas e o card atrasado se move como qualquer
+     * outro):
      *  - card concluído volta para fase de trabalho (não vira pendente);
      *  - card pendente vai para fase de trabalho ou Concluídas;
      *  - card normal vai para outra fase de trabalho, Concluídas ou
      *    Pendentes.
      */
     function allowedTargets(card) {
-        var late = systemCol('late');
         var pending = systemCol('pending');
         var done = systemCol('done');
         var today = systemCol('today');
 
-        var lateId = late ? Number(late.id) : -1;
         var pendingId = pending ? Number(pending.id) : -1;
         var doneId = done ? Number(done.id) : -1;
         var todayId = today ? Number(today.id) : -1;
@@ -463,9 +463,7 @@
         });
 
         var targets = [];
-        if (current === lateId) {
-            targets = [doneId, pendingId];
-        } else if (current === doneId) {
+        if (current === doneId) {
             targets = workIds.slice();
         } else if (current === pendingId) {
             targets = workIds.concat([doneId]);
@@ -506,7 +504,72 @@
             post({ action: 'unpending', id: String(card.id), itemtype: typeOf(card) });
             return;
         }
-        post({ action: 'set_phase', id: String(card.id), itemtype: 'Occurrence', phases_id: String(colId) });
+        // 14b (nº 70): fase de trabalho pede o novo prazo antes de gravar.
+        // Template antigo em cache (sem o modal): posta com o prazo atual.
+        if ($('tp-bm-modal')) {
+            openMoveModal(card, colId);
+            return;
+        }
+        post({
+            action: 'set_phase', id: String(card.id), itemtype: 'Occurrence', phases_id: String(colId),
+            date: card.date || '', time_limit: card.time_limit || ''
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // 14b — modal de movimento: novo prazo (data obrigatória + hora)
+    // ------------------------------------------------------------------
+
+    function columnName(colId) {
+        var name = '';
+        state.data.columns.forEach(function (col) {
+            if (Number(col.id) === Number(colId)) {
+                name = col.name || '';
+            }
+        });
+        return name;
+    }
+
+    function openMoveModal(card, colId) {
+        state.moveCard = card;
+        state.moveColId = Number(colId);
+        $('tp-bm-title').textContent = 'Mover para "' + columnName(colId) + '"';
+        $('tp-bm-subject').textContent = card.name || '(sem título)';
+        $('tp-bm-date').value = card.date || state.data.date || '';
+        $('tp-bm-time').value = card.time_limit || '';
+        // Ocorrência de rotina não muda de data (UNIQUE routine_day —
+        // regra da 4b): só o horário entra.
+        $('tp-bm-date').disabled = !!card.is_routine;
+        $('tp-bm-routine').hidden = !card.is_routine;
+        $('tp-bm-modal').hidden = false;
+        $(card.is_routine ? 'tp-bm-time' : 'tp-bm-date').focus();
+    }
+
+    function closeMoveModal() {
+        $('tp-bm-modal').hidden = true;
+        state.moveCard = null;
+        state.moveColId = 0;
+    }
+
+    function saveMove() {
+        var card = state.moveCard;
+        if (!card) {
+            return;
+        }
+        var date = $('tp-bm-date').value;
+        if (date === '' && !card.is_routine) {
+            toast('Informe a nova data da tarefa', true);
+            $('tp-bm-date').focus();
+            return;
+        }
+        post({
+            action: 'set_phase',
+            id: String(card.id),
+            itemtype: 'Occurrence',
+            phases_id: String(state.moveColId),
+            date: date,
+            time_limit: $('tp-bm-time').value
+        }, closeMoveModal);
     }
 
     // ------------------------------------------------------------------
@@ -536,7 +599,7 @@
 
         var box = el('div', 'taskplus-bcol'
             + (col.is_system ? ' taskplus-bcol--system' : '')
-            + (col.is_system && col.system_key === 'late' ? ' taskplus-bcol--late' : ''));
+            );
         box.setAttribute('data-col-id', String(colId));
 
         var cards = state.data.cards.filter(function (card) {
@@ -559,7 +622,7 @@
         var body = el('div', 'taskplus-bcol__body');
         if (cards.length === 0) {
             body.appendChild(el('div', 'taskplus-bcol__empty',
-                (col.is_system && col.system_key === 'late') ? 'Nada atrasado' : 'Sem tarefas'));
+                'Sem tarefas'));
         } else {
             cards.forEach(function (item) {
                 body.appendChild(card(item));
@@ -662,6 +725,15 @@
         }
         if (badges.childNodes.length > 0) {
             c.appendChild(badges);
+        }
+
+        // 14a (nº 69): atraso é estado do card — faixa no rodapé com o
+        // contador do servidor (late_label). Pendente/concluída fica sem.
+        if (item.is_late && !item.is_pending && !item.is_done) {
+            var lateStrip = el('div', 'taskplus-bcard__late');
+            lateStrip.appendChild(el('i', 'ti ti-alert-triangle'));
+            lateStrip.appendChild(document.createTextNode('\u00a0Atrasada' + (item.late_label ? ' \u00b7 ' + item.late_label : '')));
+            c.appendChild(lateStrip);
         }
 
         // Clique (que não foi arrasto): própria abre o modal de edição
@@ -1043,6 +1115,16 @@
         });
         $('tp-bp-cancel').addEventListener('click', closePendingModal);
         $('tp-bp-save').addEventListener('click', savePending);
+        // 14b: modal de movimento (opcional — template antigo em cache)
+        if ($('tp-bm-modal')) {
+            $('tp-bm-cancel').addEventListener('click', closeMoveModal);
+            $('tp-bm-save').addEventListener('click', saveMove);
+            $('tp-bm-modal').addEventListener('click', function (ev) {
+                if (ev.target === $('tp-bm-modal')) {
+                    closeMoveModal();
+                }
+            });
+        }
         $('tp-bp-modal').addEventListener('click', function (ev) {
             if (ev.target === $('tp-bp-modal')) {
                 closePendingModal(); // clique no fundo fecha
@@ -1054,6 +1136,9 @@
             }
             if (!$('tp-bp-modal').hidden) {
                 closePendingModal();
+            }
+            if ($('tp-bm-modal') && !$('tp-bm-modal').hidden) {
+                closeMoveModal();
             }
             if (!$('tp-be-modal').hidden) {
                 closeEditModal();
@@ -1070,6 +1155,7 @@
         safeData: safeData,
         allowedTargets: allowedTargets,
         dropOn: dropOn,
+        saveMove: saveMove,
         openEditModal: openEditModal,
         openCreateModal: openCreateModal,
         saveEdit: saveEdit,

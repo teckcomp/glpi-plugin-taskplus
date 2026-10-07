@@ -17,7 +17,7 @@
 
         <div class="taskplus-board-hint">
             <i class="ti ti-hand-move"></i>
-            <span>{{ __('Arraste os cards entre as colunas. Soltar em "Concluídas" conclui; em "Pendentes" pede motivo, data e hora. "Atrasadas" é automática — a tarefa volta sozinha à fase de origem ao ganhar novo prazo.', 'taskplus') }}</span>
+            <span>{{ __('Arraste os cards entre as colunas. Soltar numa fase pede o novo prazo; em "Concluídas" conclui; em "Pendentes" pede motivo, data e hora. Tarefa atrasada fica na fase onde está, marcada em vermelho com o tempo de atraso.', 'taskplus') }}</span>
         </div>
 
         {# Colunas + cards, renderizados pelo JS a partir do payload #}
@@ -74,6 +74,29 @@
 </div>
 
 {# ================= MODAL de pendência (mesmo contrato da Etapa 4b) ================= #}
+{# 14b (nº 70): mover para fase de trabalho pede o novo prazo #}
+<div class="taskplus-modal" id="tp-bm-modal" hidden>
+    <div class="taskplus-modal__box">
+        <h3 id="tp-bm-title">{{ __('Mover tarefa', 'taskplus') }}</h3>
+        <p class="taskplus-modal__subject" id="tp-bm-subject"></p>
+        <div class="taskplus-modal__row">
+            <label class="taskplus-field">
+                <span>{{ __('Nova data', 'taskplus') }} *</span>
+                <input type="date" id="tp-bm-date">
+            </label>
+            <label class="taskplus-field">
+                <span>{{ __('Horário-limite', 'taskplus') }}</span>
+                <input type="time" id="tp-bm-time">
+            </label>
+        </div>
+        <p class="taskplus-modal__hint" id="tp-bm-routine" hidden>{{ __('Tarefa de rotina: a data não muda, só o horário.', 'taskplus') }}</p>
+        <div class="taskplus-modal__actions">
+            <button type="button" class="btn btn-ghost-secondary" id="tp-bm-cancel">{{ __('Cancelar', 'taskplus') }}</button>
+            <button type="button" class="btn btn-primary" id="tp-bm-save">{{ __('Mover', 'taskplus') }}</button>
+        </div>
+    </div>
+</div>
+
 <div class="taskplus-modal" id="tp-bp-modal" hidden>
     <div class="taskplus-modal__box">
         <h3>{{ __('Marcar como pendente', 'taskplus') }}</h3>

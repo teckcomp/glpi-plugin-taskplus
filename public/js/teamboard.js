@@ -262,6 +262,52 @@
     // Toolbar: seletor de setor + busca + Nova tarefa
     // ------------------------------------------------------------------
 
+    /** 14c — chave do favorito por usuário (preferência do navegador). */
+    function favoriteKey() {
+        return 'taskplus.teamboard.fav.' + String(state.userId || 0);
+    }
+
+    function favoriteGroup() {
+        try {
+            return Number(window.localStorage.getItem(favoriteKey())) || 0;
+        } catch (e) {
+            return 0; // storage bloqueado (modo privado etc.): sem favorito
+        }
+    }
+
+    function setFavoriteGroup(id) {
+        try {
+            if (id > 0) {
+                window.localStorage.setItem(favoriteKey(), String(id));
+            } else {
+                window.localStorage.removeItem(favoriteKey());
+            }
+        } catch (e) {
+            // sem storage: o clique só não persiste
+        }
+    }
+
+    /**
+     * 14c — na abertura sem `?groups_id=` na URL, troca para o favorito
+     * se ele estiver no escopo e não for o já aberto (um `list` a mais).
+     */
+    function applyFavorite() {
+        if (/[?&]groups_id=/.test(String(window.location.search || ''))) {
+            return false;
+        }
+        var favId = favoriteGroup();
+        if (favId <= 0 || favId === Number(state.data.group_id)) {
+            return false;
+        }
+        var inScope = state.data.groups.some(function (g) { return Number(g.id) === favId; });
+        if (!inScope) {
+            setFavoriteGroup(0); // saiu do setor: favorito órfão some
+            return false;
+        }
+        post({ action: 'list', groups_id: String(favId) });
+        return true;
+    }
+
     function renderToolbar() {
         var bar = $('tp-tb-toolbar');
         if (!bar) {
@@ -289,6 +335,25 @@
                 post({ action: 'list', groups_id: sel.value });
             });
             sector.appendChild(sel);
+
+            // 14c: setor favorito (★) — abre direto nele da próxima vez.
+            // Preferência deste navegador (localStorage, por usuário).
+            var favId = favoriteGroup();
+            var isFav = favId > 0 && favId === Number(state.data.group_id);
+            var fav = el('button', 'taskplus-toolbar2__fav' + (isFav ? ' taskplus-toolbar2__fav--on' : ''));
+            fav.type = 'button';
+            fav.id = 'tp-tb-fav';
+            fav.textContent = isFav ? '\u2605' : '\u2606';
+            fav.title = isFav
+                ? 'Setor favorito — o Quadro de Equipe abre nele. Clique para desmarcar'
+                : 'Marcar como setor favorito: o Quadro de Equipe passa a abrir nele';
+            fav.setAttribute('aria-label', fav.title);
+            fav.addEventListener('click', function () {
+                setFavoriteGroup(isFav ? 0 : Number(state.data.group_id));
+                toast(isFav ? 'Setor favorito desmarcado' : 'Setor favorito: o Quadro de Equipe abre aqui da próxima vez');
+                renderToolbar();
+            });
+            sector.appendChild(fav);
         } else {
             var g0 = groups[0];
             sector.appendChild(el('strong', '', g0 ? (g0.name || ('Setor #' + g0.id)) : '—'));
@@ -424,7 +489,7 @@
 
         var box = el('div', 'taskplus-bcol'
             + (col.is_system ? ' taskplus-bcol--system' : '')
-            + (col.is_system && col.system_key === 'late' ? ' taskplus-bcol--late' : ''));
+            );
         box.setAttribute('data-col-id', String(colId));
 
         var cards = state.data.cards.filter(function (card) {
@@ -442,7 +507,7 @@
         var body = el('div', 'taskplus-bcol__body');
         if (cards.length === 0) {
             body.appendChild(el('div', 'taskplus-bcol__empty',
-                (col.is_system && col.system_key === 'late') ? 'Nada atrasado' : 'Sem tarefas'));
+                'Sem tarefas'));
         } else {
             cards.forEach(function (item) {
                 body.appendChild(card(item));
@@ -499,16 +564,15 @@
     }
 
     /**
-     * Colunas onde o card PODE ser solto: Atrasadas nunca; atrasado só
-     * Concluídas/Pendentes; concluído volta a fase de trabalho;
-     * pendente vai a fase de trabalho ou Concluídas; normal vai a outra
-     * fase de trabalho, Concluídas ou Pendentes.
+     * Colunas onde o card PODE ser solto (14b — nº 69: atrasada se move
+     * livremente, não há mais coluna Atrasadas): concluído volta a fase
+     * de trabalho; pendente vai a fase de trabalho ou Concluídas;
+     * normal (atrasado ou não) vai a outra fase de trabalho, Concluídas
+     * ou Pendentes.
      */
     function allowedTargets(card) {
-        var late = systemCol('late');
         var pending = systemCol('pending');
         var done = systemCol('done');
-        var lateId = late ? Number(late.id) : -1;
         var pendingId = pending ? Number(pending.id) : -1;
         var doneId = done ? Number(done.id) : -1;
         var current = Number(card.column);
@@ -522,9 +586,7 @@
         });
 
         var targets;
-        if (current === lateId) {
-            targets = [doneId, pendingId];
-        } else if (current === doneId) {
+        if (current === doneId) {
             targets = workIds.slice();
         } else if (current === pendingId) {
             targets = workIds.concat([doneId]);
@@ -582,6 +644,18 @@
             $('tp-tm-until').value = card.pending_until || tomorrow();
             $('tp-tm-time').value = card.pending_time || '18:00';
         }
+        // 14b (nº 70): fase de trabalho SEMPRE pede o novo prazo,
+        // pré-preenchido com o atual (elementos opcionais: template
+        // antigo em cache segue sem o bloco).
+        var deadline = $('tp-tm-deadline');
+        if (deadline) {
+            var isWork = !isDone && !isPending;
+            deadline.hidden = !isWork;
+            if (isWork) {
+                $('tp-tm-date').value = card.date || state.data.date || '';
+                $('tp-tm-limit').value = card.time_limit || '';
+            }
+        }
         $('tp-tm-save').textContent = isDone ? 'Concluir' : (isPending ? 'Salvar' : 'Mover');
         $('tp-tm-modal').hidden = false;
         $('tp-tm-comment').focus();
@@ -615,6 +689,16 @@
             fields.pending_time = $('tp-tm-time').value;
             if (fields.pending_until === '' || fields.pending_time === '') {
                 toast('Informe a data e a hora de retorno', true);
+                return;
+            }
+        }
+        var deadline = $('tp-tm-deadline');
+        if (deadline && !deadline.hidden) {
+            fields.date = $('tp-tm-date').value;
+            fields.time_limit = $('tp-tm-limit').value;
+            if (fields.date === '') {
+                toast('Informe a nova data da tarefa', true);
+                $('tp-tm-date').focus();
                 return;
             }
         }
@@ -695,6 +779,16 @@
         });
         if (collab.childNodes.length > 0) {
             c.appendChild(collab);
+        }
+
+        // 14a (nº 69): atraso é estado do card — faixa no rodapé com o
+        // contador vindo do servidor (late_label). Pendente/concluída
+        // não é "atrasada" para o leitor, mesmo com a data vencida.
+        if (item.is_late && !item.is_pending && !item.is_done) {
+            var late = el('div', 'taskplus-bcard__late');
+            late.appendChild(el('i', 'ti ti-alert-triangle'));
+            late.appendChild(document.createTextNode('\u00a0Atrasada' + (item.late_label ? ' \u00b7 ' + item.late_label : '')));
+            c.appendChild(late);
         }
 
         c.addEventListener('click', function () {
@@ -1266,6 +1360,7 @@
         });
 
         render();
+        applyFavorite(); // 14c
     }
 
     // Exposto para teste (jsdom) e para depuração no console
@@ -1286,6 +1381,9 @@
         renderDialog: renderDialog,
         sendComment: sendComment,
         matchesSearch: matchesSearch,
+        favoriteGroup: favoriteGroup,
+        setFavoriteGroup: setFavoriteGroup,
+        applyFavorite: applyFavorite,
         state: state
     };
 

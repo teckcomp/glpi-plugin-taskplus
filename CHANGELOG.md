@@ -3,6 +3,29 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.2.8-beta] — 2026-10-07
+
+### Alterado
+
+- **Quadro e Quadro de Equipe — atraso vira estado do card** (14a,
+  decisão nº 69): a coluna "Atrasadas" saiu dos dois quadros (e de
+  Configurações). A tarefa atrasada fica na fase onde está, com a faixa
+  vermelha "Atrasada · há 2 dias" / "há 1h30" no rodapé do card. O KPI
+  "Atrasadas" da Hoje, Semana e Histórico continua igual.
+- **Movimento livre entre fases com novo prazo** (14b, nº 70): tarefa
+  atrasada se move como qualquer outra; soltar numa fase de trabalho
+  abre o modal com **Nova data** (obrigatória) e **Horário-limite**,
+  pré-preenchidos com os atuais. No Quadro de Equipe o prazo entra no
+  comentário do diálogo quando mudou ("… · prazo 09/10 até 15:00").
+  Ocorrência de rotina muda só o horário (a data é da rotina).
+
+### Adicionado
+
+- **Setor favorito no Quadro de Equipe** (14c): estrela ao lado do
+  seletor — marcado, o quadro abre direto nesse setor da próxima vez
+  (preferência do navegador, por usuário; `?groups_id=` na URL tem
+  prioridade).
+
 ## [0.2.7-beta] — 2026-10-06
 
 ### Corrigido

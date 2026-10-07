@@ -108,10 +108,13 @@ class Board
 
     /**
      * Em qual coluna o card aparece. Os estados calculados SOBREPÕEM a
-     * fase gravada, nesta ordem: concluída · pendente · atrasada. Fora
-     * deles, vale a fase gravada — se ela for visível neste quadro
-     * ("Para hoje" ou customizada de setor do usuário); fase de setor
-     * alheio ou excluída cai na padrão, sem sumir com o card.
+     * fase gravada, nesta ordem: concluída · pendente. Fora deles, vale
+     * a fase gravada — se ela for visível neste quadro ("Para hoje" ou
+     * customizada de setor do usuário); fase de setor alheio ou
+     * excluída cai na padrão, sem sumir com o card.
+     *
+     * 14a (nº 69): atrasada NÃO é mais coluna — o card fica na fase
+     * gravada com `is_late`/`late_label` e a tela mostra a faixa.
      */
     public static function resolveColumn(array $item, array $columns): int
     {
@@ -147,9 +150,6 @@ class Board
         }
         if (!empty($item['is_pending'])) {
             return (int) ($byKey['pending'] ?? $defaultId);
-        }
-        if (!empty($item['is_late'])) {
-            return (int) ($byKey['late'] ?? $defaultId);
         }
 
         $phaseId = (int) ($item['phases_id'] ?? 0);
@@ -211,8 +211,58 @@ class Board
     }
 
     /**
+     * 14b (nº 70) — novo prazo que acompanha TODO solte em fase de
+     * trabalho: `date` (obrigatória, 'Y-m-d') e `time_limit` (opcional,
+     * 'HH:MM'; vazio = sem horário). Mesma régua do modal de edição
+     * (Occurrence::validDate/validTime). Ocorrência de ROTINA não muda
+     * de data (metade da UNIQUE routine_day) — a data vem fora e só o
+     * horário entra, com `is_edited` = 1 como no updateFor.
+     *
+     * Devolve os campos a gravar, ou a mensagem de erro (string).
+     */
+    public static function deadlineFields(array $input, bool $isRoutine): array|string
+    {
+        $rawDate = trim((string) ($input['date'] ?? ''));
+        $date    = ($rawDate === '') ? null : Occurrence::validDate($rawDate);
+        if ($date === null && !$isRoutine) {
+            return __('Informe a nova data da tarefa', 'taskplus');
+        }
+        if ($rawDate !== '' && $date === null) {
+            return __('Data inválida', 'taskplus');
+        }
+
+        $rawTime = trim((string) ($input['time_limit'] ?? ''));
+        $time    = null;
+        if ($rawTime !== '') {
+            $time = Occurrence::validTime($rawTime);
+            if ($time === null) {
+                return __('Horário-limite inválido', 'taskplus');
+            }
+        }
+
+        $fields = ['time_limit' => $time];
+        if ($isRoutine) {
+            $fields['is_edited'] = 1;
+        } else {
+            $fields['date'] = $date;
+        }
+        return $fields;
+    }
+
+    /** 'dd/mm' + (' até HH:MM') para o toast/diálogo. */
+    public static function deadlineLabel(string $date, ?string $time): string
+    {
+        $label = substr($date, 8, 2) . '/' . substr($date, 5, 2);
+        if ($time !== null && $time !== '') {
+            $label .= ' até ' . substr($time, 0, 5);
+        }
+        return $label;
+    }
+
+    /**
      * Soltar em "Para hoje" ou em fase customizada: grava a fase de
-     * trabalho. Desfaz conclusão / encerra pendência quando o card vinha
+     * trabalho E o novo prazo (14b — nº 70; atrasada se move livremente,
+     * nº 69). Desfaz conclusão / encerra pendência quando o card vinha
      * dessas colunas — é o gesto natural de "voltar ao fluxo".
      */
     private static function setPhase(array $input, int $usersId): array
@@ -256,22 +306,18 @@ class Board
 
         $isDone    = ((int) ($row['is_done'] ?? 0)) === 1;
         $isPending = self::hasActivePending((int) $row['id'], $usersId);
+        $isRoutine = ($row['plugin_taskplus_routines_id'] ?? null) !== null;
 
-        // Atrasada (e não concluída/pendente): mover para fase de
-        // trabalho não resolve o atraso — o card continuaria em
-        // Atrasadas e o solte pareceria "não ter funcionado".
-        if (!$isDone && !$isPending && self::isLateRow($row)) {
-            return [
-                'success' => false,
-                'message' => __('Tarefa atrasada: conclua, marque como pendente ou dê nova data na tela Hoje', 'taskplus'),
-            ];
+        $deadline = self::deadlineFields($input, $isRoutine);
+        if (is_string($deadline)) {
+            return ['success' => false, 'message' => $deadline];
         }
 
         if ($isPending) {
             Pending::clear(Pending::TYPE_OCCURRENCE, (int) $row['id'], $usersId);
         }
 
-        $fields = [
+        $fields = $deadline + [
             'plugin_taskplus_phases_id' => $targetId,
             'date_mod'                  => date('Y-m-d H:i:s'),
         ];
@@ -293,19 +339,20 @@ class Board
             [Occurrence::TABLE . '.id' => (int) $row['id']]
         );
 
-        if ($isDone && self::isLateRow($row)) {
-            // Desfez a conclusão de tarefa com data vencida: ela reaparece
-            // em Atrasadas (o atraso é calculado), não na fase solta — o
-            // toast avisa para o solte não parecer "não ter funcionado".
+        $newDate = (string) ($fields['date'] ?? $row['date'] ?? date('Y-m-d'));
+        $label   = self::deadlineLabel($newDate, $fields['time_limit'] ?? null);
+        if (self::isLateRow(['date' => $newDate, 'time_limit' => $fields['time_limit'] ?? null])) {
+            // Prazo novo já vencido: o card fica na fase, marcado como
+            // atrasado (nº 69) — o toast avisa para não parecer erro.
             return [
                 'success' => true,
-                'message' => __('Conclusão desfeita — a tarefa venceu e voltou para Atrasadas', 'taskplus'),
+                'message' => sprintf(__('Tarefa movida para "%s" (prazo %s) — segue atrasada', 'taskplus'), (string) $target['name'], $label),
             ];
         }
 
         return [
             'success' => true,
-            'message' => sprintf(__('Tarefa movida para "%s"', 'taskplus'), (string) $target['name']),
+            'message' => sprintf(__('Tarefa movida para "%s" (prazo %s)', 'taskplus'), (string) $target['name'], $label),
         ];
     }
 

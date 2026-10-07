@@ -451,6 +451,22 @@
 .taskplus-bcard--done .taskplus-bcard__name { text-decoration: line-through; color: #8a97a5; }
 .taskplus-bcard--pending { border-left: 3px solid #e8a13c; }
 .taskplus-bcard--late { border-left: 3px solid #d9480f; }
+/* 14a (nº 69): atraso é estado do card — faixa no rodapé */
+.taskplus-bcard__late {
+    margin-top: 6px; padding: 3px 8px; border-radius: 4px;
+    background: #fdebe3; color: #d9480f; font-size: 0.72rem; font-weight: 600;
+    display: flex; align-items: center; gap: 2px;
+}
+.taskplus-bcard--pending .taskplus-bcard__late,
+.taskplus-bcard--done .taskplus-bcard__late { display: none; }
+/* 14c: setor favorito na barra do Quadro de Equipe */
+.taskplus-toolbar2__fav {
+    border: 1px solid #dde5ec; background: #fff; border-radius: 6px;
+    width: 32px; height: 32px; line-height: 1; font-size: 1.1rem;
+    color: #8a97a5; cursor: pointer; padding: 0;
+}
+.taskplus-toolbar2__fav:hover { color: #e8a13c; border-color: #e8a13c; }
+.taskplus-toolbar2__fav--on { color: #e8a13c; border-color: #e8a13c; background: #fff7e6; }
 
 /* 4d-2: card nativo no quadro (leitura, clique abre no GLPI) */
 .taskplus-bcard--native { background: #fbfcfd; border-style: dashed; }

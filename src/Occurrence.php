@@ -531,6 +531,11 @@ class Occurrence
             'created_by_id'    => (int) ($row['users_id_creator'] ?? 0),
             'created_by_label' => '',
             'is_late'     => $isLate,
+            // 14a (nº 69): atraso é ESTADO do card, não coluna — o quadro
+            // mostra "Atrasada há 2 dias" / "há 1h30" no rodapé. Vazio
+            // quando não atrasada. Chave nova é inofensiva (sem whitelist
+            // de item no board/teamboard).
+            'late_label'  => $isLate ? self::lateLabel($date, $limit, $today, $nowTime) : '',
             // Setada como true só na consulta "concluída hoje, de dia
             // anterior" (4d-2); presente em todo item pela mesma higiene
             // do resto do payload (chave usada nunca pode faltar).
@@ -1039,9 +1044,49 @@ class Occurrence
     }
 
     /**
-     * 'Y-m-d' válido, ou null.
+     * 14a — "há quanto tempo" a tarefa está atrasada, pronto para o
+     * card: dia já passado conta em DIAS DE CALENDÁRIO ("há 1 dia",
+     * "há 3 dias" — sem hora, porque o leitor pensa em dias); vencida
+     * HOJE pelo horário-limite conta em minutos/horas desde o limite
+     * ("há 45 min", "há 2h15"). Regra pura (sem banco, sem date()):
+     * testável no harness com $today/$nowTime fixos. Devolve '' quando
+     * não está atrasada — o chamador já decidiu, mas a função se
+     * defende.
      */
-    private static function validDate(string $raw): ?string
+    public static function lateLabel(string $date, ?string $limit, string $today, string $nowTime): string
+    {
+        if ($date < $today) {
+            $days = (int) round((strtotime($today) - strtotime($date)) / 86400);
+            if ($days < 1) {
+                $days = 1;
+            }
+            return ($days === 1) ? 'há 1 dia' : sprintf('há %d dias', $days);
+        }
+        if ($date === $today && $limit !== null && $limit !== '' && $limit < $nowTime) {
+            $toMin = static function (string $hms): int {
+                $p = explode(':', $hms);
+                return ((int) ($p[0] ?? 0)) * 60 + (int) ($p[1] ?? 0);
+            };
+            $diff = $toMin($nowTime) - $toMin((string) $limit);
+            if ($diff < 1) {
+                $diff = 1;
+            }
+            if ($diff < 60) {
+                return sprintf('há %d min', $diff);
+            }
+            $h = intdiv($diff, 60);
+            $m = $diff % 60;
+            return ($m === 0) ? sprintf('há %dh', $h) : sprintf('há %dh%02d', $h, $m);
+        }
+        return '';
+    }
+
+    /**
+     * 'Y-m-d' válido, ou null. Pública desde o 14b: o Board e o
+     * TeamBoard validam o novo prazo do solte com a MESMA régua do
+     * modal de edição.
+     */
+    public static function validDate(string $raw): ?string
     {
         if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $raw, $m)) {
             return null;
@@ -1055,7 +1100,7 @@ class Occurrence
     /**
      * 'HH:MM' (ou 'HH:MM:SS') → 'HH:MM:SS', ou null se inválido.
      */
-    private static function validTime(string $raw): ?string
+    public static function validTime(string $raw): ?string
     {
         if (!preg_match('/^(\d{2}):(\d{2})(?::(\d{2}))?$/', $raw, $m)) {
             return null;

@@ -17,7 +17,7 @@
 
         <div class="taskplus-board-hint">
             <i class="ti ti-users-group"></i>
-            <span>{{ __('Tarefas da equipe do setor, com um ou mais colaboradores por tarefa. Arraste entre as fases — todo movimento pede um comentário, que vai para o diálogo da tarefa. Clique no card para ver ou editar.', 'taskplus') }}</span>
+            <span>{{ __('Tarefas da equipe do setor, com um ou mais colaboradores por tarefa. Arraste entre as fases — todo movimento pede um comentário (e, nas fases, o novo prazo); tarefa atrasada fica onde está, marcada em vermelho. Clique no card para ver ou editar.', 'taskplus') }}</span>
         </div>
 
         {# Seletor de setor + busca + Nova tarefa, montados pelo JS #}
@@ -100,6 +100,17 @@
             <textarea id="tp-tm-comment" rows="3"
                       placeholder="{{ __('O que mudou? Vai para o diálogo da tarefa, visível à equipe', 'taskplus') }}"></textarea>
         </label>
+        {# 14b (nº 70): fase de trabalho pede o novo prazo, pré-preenchido #}
+        <div class="taskplus-modal__row" id="tp-tm-deadline" hidden>
+            <label class="taskplus-field">
+                <span>{{ __('Nova data', 'taskplus') }} *</span>
+                <input type="date" id="tp-tm-date">
+            </label>
+            <label class="taskplus-field">
+                <span>{{ __('Horário-limite', 'taskplus') }}</span>
+                <input type="time" id="tp-tm-limit">
+            </label>
+        </div>
         {# Só para Pendentes: data/hora de retorno (mesmo contrato da 4b) #}
         <div class="taskplus-modal__row" id="tp-tm-pending" hidden>
             <label class="taskplus-field">
