@@ -655,6 +655,26 @@
         return box;
     }
 
+    /**
+     * 15 — barra do prazo: preenchimento = deadline_pct (0–100), cor por
+     * faixa (verde · âmbar a partir de 60 · vermelho a partir de 85),
+     * rótulo = deadline_label. Title com o percentual para quem passar
+     * o mouse.
+     */
+    function deadlineBar(item) {
+        var pct = Math.max(0, Math.min(100, Number(item.deadline_pct) || 0));
+        var tone = pct >= 85 ? 'red' : (pct >= 60 ? 'amber' : 'green');
+        var box = el('div', 'taskplus-bcard__deadline taskplus-bcard__deadline--' + tone);
+        var track = el('div', 'taskplus-bcard__deadline-track');
+        var fill = el('div', 'taskplus-bcard__deadline-fill');
+        fill.style.width = pct + '%';
+        track.appendChild(fill);
+        box.appendChild(track);
+        box.appendChild(el('span', 'taskplus-bcard__deadline-label', item.deadline_label || ''));
+        box.title = 'Prazo ' + pct + '% consumido';
+        return box;
+    }
+
     function card(item) {
         var c = el('div', 'taskplus-bcard'
             + (item.is_native ? ' taskplus-bcard--native' : '')
@@ -683,7 +703,10 @@
             badges.appendChild(el('span', 'taskplus-badge', 'rotina'));
         }
         if (item.date && state.data.date && item.date !== state.data.date && item.date_label) {
-            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--late', item.date_label));
+            // 15: data futura é prazo (azul); só a vencida fica vermelha
+            badges.appendChild(el('span',
+                'taskplus-badge ' + (item.date < state.data.date ? 'taskplus-badge--late' : 'taskplus-badge--limit'),
+                item.date_label));
         }
         if (item.time_limit) {
             badges.appendChild(el('span',
@@ -725,6 +748,12 @@
         }
         if (badges.childNodes.length > 0) {
             c.appendChild(badges);
+        }
+
+        // 15 (nº 71): a data é prazo — barra do prazo correndo desde a
+        // criação (deadline_pct/deadline_label do servidor).
+        if (!item.is_native && !item.is_late && !item.is_pending && !item.is_done && item.deadline_label) {
+            c.appendChild(deadlineBar(item));
         }
 
         // 14a (nº 69): atraso é estado do card — faixa no rodapé com o

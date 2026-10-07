@@ -360,7 +360,7 @@ class Comment
      */
     public static function withUnread(array $payload, int $viewerId): array
     {
-        $keys = ['today', 'overdue'];
+        $keys = ['today', 'overdue', 'upcoming']; // 15: upcoming do Quadro
 
         $ids = [];
         foreach ($keys as $key) {

@@ -459,6 +459,19 @@
 }
 .taskplus-bcard--pending .taskplus-bcard__late,
 .taskplus-bcard--done .taskplus-bcard__late { display: none; }
+/* 15 (nº 71): barra do prazo no card */
+.taskplus-bcard__deadline {
+    margin-top: 6px; display: flex; align-items: center; gap: 6px;
+    font-size: 0.7rem; font-weight: 600; color: #5a6b7b;
+}
+.taskplus-bcard__deadline-track {
+    flex: 1 1 auto; height: 6px; border-radius: 3px; background: #e9eef3; overflow: hidden;
+}
+.taskplus-bcard__deadline-fill { height: 100%; border-radius: 3px; background: #2f855a; transition: width .3s; }
+.taskplus-bcard__deadline--amber .taskplus-bcard__deadline-fill { background: #e8a13c; }
+.taskplus-bcard__deadline--red .taskplus-bcard__deadline-fill { background: #d9480f; }
+.taskplus-bcard__deadline--red .taskplus-bcard__deadline-label { color: #d9480f; }
+.taskplus-bcard__deadline-label { flex: 0 0 auto; white-space: nowrap; }
 /* 14c: setor favorito na barra do Quadro de Equipe */
 .taskplus-toolbar2__fav {
     border: 1px solid #dde5ec; background: #fff; border-radius: 6px;

@@ -42,7 +42,7 @@ class Occurrence
      * dia; late = pendentes de dias anteriores + pendentes de hoje com o
      * horário-limite estourado.
      */
-    public static function payload(int $usersId, ?string $from = null, ?string $to = null): array
+    public static function payload(int $usersId, ?string $from = null, ?string $to = null, int $upcomingDays = 0): array
     {
         /** @var \DBmysql $DB */
         global $DB;
@@ -59,8 +59,12 @@ class Occurrence
         $today   = date('Y-m-d');
         $nowTime = date('H:i:s');
 
-        $todayRows   = [];
-        $overdueRows = [];
+        $todayRows    = [];
+        $overdueRows  = [];
+        // 15 (nº 71): abertas com prazo nos próximos $upcomingDays dias
+        // — SÓ quando o chamador pede (Quadro); a Hoje passa 0 e segue
+        // exatamente como antes. Lista própria, fora dos KPIs.
+        $upcomingRows = [];
 
         if ($periodActive) {
             // Uma consulta só: tudo do intervalo (aberta, concluída,
@@ -133,6 +137,23 @@ class Occurrence
             $todayRows[]         = $item;
         }
 
+        if ($upcomingDays > 0) {
+            $until = date('Y-m-d', strtotime($today . ' +' . $upcomingDays . ' days'));
+            foreach ($DB->request(self::baseQuery() + [
+                'WHERE' => [
+                    self::TABLE . '.users_id'   => $usersId,
+                    self::TABLE . '.is_deleted' => 0,
+                    self::TABLE . '.is_done'    => 0,
+                    self::TABLE . '.is_skipped' => 0,
+                    [self::TABLE . '.date' => ['>', $today]],
+                    [self::TABLE . '.date' => ['<=', $until]],
+                ],
+            ]) as $row) {
+                $upcomingRows[] = self::format($row, $today, $nowTime);
+            }
+            usort($upcomingRows, [self::class, 'compareOverdue']);
+        }
+
         // Ordenação em PHP, não no SQL: o controle fino ("NULL de
         // time_limit por último") é mais simples e testável aqui.
         usort($todayRows, [self::class, 'compareToday']);
@@ -166,15 +187,17 @@ class Occurrence
             $pendings = [];
         }
 
-        $todayRows   = self::applyPendings($todayRows, $pendings, Pending::TYPE_OCCURRENCE, $usersId);
-        $overdueRows = self::applyPendings($overdueRows, $pendings, Pending::TYPE_OCCURRENCE, $usersId);
-        $native      = self::applyPendings($native, $pendings, null, $usersId);
+        $todayRows    = self::applyPendings($todayRows, $pendings, Pending::TYPE_OCCURRENCE, $usersId);
+        $overdueRows  = self::applyPendings($overdueRows, $pendings, Pending::TYPE_OCCURRENCE, $usersId);
+        $upcomingRows = self::applyPendings($upcomingRows, $pendings, Pending::TYPE_OCCURRENCE, $usersId);
+        $native       = self::applyPendings($native, $pendings, null, $usersId);
 
         // Auditoria (5b-1/5b-2): resolve o NOME de quem concluiu ou de
         // quem marcou a pendência, quando não foi o próprio dono (ação
         // do gestor pela Equipe). Uma consulta por lista, no máximo.
-        $todayRows   = self::fillActorLabels($todayRows);
-        $overdueRows = self::fillActorLabels($overdueRows);
+        $todayRows    = self::fillActorLabels($todayRows);
+        $overdueRows  = self::fillActorLabels($overdueRows);
+        $upcomingRows = self::fillActorLabels($upcomingRows);
 
         // KPIs contam APENAS as tarefas próprias (as nativas são leitura e
         // nunca migrariam para "Concluídas"), com uma exceção: pendência
@@ -256,6 +279,8 @@ class Occurrence
             'kpis'    => $kpis,
             'today'   => array_merge($todayRows, $native),
             'overdue' => $overdueRows,
+            // 15: abertas com prazo à frente (vazio para quem não pediu)
+            'upcoming' => $upcomingRows,
             // Eco do recorte já NORMALIZADO (datas inválidas caem, par
             // invertido vira crescente): é a fonte da verdade que o JS
             // espelha nos inputs e no aviso. Chave nova → safeData.
@@ -435,6 +460,7 @@ class Occurrence
                 self::TABLE . '.category',
                 self::TABLE . '.date',
                 self::TABLE . '.time_limit',
+                self::TABLE . '.date_creation',
                 self::TABLE . '.is_done',
                 self::TABLE . '.done_date',
                 self::TABLE . '.validation',
@@ -536,6 +562,12 @@ class Occurrence
             // quando não atrasada. Chave nova é inofensiva (sem whitelist
             // de item no board/teamboard).
             'late_label'  => $isLate ? self::lateLabel($date, $limit, $today, $nowTime) : '',
+            // 15 (nº 71): a data é PRAZO, não dia de execução — o quadro
+            // mostra a barra do prazo correndo desde a criação.
+            // deadline_pct 0–100 (100 = vencida), deadline_label
+            // "faltam 3 dias" / "até hoje 17:00" ('' se concluída).
+            'deadline_pct'   => $isDone ? 0 : self::deadlinePct((string) ($row['date_creation'] ?? ''), $date, $limit, $today, $nowTime),
+            'deadline_label' => $isDone ? '' : self::deadlineLabel($date, $limit, $today),
             // Setada como true só na consulta "concluída hoje, de dia
             // anterior" (4d-2); presente em todo item pela mesma higiene
             // do resto do payload (chave usada nunca pode faltar).
@@ -1041,6 +1073,42 @@ class Occurrence
             'date'        => $date,
             'time_limit'  => $time,
         ];
+    }
+
+    /**
+     * 15 — percentual do prazo já consumido: 0 na criação, 100 no
+     * vencimento (ou depois). Referência final = data + horário-limite
+     * (sem horário: fim do dia). Criação desconhecida ou posterior ao
+     * agora: barra zerada (nunca inventa). Regra pura, testável.
+     */
+    public static function deadlinePct(string $created, string $date, ?string $limit, string $today, string $nowTime): int
+    {
+        $end   = strtotime($date . ' ' . (($limit !== null && $limit !== '') ? $limit : '23:59:59'));
+        $now   = strtotime($today . ' ' . $nowTime);
+        $start = ($created !== '') ? strtotime($created) : false;
+        if ($end === false || $now === false) {
+            return 0;
+        }
+        if ($now >= $end) {
+            return 100;
+        }
+        if ($start === false || $start >= $end || $start > $now) {
+            return 0;
+        }
+        return (int) max(0, min(100, floor(($now - $start) * 100 / ($end - $start))));
+    }
+
+    /** 15 — "faltam N dias" / "falta 1 dia" / "até hoje HH:MM" / "até hoje". */
+    public static function deadlineLabel(string $date, ?string $limit, string $today): string
+    {
+        if ($date > $today) {
+            $days = (int) round((strtotime($date) - strtotime($today)) / 86400);
+            return ($days === 1) ? 'falta 1 dia' : sprintf('faltam %d dias', $days);
+        }
+        if ($date === $today) {
+            return ($limit !== null && $limit !== '') ? 'até hoje ' . substr((string) $limit, 0, 5) : 'até hoje';
+        }
+        return ''; // vencida: a faixa de atraso (14a) fala por ela
     }
 
     /**

@@ -3,6 +3,22 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.2.9-beta] — 2026-10-07
+
+### Alterado
+
+- **Quadro e Quadro de Equipe — a data é o prazo** (15, decisão nº 71):
+  tarefa aberta com data nos próximos 7 dias já aparece no quadro desde
+  a criação, com a **barra do prazo** no card (preenchimento = tempo
+  consumido desde a criação; verde → âmbar → vermelho) e o rótulo
+  "faltam 3 dias" / "até hoje 17:00". Badge de data futura em azul; só
+  a vencida fica vermelha. A Hoje e a Semana não mudam.
+
+### Corrigido
+
+- **Badge 💬 de não lidos no Quadro pessoal** não aparecia: o payload do
+  Quadro não passava pelo `withUnread` (só a Hoje passava).
+
 ## [0.2.8-beta] — 2026-10-07
 
 ### Alterado

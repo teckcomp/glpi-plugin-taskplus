@@ -356,8 +356,9 @@ class TeamBoard
     /**
      * Linhas de tarefa de equipe do setor: do dia + atrasadas + as de
      * dia anterior concluídas hoje (mesmo recorte do Quadro pessoal,
-     * 4d-2), sem excluídas nem puladas. Três consultas, uma por regra,
-     * como no Occurrence::payload — nunca divergir dele.
+     * 4d-2) + abertas com prazo nos próximos Board::UPCOMING_DAYS dias
+     * (15, nº 71), sem excluídas nem puladas. Quatro consultas, uma por
+     * regra, como no Occurrence::payload — nunca divergir dele.
      */
     private static function rows(int $groupId, string $today): array
     {
@@ -388,6 +389,14 @@ class TeamBoard
             Occurrence::TABLE . '.is_done'   => 1,
             Occurrence::TABLE . '.date'      => ['<', $today],
             Occurrence::TABLE . '.done_date' => ['>=', $today . ' 00:00:00'],
+        ]]) as $row) {
+            $rows[] = $row;
+        }
+        $until = date('Y-m-d', strtotime($today . ' +' . Board::UPCOMING_DAYS . ' days'));
+        foreach ($DB->request($base + ['WHERE' => $common + [
+            Occurrence::TABLE . '.is_done' => 0,
+            [Occurrence::TABLE . '.date' => ['>', $today]],
+            [Occurrence::TABLE . '.date' => ['<=', $until]],
         ]]) as $row) {
             $rows[] = $row;
         }

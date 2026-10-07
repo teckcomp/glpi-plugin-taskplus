@@ -63,6 +63,9 @@ class Board
      *
      * ATENÇÃO safeData(): chave nova aqui precisa entrar no board.js.
      */
+    /** 15 (nº 71): tarefas abertas até N dias à frente entram no quadro. */
+    public const UPCOMING_DAYS = 7;
+
     public static function payload(int $usersId, ?string $from = null, ?string $to = null): array
     {
         $memberGroups = Access::memberGroups($usersId);
@@ -73,10 +76,14 @@ class Board
         // o período só CASCATEIA — a normalização e o recorte moram no
         // Occurrence; concluída/pendente/atrasada do intervalo caem nas
         // colunas de estado, aberta cai na fase gravada (ou na padrão).
-        $data = Occurrence::payload($usersId, $from, $to);
+        // 15: sem período, as abertas dos próximos 7 dias também entram
+        // (a data é prazo). 13a: o badge 💬 lê `unread` — a Hoje passava
+        // pelo withUnread e o Quadro não (defeito latente, corrigido).
+        $data = Occurrence::payload($usersId, $from, $to, self::UPCOMING_DAYS);
+        $data = Comment::withUnread($data, $usersId);
 
         $cards = [];
-        foreach (array_merge($data['today'] ?? [], $data['overdue'] ?? []) as $item) {
+        foreach (array_merge($data['today'] ?? [], $data['overdue'] ?? [], $data['upcoming'] ?? []) as $item) {
             // 4d-2: nativas ENTRAM no quadro — ficam em "Para hoje" (ou
             // Pendentes). 4d-3: além de Pendentes, vão para Concluídas
             // (gravando no GLPI); concluída nativa some do payload na
