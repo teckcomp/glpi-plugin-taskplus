@@ -29,7 +29,7 @@ class Prefs
         /** @var \DBmysql $DB */
         global $DB;
 
-        $out = ['known' => false, 'show_all' => false, 'fav_groups_id' => 0];
+        $out = ['known' => false, 'show_all' => false, 'fav_groups_id' => 0, 'theme' => ''];
         if ($usersId <= 0) {
             return $out;
         }
@@ -41,6 +41,7 @@ class Prefs
                 $out['known']         = true;
                 $out['show_all']      = ((int) ($row['show_all'] ?? 0)) === 1;
                 $out['fav_groups_id'] = (int) ($row['fav_groups_id'] ?? 0);
+                $out['theme']         = self::normalizeTheme((string) ($row['theme'] ?? ''));
                 break;
             }
         } catch (\Throwable $e) {
@@ -61,6 +62,10 @@ class Prefs
         $patch = [];
         if (!empty($input['pref_save'])) {
             $patch['show_all'] = Occurrence::upcomingDaysFromInput($input, 0) === Occurrence::UPCOMING_ALL ? 1 : 0;
+        }
+        // 16q: tema do Task+ ('dark' = padrão → grava vazio; 'light')
+        if (isset($input['pref_theme']) && is_scalar($input['pref_theme'])) {
+            $patch['theme'] = self::normalizeTheme((string) $input['pref_theme']);
         }
         if (isset($input['pref_fav']) && is_scalar($input['pref_fav'])) {
             $patch['fav_groups_id'] = ((string) $input['pref_fav'] === '1')
@@ -89,6 +94,7 @@ class Prefs
         $row  = [
             'show_all'      => array_key_exists('show_all', $patch) ? ((int) $patch['show_all'] === 1 ? 1 : 0) : ($cur['show_all'] ? 1 : 0),
             'fav_groups_id' => array_key_exists('fav_groups_id', $patch) ? max(0, (int) $patch['fav_groups_id']) : $cur['fav_groups_id'],
+            'theme'         => array_key_exists('theme', $patch) ? self::normalizeTheme((string) $patch['theme']) : $cur['theme'],
             'date_mod'      => $now,
         ];
         if ($cur['known']) {
@@ -96,5 +102,14 @@ class Prefs
             return;
         }
         $DB->insert(self::TABLE, $row + ['users_id' => $usersId]);
+    }
+
+    /**
+     * 16q: só dois temas. O padrão (petróleo escuro) grava '' — assim a
+     * linha antiga (sem a coluna preenchida) já é o padrão.
+     */
+    public static function normalizeTheme(string $raw): string
+    {
+        return strtolower(trim($raw)) === 'light' ? 'light' : '';
     }
 }

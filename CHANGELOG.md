@@ -5,6 +5,18 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [0.2.10-beta] — 2026-10-18
 
+### Alterado
+
+- **Identidade visual nova** (16q-1, decisão nº 80): casca única nas nove
+  telas — faixa petróleo no topo (marca, atalhos do admin, sino, tema,
+  configurações), navegação lateral estreita por ícone, título da tela
+  com a dica no "?"; chrome em neutro, cor só para prazo/estado; KPIs
+  sem caixas; colunas do quadro sem borda; cards sem borda colorida.
+  **Tema padrão petróleo escuro, com seletor por usuário** (claro/escuro,
+  gravado em `user_prefs.theme` pelo `ajax/prefs.php`). Logo nova (marca
+  e `logo.png`). Nenhum comportamento mudou — só o estilo por trás das
+  mesmas classes.
+
 ### Corrigido
 
 - **Ver tudo e setor favorito valem em qualquer máquina** (16l, fila 16,

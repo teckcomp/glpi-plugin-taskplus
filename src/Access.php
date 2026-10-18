@@ -102,6 +102,11 @@ class Access
             'panel'    => $task,
             'history'  => $task,
             'config'   => self::canConfigPhases(),
+            // 16q: a casca (partial _sidebar) é incluída pelas 9 telas e
+            // precisa do tema do usuário e dos atalhos (nº 74) sem que
+            // cada front/ passe mais uma variável — vão junto no `nav`.
+            'theme'       => Prefs::get((int) Session::getLoginUserID())['theme'],
+            'quick_links' => QuickLinks::all(),
         ];
     }
 

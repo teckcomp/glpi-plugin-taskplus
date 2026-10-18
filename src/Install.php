@@ -93,6 +93,8 @@ class Install
             'users_id'      => 'INT %SIGN% NOT NULL DEFAULT 0',
             'show_all'      => 'TINYINT NOT NULL DEFAULT 0',
             'fav_groups_id' => 'INT %SIGN% NOT NULL DEFAULT 0',
+            // 16q: tema do Task+ por usuário ('' = padrão escuro, 'light')
+            'theme'         => "VARCHAR(10) NOT NULL DEFAULT ''",
             'date_mod'      => 'TIMESTAMP NULL DEFAULT NULL',
         ],
         'glpi_plugin_taskplus_comment_reads' => [
@@ -463,6 +465,7 @@ class Install
                     `users_id`      INT {$sign} NOT NULL DEFAULT 0,
                     `show_all`      TINYINT NOT NULL DEFAULT 0 COMMENT 'Ver tudo (no 73)',
                     `fav_groups_id` INT {$sign} NOT NULL DEFAULT 0 COMMENT 'setor favorito (no 72)',
+                    `theme`         VARCHAR(10) NOT NULL DEFAULT '' COMMENT '16q: tema (vazio = escuro, light)',
                     `date_mod`      TIMESTAMP NULL DEFAULT NULL,
                     PRIMARY KEY (`id`),
                     UNIQUE KEY `users_id` (`users_id`)

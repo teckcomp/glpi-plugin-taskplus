@@ -16,23 +16,7 @@
     {# ================= ÁREA PRINCIPAL ================= #}
     <div class="taskplus-main">
 
-        {# 16c (nº 74): atalhos cadastrados em Configurações. Ficam ANTES
-           dos KPIs no DOM; o taskplus.js insere a barra de busca antes
-           dos KPIs, então a ordem final é atalhos → busca → KPIs. #}
-        {% if quick_links|length > 0 %}
-        <nav class="taskplus-quicklinks" id="tp-quicklinks" aria-label="{{ __('Atalhos', 'taskplus') }}">
-            <span class="taskplus-quicklinks__label">{{ __('Atalhos', 'taskplus') }}</span>
-            {% for l in quick_links %}
-            <a class="taskplus-quicklinks__btn taskplus-quicklinks__btn--{{ l.color }}"
-               href="{{ l.url }}"{% if l.new_tab %} target="_blank" rel="noopener"{% endif %}
-               title="{{ l.url }}">
-                <i class="ti {{ l.icon }}"></i>
-                <b>{{ l.name }}</b>
-                {% if l.new_tab %}<i class="ti ti-external-link taskplus-quicklinks__ext"></i>{% endif %}
-            </a>
-            {% endfor %}
-        </nav>
-        {% endif %}
+        {# 16c (nº 74): os atalhos migraram para a faixa do topo (casca, 16q). #}
 
         {# KPIs do dia — ordem definida com o usuário em 05/08 (Etapa 4a):
            atrasadas primeiro (o que cobra ação), concluídas por último.
