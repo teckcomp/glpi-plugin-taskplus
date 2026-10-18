@@ -141,6 +141,37 @@
         });
     }
 
+
+    // ------------------------------------------------------------------
+    // 16g (nº 76) — rodapé do card: últimas entradas do diálogo
+    // ------------------------------------------------------------------
+    /**
+     * `item.recent` = [{author, date, content}] (cronológico, no máximo
+     * 3). Uma linha por entrada: autor · hora · primeira linha do texto
+     * (cortada em 80 caracteres, com link clicável). Sem entradas, nada.
+     * Lida/não lida é do badge 💬, não daqui.
+     */
+    function recentFooter(item) {
+        var list = Array.isArray(item.recent) ? item.recent : [];
+        if (list.length === 0) {
+            return null;
+        }
+        var box = el('div', 'taskplus-card__recent');
+        list.forEach(function (c) {
+            var line = el('div', 'taskplus-card__recent-line');
+            line.appendChild(el('b', null, c.author || '—'));
+            line.appendChild(document.createTextNode(' \u00b7 ' + (c.date || '') + ' \u00b7 '));
+            var first = String(c.content || '').split(/\r?\n/)[0].trim();
+            if (first.length > 80) {
+                first = first.slice(0, 79) + '\u2026';
+            }
+            line.appendChild(linkify(el('span', 'taskplus-card__recent-text'), first));
+            line.title = String(c.content || '');
+            box.appendChild(line);
+        });
+        return box;
+    }
+
     /**
      * Normaliza o payload do servidor. Qualquer coisa fora do esperado
      * vira estrutura vazia — a tela nunca quebra por JSON ruim.
@@ -849,6 +880,10 @@
             lateStrip.appendChild(document.createTextNode('\u00a0Atrasada' + (item.late_label ? ' \u00b7 ' + item.late_label : '')));
             c.appendChild(lateStrip);
         }
+        var recentB = recentFooter(item); // 16g
+        if (recentB) {
+            c.appendChild(recentB);
+        }
 
         // Clique (que não foi arrasto): própria abre o modal de edição
         // (regras da 4b: rotina muda só o dia); nativa abre o item no
@@ -1067,7 +1102,7 @@
             }
             li.appendChild(head);
 
-            li.appendChild(el('div', 'taskplus-dialog__text', c.content || ''));
+            li.appendChild(linkify(el('div', 'taskplus-dialog__text'), c.content || '') /* 16f: links no diálogo */);
 
             if (c.file_name) {
                 var fl = el('a', 'taskplus-dialog__attach', '\uD83D\uDCCE ' + c.file_name);

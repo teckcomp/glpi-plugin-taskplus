@@ -375,6 +375,84 @@ class Comment
         return true;
     }
 
+    /** 16g (nº 76): quantas entradas do diálogo vão no rodapé do card. */
+    public const RECENT_LIMIT = 3;
+
+    /**
+     * 16g (decisão nº 76): as RECENT_LIMIT últimas entradas VIVAS do
+     * diálogo de cada ocorrência, em ordem cronológica (a mais nova por
+     * último), já formatadas para o rodapé do card:
+     *   [occId => [['author' => nome, 'date' => 'd/m H:i', 'content' => texto], ...]]
+     *
+     * Uma consulta de comentários (do mais novo ao mais antigo, corte em
+     * PHP por ocorrência) e uma de nomes. Ocorrência sem comentário não
+     * tem chave — o chamador usa `?? []`. Não distingue lido de não lido:
+     * isso é do badge 💬 (unreadFor).
+     */
+    public static function recentFor(array $occIds, int $limit = self::RECENT_LIMIT): array
+    {
+        /** @var \DBmysql $DB */
+        global $DB;
+
+        $ids = [];
+        foreach ($occIds as $raw) {
+            if ((int) $raw > 0) {
+                $ids[(int) $raw] = true;
+            }
+        }
+        if ($ids === [] || $limit <= 0) {
+            return [];
+        }
+
+        $byOcc     = [];
+        $authorIds = [];
+        foreach ($DB->request([
+            'FROM'  => self::TABLE,
+            'WHERE' => [
+                self::TABLE . '.plugin_taskplus_occurrences_id' => array_keys($ids),
+                self::TABLE . '.is_deleted'                     => 0,
+            ],
+            'ORDER' => [self::TABLE . '.id DESC'],
+        ]) as $row) {
+            $occId = (int) ($row['plugin_taskplus_occurrences_id'] ?? 0);
+            if (count($byOcc[$occId] ?? []) >= $limit) {
+                continue;
+            }
+            $byOcc[$occId][] = $row;
+            $authorIds[(int) ($row['users_id'] ?? 0)] = true;
+        }
+        if ($byOcc === []) {
+            return [];
+        }
+
+        $labels = [];
+        foreach ($DB->request([
+            'FROM'  => 'glpi_users',
+            'WHERE' => ['glpi_users.id' => array_keys($authorIds) ?: [0]],
+        ]) as $u) {
+            $label = trim((string) ($u['firstname'] ?? '') . ' ' . (string) ($u['realname'] ?? ''));
+            if ($label === '') {
+                $label = (string) ($u['name'] ?? '');
+            }
+            $labels[(int) ($u['id'] ?? 0)] = $label;
+        }
+
+        $out = [];
+        foreach ($byOcc as $occId => $rows) {
+            $list = [];
+            foreach (array_reverse($rows) as $row) { // cronológica
+                $when   = (string) ($row['date_creation'] ?? '');
+                $list[] = [
+                    'author'  => $labels[(int) ($row['users_id'] ?? 0)] ?? '',
+                    'date'    => $when !== '' ? date('d/m H:i', strtotime($when)) : '',
+                    'content' => (string) ($row['content'] ?? ''),
+                ];
+            }
+            $out[$occId] = $list;
+        }
+        return $out;
+    }
+
     /**
      * Injeta `unread` (int) em cada item das listas `today`/`overdue` de
      * um payload da tela Hoje, do ponto de vista do LEITOR informado.
@@ -401,6 +479,14 @@ class Comment
         }
 
         $counts = ($ids === []) ? [] : self::unreadFor($ids, $viewerId);
+        // 16g (nº 76): últimas entradas do diálogo para o rodapé do card.
+        // Falha aqui não derruba a tela — fica sem rodapé.
+        $recent = [];
+        try {
+            $recent = ($ids === []) ? [] : self::recentFor($ids);
+        } catch (\Throwable $e) {
+            $recent = [];
+        }
 
         foreach ($keys as $key) {
             if (!is_array($payload[$key] ?? null)) {
@@ -414,6 +500,9 @@ class Comment
                 $payload[$key][$i]['unread'] = (empty($item['is_native']) && $id > 0)
                     ? (int) ($counts[$id] ?? 0)
                     : 0;
+                $payload[$key][$i]['recent'] = (empty($item['is_native']) && $id > 0)
+                    ? ($recent[$id] ?? [])
+                    : [];
             }
         }
 

@@ -178,6 +178,13 @@ class TeamBoard
         } catch (\Throwable $e) {
             $unread = [];
         }
+        // 16g (nº 76): rodapé do card com as últimas entradas do diálogo
+        $recent = [];
+        try {
+            $recent = ($ids === []) ? [] : Comment::recentFor($ids);
+        } catch (\Throwable $e) {
+            $recent = [];
+        }
 
         // 13d-2: quem olha pode AGIR em cada card? (colaborador ou gestor
         // do setor — nº 66). Resolvido em lote: vínculos do leitor + os
@@ -200,6 +207,7 @@ class TeamBoard
             $items[$i]['card_key'] = 'Occurrence:' . (int) $item['id'];
             // Não lido só faz sentido para quem alcança o diálogo
             $items[$i]['unread']   = $canAct ? (int) ($unread[(int) $item['id']] ?? 0) : 0;
+            $items[$i]['recent']   = $recent[(int) $item['id']] ?? []; // 16g
             foreach (['pending_by_id', 'done_by_id'] as $k) {
                 if ((int) ($item[$k] ?? 0) > 0) {
                     $actorIds[] = (int) $item[$k];

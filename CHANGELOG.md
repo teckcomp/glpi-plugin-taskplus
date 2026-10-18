@@ -29,6 +29,15 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
   do GLPI no seletor; agora ficam só os que têm ≥1 membro com direito
   de tarefa, mais os setores de que o próprio admin é gestor ou membro.
   Gestor comum não muda.
+- **Últimas entradas do diálogo no card** (16g, decisão nº 76): os
+  cards da Hoje, do Quadro e do Quadro de Equipe (inclusive "Da
+  equipe") ganham um rodapé com as 3 últimas entradas do diálogo —
+  autor · hora · primeira linha do texto (links clicáveis). Não lidas
+  continuam só no badge 💬. Na Hoje, clicar no rodapé abre o diálogo.
+- **Links clicáveis no Diálogo e no modal de edição da Equipe** (16f,
+  fila 14): URL num comentário vira link (nova aba) na Hoje, no Quadro,
+  no Quadro de Equipe, na Equipe e no Histórico; na tela Equipe a
+  descrição também ganha a caixa "Links:" abaixo do campo (12a/12c).
 - **Atalhos na Hoje** (16c, decisão nº 74): até 10 botões globais no
   alto da tela Hoje (nome + link + ícone do catálogo + uma de 14 cores +
   abrir em nova aba), cadastrados pelo admin em Configurações → Preferências. Link

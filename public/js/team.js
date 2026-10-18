@@ -59,6 +59,84 @@
         return e;
     }
 
+    // ------------------------------------------------------------------
+    // 16f (fila 14) — links clicáveis na descrição (cópia do teamboard.js, 12a/12c)
+    // ------------------------------------------------------------------
+
+    /**
+     * Preenche `node` com `text`, transformando URLs em <a> que abrem em
+     * NOVA GUIA. Seguro por construção: texto entra por createTextNode,
+     * o link por createElement + href atribuído — nunca innerHTML. Só
+     * http(s) e www. viram link (javascript:, data: e afins ficam texto,
+     * porque a regex nem os reconhece). Pontuação final colada na URL
+     * ("veja http://x.com/a.") fica fora do link.
+     */
+    function linkify(node, text) {
+        var s = String(text || '');
+        var re = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
+        var last = 0;
+        var m;
+        while ((m = re.exec(s)) !== null) {
+            var url = m[0];
+            var trail = '';
+            var t = url.match(/[.,;:!?)\]}]+$/);
+            if (t) {
+                trail = t[0];
+                url = url.slice(0, url.length - trail.length);
+            }
+            if (url === '' || /^(https?:\/\/|www\.)$/i.test(url)) {
+                continue;
+            }
+            if (m.index > last) {
+                node.appendChild(document.createTextNode(s.slice(last, m.index)));
+            }
+            var a = document.createElement('a');
+            a.href = /^www\./i.test(url) ? 'https://' + url : url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.className = 'taskplus-link';
+            a.textContent = url;
+            a.addEventListener('click', function (ev) {
+                ev.stopPropagation(); // clique no link não aciona o card
+            });
+            node.appendChild(a);
+            last = m.index + m[0].length - trail.length;
+            re.lastIndex = last;
+        }
+        if (last < s.length) {
+            node.appendChild(document.createTextNode(s.slice(last)));
+        }
+        return node;
+    }
+
+    /** 12c — links da descrição abaixo do textarea (cópia do board.js). */
+    function renderDescLinks(textareaId) {
+        var ta = $(textareaId);
+        if (!ta || !ta.parentNode) {
+            return;
+        }
+        var boxId = textareaId + '-links';
+        var box = $(boxId);
+        if (!box) {
+            box = el('div', 'taskplus-desc-links');
+            box.id = boxId;
+            ta.parentNode.parentNode.insertBefore(box, ta.parentNode.nextSibling);
+            ta.addEventListener('input', function () {
+                renderDescLinks(textareaId);
+            });
+        }
+        box.textContent = '';
+        var anchors = linkify(document.createElement('div'), ta.value).querySelectorAll('a');
+        box.hidden = anchors.length === 0;
+        if (anchors.length === 0) {
+            return;
+        }
+        box.appendChild(el('span', 'taskplus-desc-links__label', 'Links:'));
+        Array.prototype.forEach.call(anchors, function (a) {
+            box.appendChild(a);
+        });
+    }
+
     /**
      * Normaliza o payload do servidor. Qualquer coisa fora do esperado
      * vira estrutura vazia — a tela nunca quebra por JSON ruim.
@@ -785,6 +863,7 @@
         $('tp-t-e-time').value = item.time_limit || '';
         $('tp-t-e-category').value = item.category || '';
         $('tp-t-e-description').value = item.description || '';
+        renderDescLinks('tp-t-e-description'); // 16f
         $('tp-t-edit-modal').hidden = false;
         $('tp-t-e-name').focus();
     }
@@ -1280,7 +1359,7 @@
             }
             li.appendChild(head);
 
-            var body = el('div', 'taskplus-dialog__text', c.content || '');
+            var body = linkify(el('div', 'taskplus-dialog__text'), c.content || '') /* 16f: links no diálogo */;
             li.appendChild(body);
 
             // 8e-3: anexo — download servido pelo plugin (gate próprio)
@@ -1387,7 +1466,7 @@
         render();
     }
 
-    window.TaskplusTeam = { init: init };
+    window.TaskplusTeam = { init: init, renderDescLinks: renderDescLinks, linkify: linkify, renderTeamDialog: renderTeamDialog };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

@@ -339,6 +339,17 @@
 .taskplus-section__title--upcoming { color: #2a76a8; border-bottom-color: #cfe3f2; }
 .taskplus-section__title--upcoming .taskplus-section__count { background: #e3f0fa; color: #2a76a8; }
 
+/* 16g (nº 76): rodapé do card com as últimas entradas do diálogo */
+.taskplus-card__recent {
+    margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e4e9ee;
+    font-size: 0.78rem; color: #45525e; line-height: 1.35;
+}
+.taskplus-card__recent-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.taskplus-card__recent-line b { font-weight: 600; color: #2c3844; }
+.taskplus-card__recent--click { cursor: pointer; }
+.taskplus-card__recent--click:hover { color: #2a76a8; }
+.taskplus-bcard .taskplus-card__recent { margin-top: 6px; }
+
 /* 16c (nº 74): atalhos no alto da Hoje */
 .taskplus-quicklinks {
     display: flex; align-items: center; flex-wrap: wrap; gap: 8px;

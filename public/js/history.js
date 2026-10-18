@@ -989,7 +989,7 @@
             head.appendChild(el('span', '', c.date || ''));
             li.appendChild(head);
 
-            li.appendChild(el('div', 'taskplus-dialog__text', c.content || ''));
+            li.appendChild(linkify(el('div', 'taskplus-dialog__text'), c.content || '') /* 16f: links no diálogo */);
 
             // Anexo: download servido pelo plugin, com o gate próprio do
             // ajax/attachment.php (participante OU gestor do dono) — a
