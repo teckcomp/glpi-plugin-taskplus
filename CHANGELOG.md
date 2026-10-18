@@ -16,6 +16,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
   gravado em `user_prefs.theme` pelo `ajax/prefs.php`). Logo nova (marca
   e `logo.png`). Nenhum comportamento mudou — só o estilo por trás das
   mesmas classes.
+- **Card compartilhado** (16q-2): `public/js/card.js` pole o DOM que as
+  telas montam — barra de categoria no topo (cor estável por nome), data
+  e atraso num chip só ("⚠ 05/10 · há 13 dias"), prazo junto da data
+  ("🕓 30/10 · faltam 12 dias"), motivo da pendência no tooltip, 💬/📎/
+  validação como ícones, colaboradores como avatares; rodapé do diálogo
+  mostra só a última entrada (ajuste da nº 76). Equipe: avatar, setores
+  sob o nome e barra segmentada no placar, com escudo contando as
+  concluídas que aguardam validação.
 
 ### Corrigido
 

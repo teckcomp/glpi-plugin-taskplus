@@ -72,7 +72,8 @@ function plugin_init_taskplus(): void
     // todas as páginas, mas a guarda do bell.js o torna inerte fora das
     // telas do plugin (o markup do sino só existe na sidebar do Task+).
     // 16q: shell.js — seletor de tema da casca (mesma guarda do bell.js).
-    $PLUGIN_HOOKS[Hooks::ADD_JAVASCRIPT]['taskplus'] = ['js/bell.js', 'js/shell.js'];
+    // 16q-2: card.js — polidor compartilhado dos cards (mesma guarda).
+    $PLUGIN_HOOKS[Hooks::ADD_JAVASCRIPT]['taskplus'] = ['js/bell.js', 'js/shell.js', 'js/card.js'];
 
     // 8b: página inicial por perfil — roda a cada request, decide em
     // GlpiPlugin\Taskplus\Home::shouldRedirect() (pura, testada) e só
