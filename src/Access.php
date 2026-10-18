@@ -225,6 +225,28 @@ class Access
         $managed = self::managedGroups($usersId, $isAdmin);
         $member  = self::memberGroups($usersId);
 
+        // 16e (fila 2b, decisão nº 75): para o ADMIN, managedGroups devolve
+        // TODOS os grupos do GLPI — em base de cliente, dezenas de grupos
+        // sem técnico. Ficam só os que têm ≥1 membro com direito de
+        // tarefa (régua da nº 58, Team::membersOf), mais os vínculos
+        // explícitos do próprio admin (is_manager ou membro), que nunca
+        // somem. Gestor comum não passa por aqui: os dele já são explícitos.
+        if ($isAdmin && $managed !== []) {
+            $withTechs = [];
+            foreach (Team::membersOf($managed) as $m) {
+                foreach ((array) ($m['group_ids'] ?? []) as $gid) {
+                    $withTechs[(int) $gid] = true;
+                }
+            }
+            $explicit = self::managedGroups($usersId, false);
+            foreach ($managed as $gid => $name) {
+                $gid = (int) $gid;
+                if (!isset($withTechs[$gid]) && !isset($explicit[$gid]) && !isset($member[$gid])) {
+                    unset($managed[$gid]);
+                }
+            }
+        }
+
         $groups = [];
         foreach ($managed as $gid => $name) {
             $groups[(int) $gid] = ['name' => (string) $name, 'can_manage' => true];

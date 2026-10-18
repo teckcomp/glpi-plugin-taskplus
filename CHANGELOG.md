@@ -24,6 +24,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
   no navegador (`localStorage`, como o setor favorito): ligou num
   lugar, vale nos três. KPIs não mudam; com De/Até preenchido vale o
   período e o botão fica desabilitado.
+- **Seletor do Quadro de Equipe do admin só com setores que têm técnico**
+  (16e, fila 2b, decisão nº 75): quem tem `config` via todos os grupos
+  do GLPI no seletor; agora ficam só os que têm ≥1 membro com direito
+  de tarefa, mais os setores de que o próprio admin é gestor ou membro.
+  Gestor comum não muda.
 - **Atalhos na Hoje** (16c, decisão nº 74): até 10 botões globais no
   alto da tela Hoje (nome + link + ícone do catálogo + uma de 14 cores +
   abrir em nova aba), cadastrados pelo admin em Configurações → Preferências. Link
