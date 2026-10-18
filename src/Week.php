@@ -44,7 +44,7 @@ class Week
      * vazio/inválido cai na semana corrente — o JS navega mandando
      * `week.prev`/`week.next` de volta como âncora.
      */
-    public static function payload(int $usersId, ?string $anchor = null): array
+    public static function payload(int $usersId, ?string $anchor = null, bool $showAll = false): array
     {
         [$start, $end] = self::weekRange($anchor);
 
@@ -62,7 +62,53 @@ class Week
             // origem indisponível: a semana segue só com as próprias
         }
 
-        return self::assemble($base, $start, $end);
+        $out = self::assemble($base, $start, $end);
+
+        // 16k (nº 71 na Semana, fila 15): com "Ver tudo", as abertas cujo
+        // prazo cai DEPOIS da semana mostrada vão em `beyond` (cronológicas,
+        // mesmo formato de item). Sem o toggle, chave vazia e nada muda.
+        $out['show_all'] = $showAll;
+        $out['beyond']   = [];
+        if ($showAll) {
+            try {
+                $all    = Occurrence::payload($usersId, null, null, Occurrence::UPCOMING_ALL);
+                $future = (array) ($all['upcoming'] ?? []);
+                // 13d/16k: as de EQUIPE do colaborador também (forUser com
+                // ALL devolve do dia em diante; o beyond corta no fim da semana)
+                try {
+                    $future = array_merge($future, TeamBoard::forUser($usersId, null, null, Occurrence::UPCOMING_ALL));
+                } catch (\Throwable $e) {
+                    // sem as de equipe, segue só com as próprias
+                }
+                $out['beyond'] = self::beyond($future, $end);
+            } catch (\Throwable $e) {
+                $out['beyond'] = [];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * 16k: filtra as futuras (upcoming, já abertas e cronológicas) para
+     * as de prazo > fim da semana mostrada. PURA — coberta pelo harness.
+     */
+    public static function beyond(array $upcoming, string $end): array
+    {
+        $out = [];
+        foreach ($upcoming as $item) {
+            if (!is_array($item) || !empty($item['is_native']) || !empty($item['is_done'])) {
+                continue;
+            }
+            if ((string) ($item['date'] ?? '') > $end) {
+                $out[] = $item;
+            }
+        }
+        // próprias + equipe vêm de duas origens: ordem cronológica única
+        usort($out, static function (array $a, array $b): int {
+            return [(string) ($a['date'] ?? ''), (string) ($a['time_limit'] ?? ''), (int) ($a['id'] ?? 0)]
+                <=> [(string) ($b['date'] ?? ''), (string) ($b['time_limit'] ?? ''), (int) ($b['id'] ?? 0)];
+        });
+        return $out;
     }
 
     /**

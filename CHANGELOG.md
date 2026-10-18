@@ -7,6 +7,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ### Corrigido
 
+- **Semana com "data é prazo"** (16k, fila 15, nº 71): o card ganha a
+  barra de prazo e a faixa "Atrasada · há N", como nos quadros; o botão
+  "Ver tudo" (mesma preferência) abre a seção "Depois desta semana" com
+  as abertas de prazo além do domingo mostrado.
 - **Histórico com validação e colunas de auditoria** (16j, fila 11 e 12):
   o item concluído mostra "aguardando validação" ou "validada por X em
   d/m H:i"; o CSV ganha as colunas Comentários, Anexos e Validação.

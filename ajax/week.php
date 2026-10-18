@@ -50,6 +50,7 @@
 
 use Glpi\Exception\Http\HttpException;
 use GlpiPlugin\Taskplus\Access;
+use GlpiPlugin\Taskplus\Occurrence;
 use GlpiPlugin\Taskplus\Week;
 
 include('../../../inc/includes.php');
@@ -72,7 +73,9 @@ $anchor = isset($_POST['anchor']) ? (string) $_POST['anchor'] : null;
 
 // Token novo para o JS rotacionar + estado atualizado para re-render
 $result['csrf'] = Session::getNewCSRFToken();
-$result['data'] = Week::payload($usersId, $anchor);
+// 16k: "Ver tudo" (show_all=1) → seção "Depois desta semana"
+$showAll = Occurrence::upcomingDaysFromInput($_POST, 0) === Occurrence::UPCOMING_ALL;
+$result['data'] = Week::payload($usersId, $anchor, $showAll);
 
 header('Content-Type: application/json; charset=UTF-8');
 echo json_encode($result, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);

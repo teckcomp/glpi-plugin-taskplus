@@ -33,6 +33,8 @@
             <input type="search" id="tp-w-search" class="taskplus-toolbar2__search"
                    placeholder="{{ __('Buscar por título, descrição ou categoria', 'taskplus') }}"
                    aria-label="{{ __('Buscar', 'taskplus') }}">
+            {# 16k: "Ver tudo" — abertas com prazo depois desta semana #}
+            <button type="button" class="taskplus-toolbar2__all" id="tp-w-all" aria-pressed="false">{{ __('Ver tudo', 'taskplus') }}</button>
         </div>
 
         {# KPIs do CONJUNTO da semana — mesma régua do modo-período
@@ -60,11 +62,13 @@
            sem dado por dia — ficam fora da grade, como no modo-período. #}
         <div class="taskplus-weeknote">
             <i class="ti ti-info-circle"></i>
-            <span>{{ __('A grade mostra suas tarefas próprias (rotinas e avulsas). As origens do GLPI — tickets e projetos — não têm dado por dia e seguem na tela Hoje.', 'taskplus') }}</span>
+            <span>{{ __('A grade mostra suas tarefas próprias (rotinas e avulsas) e as de equipe, no dia do PRAZO, com a barra de prazo. As origens do GLPI — tickets e projetos — não têm dado por dia e seguem na tela Hoje.', 'taskplus') }}</span>
         </div>
 
         {# Grade seg–dom, renderizada pelo JS a partir do payload #}
         <div class="taskplus-week" id="tp-w-grid"></div>
+        {# 16k: abertas com prazo depois da semana (só com "Ver tudo") #}
+        <div class="taskplus-wbeyond" id="tp-w-beyond" hidden></div>
     </div>
 </div>
 

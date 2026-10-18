@@ -339,6 +339,13 @@
 .taskplus-section__title--upcoming { color: #2a76a8; border-bottom-color: #cfe3f2; }
 .taskplus-section__title--upcoming .taskplus-section__count { background: #e3f0fa; color: #2a76a8; }
 
+/* 16k: Semana — "Depois desta semana" (abertas com prazo além do domingo) */
+.taskplus-wbeyond { margin-top: 12px; background: #fff; border: 1px solid #dde5ec; border-radius: 8px; padding: 10px 12px; }
+.taskplus-wbeyond__head { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: #2a76a8; border-bottom: 1px solid #cfe3f2; padding-bottom: 6px; margin-bottom: 8px; }
+.taskplus-wbeyond__list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.taskplus-wbeyond__date { font-size: 0.72rem; font-weight: 600; color: #2a76a8; margin-bottom: 2px; }
+.taskplus-weekbar .taskplus-toolbar2__all { margin-left: 6px; }
+
 /* 16g (nº 76): rodapé do card com as últimas entradas do diálogo */
 .taskplus-card__recent {
     margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e4e9ee;

@@ -24,6 +24,7 @@
     var state = {
         root: null,
         userId: 0, // 13d
+        showAll: false, // 16k: mesma preferência dos quadros/Hoje
         ajaxUrl: '',
         todayUrl: '',
         csrf: '',
@@ -129,7 +130,10 @@
                 next: (typeof w.next === 'string') ? w.next : '',
                 is_current: (w.is_current === undefined) ? true : !!w.is_current
             },
-            days: Array.isArray(d.days) ? d.days.map(safeDay) : []
+            days: Array.isArray(d.days) ? d.days.map(safeDay) : [],
+            // 16k
+            show_all: !!d.show_all,
+            beyond: Array.isArray(d.beyond) ? d.beyond : []
         };
     }
 
@@ -177,6 +181,9 @@
         // resposta devolve a MESMA semana que o usuário está vendo.
         if (state.anchor !== '') {
             fd.append('anchor', state.anchor);
+        }
+        if (state.showAll) { // 16k
+            fd.append('show_all', '1');
         }
 
         // 9e-2: sem o Accept o core devolve a página de erro em HTML, o
@@ -292,6 +299,7 @@
         }
         grid.textContent = '';
 
+        renderBeyond(); // 16k
         state.data.days.forEach(function (day) {
             grid.appendChild(dayColumn(day));
         });
@@ -335,6 +343,89 @@
         return col;
     }
 
+    // ------------------------------------------------------------------
+    // 16k — barra de prazo (cópia do board.js) e "Ver tudo"
+    // ------------------------------------------------------------------
+    function deadlineBar(item) {
+        var pct = Math.max(0, Math.min(100, Number(item.deadline_pct) || 0));
+        var tone = pct >= 85 ? 'red' : (pct >= 60 ? 'amber' : 'green');
+        var box = el('div', 'taskplus-bcard__deadline taskplus-bcard__deadline--' + tone);
+        var track = el('div', 'taskplus-bcard__deadline-track');
+        var fill = el('div', 'taskplus-bcard__deadline-fill');
+        fill.style.width = pct + '%';
+        track.appendChild(fill);
+        box.appendChild(track);
+        box.appendChild(el('span', 'taskplus-bcard__deadline-label', item.deadline_label || ''));
+        box.title = 'Prazo ' + pct + '% consumido';
+        return box;
+    }
+
+    function showAllKey() {
+        return 'taskplus.board.all.' + String(state.userId || 0);
+    }
+
+    function readShowAll() {
+        try {
+            return window.localStorage.getItem(showAllKey()) === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function setShowAll(on) {
+        state.showAll = !!on;
+        try {
+            if (state.showAll) {
+                window.localStorage.setItem(showAllKey(), '1');
+            } else {
+                window.localStorage.removeItem(showAllKey());
+            }
+        } catch (e) {
+            // storage bloqueado: vale só nesta página
+        }
+    }
+
+    function syncShowAllButton() {
+        var all = $('tp-w-all');
+        if (!all) {
+            return;
+        }
+        all.classList.toggle('taskplus-toolbar2__all--on', state.showAll);
+        all.setAttribute('aria-pressed', state.showAll ? 'true' : 'false');
+        all.textContent = state.showAll ? 'Vendo tudo' : 'Ver tudo';
+        all.title = state.showAll
+            ? 'Mostrando também as tarefas abertas com prazo depois desta semana'
+            : 'Mostrar também as tarefas abertas com prazo depois desta semana';
+    }
+
+    /** 16k: seção "Depois desta semana" — só com Ver tudo e com itens. */
+    function renderBeyond() {
+        var box = $('tp-w-beyond');
+        if (!box) {
+            return;
+        }
+        box.textContent = '';
+        var items = state.showAll
+            ? state.data.beyond.filter(matchesSearch)
+            : [];
+        if (items.length === 0) {
+            box.hidden = true;
+            return;
+        }
+        var head = el('div', 'taskplus-wbeyond__head');
+        head.appendChild(el('span', null, 'Depois desta semana'));
+        head.appendChild(el('span', 'taskplus-section__count', String(items.length)));
+        box.appendChild(head);
+        var list = el('div', 'taskplus-wbeyond__list');
+        items.forEach(function (item) {
+            var c = chip(item);
+            c.insertBefore(el('div', 'taskplus-wbeyond__date', item.date_label || ''), c.firstChild);
+            list.appendChild(c);
+        });
+        box.appendChild(list);
+        box.hidden = false;
+    }
+
     /**
      * Card compacto de um dia. SÓ leitura: sem check, sem ações — as
      * classes de status e os badges são os mesmos das outras telas.
@@ -356,9 +447,6 @@
             badges.appendChild(el('span',
                 'taskplus-badge' + (item.is_late ? ' taskplus-badge--late' : ' taskplus-badge--limit'),
                 'até ' + item.time_limit));
-        }
-        if (item.is_late && !item.time_limit) {
-            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--late', 'atrasada'));
         }
         if (item.is_routine) {
             badges.appendChild(el('span', 'taskplus-badge', 'rotina'));
@@ -394,6 +482,17 @@
         }
         if (badges.childNodes.length > 0) {
             c.appendChild(badges);
+        }
+        // 16k (nº 71): mesma leitura dos quadros — barra de prazo em
+        // aberta não atrasada; faixa "Atrasada · há N" em atrasada.
+        if (!item.is_late && !item.is_pending && !item.is_done && item.deadline_label) {
+            c.appendChild(deadlineBar(item));
+        }
+        if (item.is_late && !item.is_pending && !item.is_done) {
+            var late = el('div', 'taskplus-bcard__late');
+            late.appendChild(el('i', 'ti ti-alert-triangle'));
+            late.appendChild(document.createTextNode('\u00a0Atrasada' + (item.late_label ? ' \u00b7 ' + item.late_label : '')));
+            c.appendChild(late);
         }
 
         if (item.is_team) {
@@ -466,13 +565,27 @@
                 renderGrid();
             });
         }
+        // 16k: "Ver tudo" (preferência por pessoa, a mesma dos quadros)
+        state.showAll = readShowAll();
+        var all = $('tp-w-all');
+        if (all) {
+            all.addEventListener('click', function () {
+                setShowAll(!state.showAll);
+                syncShowAllButton();
+                post({ action: 'list' });
+            });
+        }
+        syncShowAllButton();
 
         render();
+        if (state.showAll) {
+            post({ action: 'list' }); // o payload embutido não traz `beyond`
+        }
     }
 
     // Exposto para o harness (jsdom outside-only não dispara
     // DOMContentLoaded — lição T14) e para depuração.
-    window.TaskplusWeek = { init: init };
+    window.TaskplusWeek = { init: init, chip: chip, renderBeyond: renderBeyond, state: state };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
