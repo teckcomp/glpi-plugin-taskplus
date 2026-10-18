@@ -90,6 +90,10 @@ class Install
             'plugin_taskplus_occurrences_id' => 'INT %SIGN% NOT NULL DEFAULT 0',
             'users_id'                       => 'INT %SIGN% NOT NULL DEFAULT 0',
             'date_read'                      => 'TIMESTAMP NULL DEFAULT NULL',
+            // 16d: id do último comentário visto na abertura. NULL = linha
+            // anterior a esta versão (o não lido cai na comparação por
+            // hora, como antes); 0 = abriu a thread ainda vazia.
+            'last_comment_id'                => 'INT %SIGN% NULL DEFAULT NULL',
         ],
         'glpi_plugin_taskplus_routines' => [
             'name'             => "VARCHAR(255) NOT NULL DEFAULT ''",
@@ -443,6 +447,7 @@ class Install
                     `plugin_taskplus_occurrences_id` INT {$sign} NOT NULL DEFAULT 0,
                     `users_id`      INT {$sign} NOT NULL DEFAULT 0 COMMENT 'leitor',
                     `date_read`     TIMESTAMP NULL DEFAULT NULL COMMENT 'ultima abertura da thread',
+                    `last_comment_id` INT {$sign} NULL DEFAULT NULL COMMENT '16d: ultimo comentario visto',
                     PRIMARY KEY (`id`),
                     UNIQUE KEY `occ_user` (`plugin_taskplus_occurrences_id`, `users_id`)
                 ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collation}

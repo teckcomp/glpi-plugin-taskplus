@@ -217,11 +217,13 @@ class Comment
      * Duas consultas simples e junção em PHP, de propósito: COUNT com
      * GROUPBY no iterator do GLPI 11 descarta os campos do SELECT.
      *
-     * Limite conhecido e aceito: `date_read` é TIMESTAMP (1 segundo) e a
-     * comparação é estrita, então comentário gravado no MESMO segundo em
-     * que o leitor abriu a thread não reacende o contador. A janela é
-     * mínima e o comentário seguinte volta a contar; eliminá-la exigiria
-     * guardar o id do último comentário lido, não a hora.
+     * 16d (defeito nº 1 da fila): a comparação por `date_read` (TIMESTAMP,
+     * 1 segundo) deixava comentário gravado no MESMO segundo da abertura
+     * nascer como lido. Agora a leitura guarda `last_comment_id` (maior id
+     * existente na abertura) e o não lido é `comments.id >
+     * last_comment_id` — o id é monotônico, sem janela. Linha de leitura
+     * anterior a esta versão (`last_comment_id` NULL) segue pela hora,
+     * até a próxima abertura regravar.
      */
     public static function unreadFor(array $occIds, int $viewerId): array
     {
@@ -254,7 +256,13 @@ class Comment
                 self::TABLE_READS . '.users_id'                       => $viewerId,
             ],
         ]) as $row) {
-            $reads[(int) $row['plugin_taskplus_occurrences_id']] = (string) ($row['date_read'] ?? '');
+            $reads[(int) $row['plugin_taskplus_occurrences_id']] = [
+                'date' => (string) ($row['date_read'] ?? ''),
+                // NULL (coluna nova em linha antiga) ≠ 0 (thread vazia na abertura)
+                'last' => array_key_exists('last_comment_id', $row) && $row['last_comment_id'] !== null
+                    ? (int) $row['last_comment_id']
+                    : null,
+            ];
         }
 
         foreach ($DB->request([
@@ -273,11 +281,22 @@ class Comment
             if (!isset($out[$occId])) {
                 continue;
             }
+            $read = $reads[$occId] ?? null;
+            if ($read === null) {
+                $out[$occId]++; // nunca abriu: tudo é novo
+                continue;
+            }
+            if ($read['last'] !== null) {
+                // 16d: desempate por id — sem janela de 1 segundo
+                if ((int) ($row['id'] ?? 0) > $read['last']) {
+                    $out[$occId]++;
+                }
+                continue;
+            }
+            // Linha de leitura antiga (sem last_comment_id): régua por hora.
+            // 'Y-m-d H:i:s' compara direito como string.
             $when = (string) ($row['date_creation'] ?? '');
-            $read = $reads[$occId] ?? '';
-            // 'Y-m-d H:i:s' compara direito como string (ordem
-            // lexicográfica = ordem cronológica).
-            if ($read === '' || $when > $read) {
+            if ($read['date'] === '' || $when > $read['date']) {
                 $out[$occId]++;
             }
         }
@@ -300,6 +319,15 @@ class Comment
         }
 
         $now      = date('Y-m-d H:i:s');
+        // 16d: maior id de comentário da thread NESTE instante (inclusive
+        // excluídos — o id é só um marco; 0 = thread ainda vazia).
+        $lastId = 0;
+        foreach ($DB->request([
+            'FROM'  => self::TABLE,
+            'WHERE' => [self::TABLE . '.plugin_taskplus_occurrences_id' => $occId],
+        ]) as $row) {
+            $lastId = max($lastId, (int) ($row['id'] ?? 0));
+        }
         $existing = 0;
         foreach ($DB->request([
             'FROM'  => self::TABLE_READS,
@@ -314,7 +342,7 @@ class Comment
         if ($existing > 0) {
             $DB->update(
                 self::TABLE_READS,
-                ['date_read' => $now],
+                ['date_read' => $now, 'last_comment_id' => $lastId],
                 [self::TABLE_READS . '.id' => $existing]
             );
             return;
@@ -324,6 +352,7 @@ class Comment
             'plugin_taskplus_occurrences_id' => $occId,
             'users_id'                       => $viewerId,
             'date_read'                      => $now,
+            'last_comment_id'                => $lastId,
         ]);
     }
 

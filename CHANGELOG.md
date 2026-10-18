@@ -5,6 +5,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [0.2.10-beta] — 2026-10-18
 
+### Corrigido
+
+- **Badge 💬 não acendia para comentário gravado no mesmo segundo em que
+  o leitor abriu a thread** (16d, defeito nº 1 da fila): a marca de
+  leitura agora guarda o id do último comentário visto
+  (`comment_reads.last_comment_id`) e o não lido é por id, sem janela.
+  Marcas anteriores seguem pela hora até a próxima abertura.
+
 ### Adicionado
 
 - **"Ver tudo" na Hoje, no Quadro e no Quadro de Equipe** (16, decisão
