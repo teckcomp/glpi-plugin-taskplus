@@ -165,6 +165,9 @@
             if (first.length > 80) {
                 first = first.slice(0, 79) + '\u2026';
             }
+            if (first === '' && c.has_file) {
+                first = '\uD83D\uDCCE anexo'; // comentário só com arquivo
+            }
             line.appendChild(linkify(el('span', 'taskplus-card__recent-text'), first));
             line.title = String(c.content || '');
             box.appendChild(line);
@@ -831,7 +834,7 @@
         }
         if (item.is_native && item.ticket_label) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--ticket',
-                'Chamado ' + item.ticket_label));
+                'Ticket ' + item.ticket_label));
         }
         if (item.is_native && item.project_name) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--project',

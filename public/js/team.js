@@ -720,7 +720,7 @@
         }
 
         if (item.source === 'ticket') {
-            row.appendChild(el('span', 'taskplus-badge taskplus-badge--ticket', 'Chamado'));
+            row.appendChild(el('span', 'taskplus-badge taskplus-badge--ticket', 'Ticket'));
         } else if (item.source === 'project') {
             row.appendChild(el('span', 'taskplus-badge taskplus-badge--project', 'Projeto'));
         }

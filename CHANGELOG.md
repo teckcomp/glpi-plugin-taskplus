@@ -29,6 +29,9 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
   do GLPI no seletor; agora ficam só os que têm ≥1 membro com direito
   de tarefa, mais os setores de que o próprio admin é gestor ou membro.
   Gestor comum não muda.
+- **"chamado" → "ticket" no restante do plugin** (16h, fila 13, nº 63):
+  mensagens de tarefa de ticket, dicas de Histórico/Painel/Semana e
+  badges "Ticket" na Equipe e no Quadro.
 - **Últimas entradas do diálogo no card** (16g, decisão nº 76): os
   cards da Hoje, do Quadro e do Quadro de Equipe (inclusive "Da
   equipe") ganham um rodapé com as 3 últimas entradas do diálogo —

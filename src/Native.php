@@ -331,18 +331,18 @@ class Native
 
         if ($row === null || (int) ($row['users_id_tech'] ?? 0) !== $usersId) {
             // Mesma régua da leitura: "minha" tarefa = users_id_tech = eu.
-            return ['success' => false, 'message' => __('Tarefa de chamado não encontrada ou não é sua', 'taskplus')];
+            return ['success' => false, 'message' => __('Tarefa de ticket não encontrada ou não é sua', 'taskplus')];
         }
         if ((int) ($row['state'] ?? 0) !== self::STATE_TODO) {
             // Idempotente: repetir o gesto não é erro (mesmo espírito do
             // "já estava concluída" da ocorrência própria).
-            return ['success' => true, 'message' => __('Tarefa do chamado já estava feita', 'taskplus')];
+            return ['success' => true, 'message' => __('Tarefa do ticket já estava feita', 'taskplus')];
         }
 
         return self::nativeUpdate(
             TicketTask::class,
             ['id' => $taskId, 'state' => self::STATE_DONE],
-            __('Tarefa do chamado marcada como feita (o chamado continua aberto)', 'taskplus')
+            __('Tarefa do ticket marcada como feita (o ticket continua aberto)', 'taskplus')
         );
     }
 

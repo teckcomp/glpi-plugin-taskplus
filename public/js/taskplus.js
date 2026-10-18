@@ -170,6 +170,9 @@
             if (first.length > 80) {
                 first = first.slice(0, 79) + '\u2026';
             }
+            if (first === '' && c.has_file) {
+                first = '\uD83D\uDCCE anexo'; // comentário só com arquivo
+            }
             line.appendChild(linkify(el('span', 'taskplus-card__recent-text'), first));
             line.title = String(c.content || '');
             box.appendChild(line);

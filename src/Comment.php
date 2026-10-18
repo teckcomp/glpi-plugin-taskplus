@@ -443,9 +443,10 @@ class Comment
             foreach (array_reverse($rows) as $row) { // cronológica
                 $when   = (string) ($row['date_creation'] ?? '');
                 $list[] = [
-                    'author'  => $labels[(int) ($row['users_id'] ?? 0)] ?? '',
-                    'date'    => $when !== '' ? date('d/m H:i', strtotime($when)) : '',
-                    'content' => (string) ($row['content'] ?? ''),
+                    'author'   => $labels[(int) ($row['users_id'] ?? 0)] ?? '',
+                    'date'     => $when !== '' ? date('d/m H:i', strtotime($when)) : '',
+                    'content'  => (string) ($row['content'] ?? ''),
+                    'has_file' => ((int) ($row['documents_id'] ?? 0)) > 0, // só anexo → "📎 anexo"
                 ];
             }
             $out[$occId] = $list;
