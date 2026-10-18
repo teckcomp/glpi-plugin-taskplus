@@ -133,7 +133,8 @@
             days: Array.isArray(d.days) ? d.days.map(safeDay) : [],
             // 16k
             show_all: !!d.show_all,
-            beyond: Array.isArray(d.beyond) ? d.beyond : []
+            beyond: Array.isArray(d.beyond) ? d.beyond : [],
+            prefs: (d.prefs && typeof d.prefs === 'object') ? safePrefs(d.prefs) : ((state.data && state.data.prefs) ? state.data.prefs : safePrefs(null)) // 16l
         };
     }
 
@@ -360,6 +361,29 @@
         return box;
     }
 
+
+    // ------------------------------------------------------------------
+    // 16l (nº 79) — preferência vem do SERVIDOR (payload.prefs); o
+    // localStorage fica como fallback para quem ainda não tem linha
+    // (known=false): nesse caso o primeiro `list` leva pref_save e migra.
+    // ------------------------------------------------------------------
+    function safePrefs(raw) {
+        var p = (raw && typeof raw === 'object') ? raw : {};
+        return {
+            known: !!p.known,
+            show_all: !!p.show_all,
+            fav_groups_id: Number(p.fav_groups_id) || 0
+        };
+    }
+
+    /** Estado inicial do Ver tudo: servidor se conhecido, senão navegador. */
+    function initialShowAll(prefs) {
+        if (prefs.known) {
+            return prefs.show_all;
+        }
+        return readShowAll();
+    }
+
     function showAllKey() {
         return 'taskplus.board.all.' + String(state.userId || 0);
     }
@@ -566,20 +590,21 @@
             });
         }
         // 16k: "Ver tudo" (preferência por pessoa, a mesma dos quadros)
-        state.showAll = readShowAll();
+        state.showAll = initialShowAll(state.data.prefs); // 16l
         var all = $('tp-w-all');
         if (all) {
             all.addEventListener('click', function () {
                 setShowAll(!state.showAll);
                 syncShowAllButton();
-                post({ action: 'list' });
+                post({ action: 'list', pref_save: '1' }); // 16l
             });
         }
         syncShowAllButton();
 
         render();
         if (state.showAll) {
-            post({ action: 'list' }); // o payload embutido não traz `beyond`
+            // o payload embutido não traz `beyond`; sem linha no servidor, migra
+            post(state.data.prefs.known ? { action: 'list' } : { action: 'list', pref_save: '1' });
         }
     }
 

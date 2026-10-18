@@ -11,6 +11,7 @@
 
 use Glpi\Application\View\TemplateRenderer;
 use GlpiPlugin\Taskplus\Access;
+use GlpiPlugin\Taskplus\Prefs;
 use GlpiPlugin\Taskplus\Board;
 use GlpiPlugin\Taskplus\Today;
 use GlpiPlugin\Taskplus\Url;
@@ -27,6 +28,8 @@ Html::header(
 );
 
 $payload = Board::payload((int) Session::getLoginUserID());
+// 16l (nº 79): preferências de tela do usuário (chave nova → safeData)
+$payload['prefs'] = Prefs::get((int) Session::getLoginUserID());
 
 // Twig do GLPI é strict: TODA variável usada no template TEM que estar
 // aqui, e `nav` traz TODAS as chaves sempre (Access::sidebar()).

@@ -50,6 +50,7 @@ use Glpi\Exception\Http\HttpException;
 use GlpiPlugin\Taskplus\Access;
 use GlpiPlugin\Taskplus\Comment;
 use GlpiPlugin\Taskplus\Occurrence;
+use GlpiPlugin\Taskplus\Prefs;
 use GlpiPlugin\Taskplus\TeamBoard;
 use GlpiPlugin\Taskplus\Tickets;
 
@@ -77,8 +78,12 @@ $pt = isset($_POST['period_to']) ? (string) $_POST['period_to'] : null;
 $result['csrf'] = Session::getNewCSRFToken();
 // 16 (nº 73): "Ver tudo" da Hoje — futuras sem teto (chave `upcoming`);
 // sem ele passa 0 e o caminho é byte a byte o de sempre.
+// 16l (nº 79): o clique no Ver tudo / na ★ manda pref_save / pref_fav
+// junto do list — grava no servidor sem POST extra.
+Prefs::applyFromInput($usersId, $_POST);
 $up = Occurrence::upcomingDaysFromInput($_POST, 0);
 $result['data'] = Occurrence::payload($usersId, $pf, $pt, $up);
+$result['data']['prefs'] = Prefs::get($usersId); // 16l: eco após gravar
 
 // Etapa 8a: a coluna Chamados acompanha todo re-render da tela Hoje.
 // Mesma chave e mesmo guarda do front/today.php.

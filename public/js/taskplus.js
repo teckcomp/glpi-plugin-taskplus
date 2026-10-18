@@ -202,6 +202,7 @@
             // 16 (nº 73): abertas futuras — só chega com "Ver tudo"
             upcoming: Array.isArray(d.upcoming) ? d.upcoming : [],
             show_all: !!d.show_all,
+            prefs: (d.prefs && typeof d.prefs === 'object') ? safePrefs(d.prefs) : ((state.data && state.data.prefs) ? state.data.prefs : safePrefs(null)), // 16l
             // 8a: payload antigo (sem a chave) vira lista vazia
             tickets: Array.isArray(d.tickets) ? d.tickets : [],
             // 13d: tarefas de equipe do colaborador (payload antigo vira vazio)
@@ -345,6 +346,29 @@
     // 16 (nº 73) — "Ver tudo": preferência do navegador, por usuário
     // ------------------------------------------------------------------
 
+
+    // ------------------------------------------------------------------
+    // 16l (nº 79) — preferência vem do SERVIDOR (payload.prefs); o
+    // localStorage fica como fallback para quem ainda não tem linha
+    // (known=false): nesse caso o primeiro `list` leva pref_save e migra.
+    // ------------------------------------------------------------------
+    function safePrefs(raw) {
+        var p = (raw && typeof raw === 'object') ? raw : {};
+        return {
+            known: !!p.known,
+            show_all: !!p.show_all,
+            fav_groups_id: Number(p.fav_groups_id) || 0
+        };
+    }
+
+    /** Estado inicial do Ver tudo: servidor se conhecido, senão navegador. */
+    function initialShowAll(prefs) {
+        if (prefs.known) {
+            return prefs.show_all;
+        }
+        return readShowAll();
+    }
+
     function showAllKey() {
         return 'taskplus.board.all.' + String(state.userId || 0);
     }
@@ -376,7 +400,7 @@
         if (!state.showAll || periodActive()) {
             return false;
         }
-        post({ action: 'list' });
+        post(state.data.prefs.known ? { action: 'list' } : { action: 'list', pref_save: '1' }); // 16l
         return true;
     }
 
@@ -1667,11 +1691,11 @@
         // MESMA dos quadros: quem liga num lugar vê tudo em todos.
         var showAll = $('tp-show-all');
         if (showAll) {
-            state.showAll = readShowAll();
+            state.showAll = initialShowAll(state.data.prefs); // 16l
             showAll.checked = state.showAll;
             showAll.addEventListener('change', function (ev) {
                 setShowAll(!!ev.target.checked);
-                post({ action: 'list' });
+                post({ action: 'list', pref_save: '1' }); // 16l
             });
             applyShowAll();
         }

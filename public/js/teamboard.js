@@ -192,7 +192,8 @@
             },
             // 16: eco do "Ver tudo" + teto padrão (payload antigo: 7)
             show_all: !!d.show_all,
-            upcoming_days: Number(d.upcoming_days) || 7
+            upcoming_days: Number(d.upcoming_days) || 7,
+            prefs: (d.prefs && typeof d.prefs === 'object') ? safePrefs(d.prefs) : ((state.data && state.data.prefs) ? state.data.prefs : safePrefs(null)) // 16l
         };
     }
 
@@ -201,6 +202,29 @@
     // (mesma chave do Quadro pessoal: a preferência é da pessoa, não
     // da tela — quem liga num quadro vê tudo no outro).
     // ------------------------------------------------------------------
+
+
+    // ------------------------------------------------------------------
+    // 16l (nº 79) — preferência vem do SERVIDOR (payload.prefs); o
+    // localStorage fica como fallback para quem ainda não tem linha
+    // (known=false): nesse caso o primeiro `list` leva pref_save e migra.
+    // ------------------------------------------------------------------
+    function safePrefs(raw) {
+        var p = (raw && typeof raw === 'object') ? raw : {};
+        return {
+            known: !!p.known,
+            show_all: !!p.show_all,
+            fav_groups_id: Number(p.fav_groups_id) || 0
+        };
+    }
+
+    /** Estado inicial do Ver tudo: servidor se conhecido, senão navegador. */
+    function initialShowAll(prefs) {
+        if (prefs.known) {
+            return prefs.show_all;
+        }
+        return readShowAll();
+    }
 
     function showAllKey() {
         return 'taskplus.board.all.' + String(state.userId || 0);
@@ -229,7 +253,7 @@
 
     function toggleShowAll() {
         setShowAll(!state.showAll);
-        post({ action: 'list', groups_id: String(state.data.group_id) });
+        post({ action: 'list', groups_id: String(state.data.group_id), pref_save: '1' }); // 16l
     }
 
     /** Na abertura: payload embutido é o de 7 dias — "Ver tudo" ligado
@@ -239,7 +263,11 @@
         if (!state.showAll || state.data.period.active || state.data.group_id === 0) {
             return false;
         }
-        post({ action: 'list', groups_id: String(state.data.group_id) });
+        var fields = { action: 'list', groups_id: String(state.data.group_id) };
+        if (!state.data.prefs.known) {
+            fields.pref_save = '1'; // 16l: migra a preferência do navegador
+        }
+        post(fields);
         return true;
     }
 
@@ -366,6 +394,10 @@
     }
 
     function favoriteGroup() {
+        // 16l: o servidor é a fonte quando o usuário já tem linha
+        if (state.data.prefs && state.data.prefs.known) {
+            return state.data.prefs.fav_groups_id;
+        }
         try {
             return Number(window.localStorage.getItem(favoriteKey())) || 0;
         } catch (e) {
@@ -374,6 +406,9 @@
     }
 
     function setFavoriteGroup(id) {
+        if (state.data.prefs) {
+            state.data.prefs.fav_groups_id = id; // 16l: espelho local do servidor
+        }
         try {
             if (id > 0) {
                 window.localStorage.setItem(favoriteKey(), String(id));
@@ -402,7 +437,10 @@
             setFavoriteGroup(0); // saiu do setor: favorito órfão some
             return false;
         }
-        post({ action: 'list', groups_id: String(favId) });
+        // 16l: favorito vindo do navegador (sem linha) → migra com pref_fav
+        post(state.data.prefs.known
+            ? { action: 'list', groups_id: String(favId) }
+            : { action: 'list', groups_id: String(favId), pref_fav: '1', pref_save: state.showAll ? '1' : '0' });
         return true;
     }
 
@@ -450,6 +488,8 @@
                 setFavoriteGroup(isFav ? 0 : Number(state.data.group_id));
                 toast(isFav ? 'Setor favorito desmarcado' : 'Setor favorito: o Quadro de Equipe abre aqui da próxima vez');
                 renderToolbar();
+                // 16l: grava no servidor pelo próprio list (pref_fav=1|0)
+                post({ action: 'list', groups_id: String(state.data.group_id), pref_fav: isFav ? '0' : '1' });
             });
             sector.appendChild(fav);
         } else {

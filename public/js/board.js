@@ -194,13 +194,37 @@
             },
             // 16: eco do "Ver tudo" + teto padrão (payload antigo: 7)
             show_all: !!d.show_all,
-            upcoming_days: Number(d.upcoming_days) || 7
+            upcoming_days: Number(d.upcoming_days) || 7,
+            prefs: (d.prefs && typeof d.prefs === 'object') ? safePrefs(d.prefs) : ((state.data && state.data.prefs) ? state.data.prefs : safePrefs(null)) // 16l
         };
     }
 
     // ------------------------------------------------------------------
     // 16 (nº 73) — "Ver tudo": preferência do navegador, por usuário
     // ------------------------------------------------------------------
+
+
+    // ------------------------------------------------------------------
+    // 16l (nº 79) — preferência vem do SERVIDOR (payload.prefs); o
+    // localStorage fica como fallback para quem ainda não tem linha
+    // (known=false): nesse caso o primeiro `list` leva pref_save e migra.
+    // ------------------------------------------------------------------
+    function safePrefs(raw) {
+        var p = (raw && typeof raw === 'object') ? raw : {};
+        return {
+            known: !!p.known,
+            show_all: !!p.show_all,
+            fav_groups_id: Number(p.fav_groups_id) || 0
+        };
+    }
+
+    /** Estado inicial do Ver tudo: servidor se conhecido, senão navegador. */
+    function initialShowAll(prefs) {
+        if (prefs.known) {
+            return prefs.show_all;
+        }
+        return readShowAll();
+    }
 
     function showAllKey() {
         return 'taskplus.board.all.' + String(state.userId || 0);
@@ -229,7 +253,7 @@
 
     function toggleShowAll() {
         setShowAll(!state.showAll);
-        post({ action: 'list' });
+        post({ action: 'list', pref_save: '1' }); // 16l: grava no servidor
     }
 
     /** Na abertura: o payload embutido é o de 7 dias — com "Ver tudo"
@@ -238,7 +262,8 @@
         if (!state.showAll || periodActive()) {
             return false;
         }
-        post({ action: 'list' });
+        // 16l: sem linha no servidor e com preferência no navegador → migra
+        post(state.data.prefs.known ? { action: 'list' } : { action: 'list', pref_save: '1' });
         return true;
     }
 
@@ -1256,7 +1281,6 @@
         state.commentsUrl = state.root.getAttribute('data-comments-url') || '';
         state.attachUrl = state.root.getAttribute('data-attachments-url') || '';
         state.userId = Number(state.root.getAttribute('data-user-id')) || 0; // 16
-        state.showAll = readShowAll(); // 16
 
         var raw = null;
         var dataEl = $('taskplus-board-data');
@@ -1268,6 +1292,7 @@
             }
         }
         state.data = safeData(raw);
+        state.showAll = initialShowAll(state.data.prefs); // 16l
 
         // 5b-2 p2: barra de busca + período acima do quadro
         buildToolbar();

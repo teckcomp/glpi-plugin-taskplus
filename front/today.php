@@ -10,6 +10,7 @@
 
 use Glpi\Application\View\TemplateRenderer;
 use GlpiPlugin\Taskplus\Access;
+use GlpiPlugin\Taskplus\Prefs;
 use GlpiPlugin\Taskplus\Comment;
 use GlpiPlugin\Taskplus\Occurrence;
 use GlpiPlugin\Taskplus\QuickLinks;
@@ -66,6 +67,9 @@ try {
 // aqui, e `nav` traz TODAS as chaves sempre (Access::sidebar()).
 // JSON com HEX_TAG & cia: um "</script>" num nome de tarefa não pode
 // quebrar a página (lição herdada do ProjectPlus).
+// 16l (nº 79): preferências de tela do usuário (chave nova → safeData)
+$payload['prefs'] = Prefs::get((int) Session::getLoginUserID());
+
 TemplateRenderer::getInstance()->display(
     '@taskplus/today.html.twig',
     [

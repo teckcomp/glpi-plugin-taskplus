@@ -40,6 +40,8 @@ class Install
         'glpi_plugin_taskplus_comment_reads',
         // 13b: colaboradores da tarefa de equipe
         'glpi_plugin_taskplus_occurrence_users',
+        // 16l: preferências de tela por usuário (Ver tudo, setor favorito)
+        'glpi_plugin_taskplus_user_prefs',
     ];
 
     /**
@@ -86,6 +88,13 @@ class Install
         ],
         // 9a-1: marca de leitura do diálogo, uma linha por (ocorrência,
         // leitor). A UNIQUE fica só no CREATE TABLE (regra do topo).
+        // 16l (nº 79): preferências por usuário. A UNIQUE fica no CREATE.
+        'glpi_plugin_taskplus_user_prefs' => [
+            'users_id'      => 'INT %SIGN% NOT NULL DEFAULT 0',
+            'show_all'      => 'TINYINT NOT NULL DEFAULT 0',
+            'fav_groups_id' => 'INT %SIGN% NOT NULL DEFAULT 0',
+            'date_mod'      => 'TIMESTAMP NULL DEFAULT NULL',
+        ],
         'glpi_plugin_taskplus_comment_reads' => [
             'plugin_taskplus_occurrences_id' => 'INT %SIGN% NOT NULL DEFAULT 0',
             'users_id'                       => 'INT %SIGN% NOT NULL DEFAULT 0',
@@ -445,6 +454,22 @@ class Install
         //    comentário. A UNIQUE `occ_user` é o que torna a marcação um
         //    upsert seguro mesmo com dois cliques simultâneos.
         // ------------------------------------------------------------------
+        // 16l (nº 79): preferências de tela por usuário — uma linha por
+        // users_id; o JS lê no front e grava pelo próprio `list` da tela.
+        if (!$DB->tableExists('glpi_plugin_taskplus_user_prefs')) {
+            $DB->doQuery("
+                CREATE TABLE `glpi_plugin_taskplus_user_prefs` (
+                    `id`            INT {$sign} NOT NULL AUTO_INCREMENT,
+                    `users_id`      INT {$sign} NOT NULL DEFAULT 0,
+                    `show_all`      TINYINT NOT NULL DEFAULT 0 COMMENT 'Ver tudo (no 73)',
+                    `fav_groups_id` INT {$sign} NOT NULL DEFAULT 0 COMMENT 'setor favorito (no 72)',
+                    `date_mod`      TIMESTAMP NULL DEFAULT NULL,
+                    PRIMARY KEY (`id`),
+                    UNIQUE KEY `users_id` (`users_id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collation}
+            ");
+        }
+
         if (!$DB->tableExists('glpi_plugin_taskplus_comment_reads')) {
             $DB->doQuery("
                 CREATE TABLE `glpi_plugin_taskplus_comment_reads` (

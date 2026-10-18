@@ -13,6 +13,7 @@
 use Glpi\Application\View\TemplateRenderer;
 use Glpi\Exception\Http\AccessDeniedHttpException;
 use GlpiPlugin\Taskplus\Access;
+use GlpiPlugin\Taskplus\Prefs;
 use GlpiPlugin\Taskplus\TeamBoard;
 use GlpiPlugin\Taskplus\Today;
 use GlpiPlugin\Taskplus\Url;
@@ -39,6 +40,9 @@ $payload = TeamBoard::payload(
 
 // Twig do GLPI é strict: TODA variável usada no template TEM que estar
 // aqui, e `nav` traz TODAS as chaves sempre (Access::sidebar()).
+// 16l (nº 79): preferências de tela do usuário (chave nova → safeData)
+$payload['prefs'] = Prefs::get((int) Session::getLoginUserID());
+
 TemplateRenderer::getInstance()->display(
     '@taskplus/teamboard.html.twig',
     [

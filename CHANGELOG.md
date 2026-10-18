@@ -7,6 +7,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ### Corrigido
 
+- **Ver tudo e setor favorito valem em qualquer máquina** (16l, fila 16,
+  decisão nº 79): preferências gravadas no servidor por usuário
+  (`glpi_plugin_taskplus_user_prefs`), lidas na abertura da Hoje, do
+  Quadro, do Quadro de Equipe e da Semana; o que estava só no navegador
+  migra sozinho na primeira abertura. `?groups_id=` na URL continua
+  valendo sobre o favorito.
 - **Semana com "data é prazo"** (16k, fila 15, nº 71): o card ganha a
   barra de prazo e a faixa "Atrasada · há N", como nos quadros; o botão
   "Ver tudo" (mesma preferência) abre a seção "Depois desta semana" com

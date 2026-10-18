@@ -18,6 +18,7 @@ use Glpi\Exception\Http\HttpException;
 use GlpiPlugin\Taskplus\Access;
 use GlpiPlugin\Taskplus\Board;
 use GlpiPlugin\Taskplus\Occurrence;
+use GlpiPlugin\Taskplus\Prefs;
 use GlpiPlugin\Taskplus\TeamBoard;
 
 include('../../../inc/includes.php');
@@ -43,8 +44,12 @@ $pt = isset($_POST['period_to']) ? (string) $_POST['period_to'] : null;
 
 $result['csrf'] = Session::getNewCSRFToken();
 // 16 (nº 73): "Ver tudo" (show_all=1) viaja em todo POST, como o período.
+// 16l (nº 79): o clique no Ver tudo / na ★ manda pref_save / pref_fav
+// junto do list — grava no servidor sem POST extra.
+Prefs::applyFromInput($usersId, $_POST);
 $up = Occurrence::upcomingDaysFromInput($_POST, Board::UPCOMING_DAYS);
 $result['data'] = TeamBoard::payload($usersId, $groupId, $pf, $pt, $up);
+$result['data']['prefs'] = Prefs::get($usersId); // 16l: eco após gravar
 
 header('Content-Type: application/json; charset=UTF-8');
 echo json_encode($result, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);

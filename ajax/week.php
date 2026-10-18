@@ -51,6 +51,7 @@
 use Glpi\Exception\Http\HttpException;
 use GlpiPlugin\Taskplus\Access;
 use GlpiPlugin\Taskplus\Occurrence;
+use GlpiPlugin\Taskplus\Prefs;
 use GlpiPlugin\Taskplus\Week;
 
 include('../../../inc/includes.php');
@@ -75,7 +76,11 @@ $anchor = isset($_POST['anchor']) ? (string) $_POST['anchor'] : null;
 $result['csrf'] = Session::getNewCSRFToken();
 // 16k: "Ver tudo" (show_all=1) → seção "Depois desta semana"
 $showAll = Occurrence::upcomingDaysFromInput($_POST, 0) === Occurrence::UPCOMING_ALL;
+// 16l (nº 79): o clique no Ver tudo / na ★ manda pref_save / pref_fav
+// junto do list — grava no servidor sem POST extra.
+Prefs::applyFromInput($usersId, $_POST);
 $result['data'] = Week::payload($usersId, $anchor, $showAll);
+$result['data']['prefs'] = Prefs::get($usersId); // 16l: eco após gravar
 
 header('Content-Type: application/json; charset=UTF-8');
 echo json_encode($result, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
