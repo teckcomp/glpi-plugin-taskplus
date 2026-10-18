@@ -414,6 +414,11 @@ class History
                 Occurrence::TABLE . '.is_edited',
                 Occurrence::TABLE . '.is_deleted',
                 Occurrence::TABLE . '.date_creation',
+                Occurrence::TABLE . '.users_id_restore', // 16i
+                Occurrence::TABLE . '.date_restore',     // 16i
+                Occurrence::TABLE . '.validation',        // 16j
+                Occurrence::TABLE . '.users_id_validate', // 16j
+                Occurrence::TABLE . '.validation_date',   // 16j
                 Routine::TABLE . '.name AS routine_name',
             ],
             'FROM'      => Occurrence::TABLE,
@@ -502,6 +507,20 @@ class History
                 && ((int) ($row['users_id_done'] ?? 0)) !== ((int) ($row['users_id'] ?? 0)),
             'done_by_id'    => (int) ($row['users_id_done'] ?? 0),
             'done_by_label' => '',
+            // 16j (fila 12): estado da validação (11b) visível no Histórico.
+            // 0 = não se aplica, 1 = aguardando, 2 = validada.
+            'validation'         => $isDone ? (int) ($row['validation'] ?? 0) : 0,
+            'validated_by_id'    => ($isDone && (int) ($row['validation'] ?? 0) === 2)
+                ? (int) ($row['users_id_validate'] ?? 0) : 0,
+            'validated_by_label' => '',
+            'validated_at'       => ($isDone && (int) ($row['validation'] ?? 0) === 2 && !empty($row['validation_date']))
+                ? date('d/m H:i', strtotime((string) $row['validation_date'])) : '',
+            // 16i (nº 38): restaurada por quem/quando (0/'' = nunca)
+            'restored_by_id'    => $isDeleted ? 0 : (int) ($row['users_id_restore'] ?? 0),
+            'restored_by_label' => '',
+            'restored_at'       => (!$isDeleted && !empty($row['date_restore']))
+                ? date('d/m H:i', strtotime((string) $row['date_restore']))
+                : '',
             // Pulo (4b — sempre ação do próprio dono, sem badge de autor)
             'skip_reason'  => $isSkipped ? (string) ($row['skip_reason'] ?? '') : '',
             'skip_label'   => $skipLabel,
@@ -663,6 +682,12 @@ class History
             if (!empty($item['created_by_other']) && (int) ($item['created_by_id'] ?? 0) > 0) {
                 $ids[(int) $item['created_by_id']] = true;
             }
+            if ((int) ($item['restored_by_id'] ?? 0) > 0) { // 16i
+                $ids[(int) $item['restored_by_id']] = true;
+            }
+            if ((int) ($item['validated_by_id'] ?? 0) > 0) { // 16j
+                $ids[(int) $item['validated_by_id']] = true;
+            }
         }
         if ($ids === []) {
             return $rows;
@@ -691,6 +716,12 @@ class History
             }
             if (!empty($item['created_by_other'])) {
                 $item['created_by_label'] = $labels[(int) ($item['created_by_id'] ?? 0)] ?? '';
+            }
+            if ((int) ($item['restored_by_id'] ?? 0) > 0) { // 16i
+                $item['restored_by_label'] = $labels[(int) ($item['restored_by_id'] ?? 0)] ?? '';
+            }
+            if ((int) ($item['validated_by_id'] ?? 0) > 0) { // 16j
+                $item['validated_by_label'] = $labels[(int) ($item['validated_by_id'] ?? 0)] ?? '';
             }
         }
         unset($item);
@@ -919,9 +950,11 @@ class History
             return ['success' => false, 'message' => __('Ocorrência de rotina não pode ser restaurada', 'taskplus')];
         }
 
+        // 16i (decisão nº 38): carimbo de quem restaurou e quando
+        $now = date('Y-m-d H:i:s');
         $DB->update(
             Occurrence::TABLE,
-            ['is_deleted' => 0, 'date_mod' => date('Y-m-d H:i:s')],
+            ['is_deleted' => 0, 'date_mod' => $now, 'users_id_restore' => $usersId, 'date_restore' => $now],
             [Occurrence::TABLE . '.id' => (int) $row['id']]
         );
 

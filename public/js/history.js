@@ -225,6 +225,8 @@
             done_label: (typeof i.done_label === 'string') ? i.done_label : '',
             done_by_other: !!i.done_by_other,
             done_by_label: (typeof i.done_by_label === 'string') ? i.done_by_label : '',
+            restored_by_label: (typeof i.restored_by_label === 'string') ? i.restored_by_label : '', // 16i
+            restored_at: (typeof i.restored_at === 'string') ? i.restored_at : '',                   // 16i
             skip_reason: (typeof i.skip_reason === 'string') ? i.skip_reason : '',
             skip_label: (typeof i.skip_label === 'string') ? i.skip_label : '',
             is_pending: !!i.is_pending,
@@ -238,7 +240,11 @@
             // (payload velho) simplesmente não mostra o botão — nunca
             // mostra um botão que abriria modal vazio.
             dialog_count: Number(i.dialog_count) || 0,
-            file_count: Number(i.file_count) || 0
+            file_count: Number(i.file_count) || 0,
+            // 16j: validação (11b) — 0 não se aplica, 1 aguardando, 2 validada
+            validation: Number(i.validation) || 0,
+            validated_by_label: (typeof i.validated_by_label === 'string') ? i.validated_by_label : '',
+            validated_at: (typeof i.validated_at === 'string') ? i.validated_at : ''
         };
     }
 
@@ -300,6 +306,18 @@
      * O cabeçalho registra os três recortes, para o arquivo não mentir
      * sobre o próprio conteúdo depois de sair daqui.
      */
+    /** 16j: texto da validação para badge e CSV ('' quando não se aplica). */
+    function validationText(item) {
+        if (item.validation === 1) {
+            return 'aguardando validação';
+        }
+        if (item.validation === 2) {
+            return 'validada' + (item.validated_by_label ? ' por ' + item.validated_by_label : '')
+                + (item.validated_at ? ' em ' + item.validated_at : '');
+        }
+        return '';
+    }
+
     function buildCsv() {
         var p = state.data.period;
         var rows = [];
@@ -314,7 +332,10 @@
                     item.routine_name,
                     stateText(item),
                     item.done_label,
-                    item.pending_reason || item.skip_reason
+                    item.pending_reason || item.skip_reason,
+                    String(item.dialog_count), // 16j (fila 11)
+                    String(item.file_count),
+                    validationText(item)
                 ]));
             });
         });
@@ -327,7 +348,8 @@
             csvLine(['Linhas', String(rows.length)]),
             '',
             csvLine(['Data', 'Tarefa', 'Categoria', 'Origem', 'Rotina',
-                     'Estado', 'Conclusão', 'Motivo'])
+                     'Estado', 'Conclusão', 'Motivo',
+                     'Comentários', 'Anexos', 'Validação']) // 16j
         ];
 
         return head.concat(rows).join('\r\n') + '\r\n';
@@ -413,7 +435,16 @@
             credentials: 'same-origin',
             headers: { 'Accept': 'application/json' }
         })
-            .then(function (resp) { return resp.json(); })
+            .then(function (resp) {
+                // 16i (fila 8, revê a nº 49): sessão expirada → o core
+                // responde 401; recarregar leva ao login e, depois, de volta
+                // a esta tela. Antes ficava só o toast "sessão expirada".
+                if (resp.status === 401) {
+                    window.location.reload();
+                    return new Promise(function () {}); // nada mais a fazer
+                }
+                return resp.json();
+            })
             .then(function (res) {
                 state.busy = false;
                 // Rotação do token: o que foi enviado já era (uso único)
@@ -798,6 +829,15 @@
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--manager',
                 'pelo gestor ' + item.done_by_label));
         }
+        if (item.state === 'done' && item.validation === 1) { // 16j (fila 12)
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--validate', 'aguardando validação'));
+        } else if (item.state === 'done' && item.validation === 2) {
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--validated', validationText(item)));
+        }
+        if (item.restored_by_label) { // 16i (nº 38): carimbo da restauração
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--manager',
+                'restaurada por ' + item.restored_by_label + (item.restored_at ? ' em ' + item.restored_at : '')));
+        }
         if (item.time_limit) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--limit',
                 'até ' + item.time_limit));
@@ -945,7 +985,16 @@
             credentials: 'same-origin',
             headers: { 'Accept': 'application/json' }
         })
-            .then(function (resp) { return resp.json(); })
+            .then(function (resp) {
+                // 16i (fila 8, revê a nº 49): sessão expirada → o core
+                // responde 401; recarregar leva ao login e, depois, de volta
+                // a esta tela. Antes ficava só o toast "sessão expirada".
+                if (resp.status === 401) {
+                    window.location.reload();
+                    return new Promise(function () {}); // nada mais a fazer
+                }
+                return resp.json();
+            })
             .then(function (res) {
                 state.busy = false;
                 if (res && typeof res.csrf === 'string' && res.csrf !== '') {
@@ -1070,6 +1119,7 @@
     // `csv` exposto para o harness conferir o TEXTO gerado sem depender
     // de Blob/createObjectURL, que o jsdom não implementa.
     window.TaskplusHistory = {
+        validationText: validationText,
         init: init, csv: buildCsv, csvName: csvName,
         // 11a: expostos para o harness conferir rótulo e thread sem
         // depender de rede

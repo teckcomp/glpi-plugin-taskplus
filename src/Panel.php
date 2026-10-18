@@ -146,6 +146,10 @@ class Panel
         }
 
         $view['options'] = $options;
+        // 16i (fila 9): o gestor não está nas opções do seletor, então o
+        // CSV não achava o setor dele. Vão os setores de que ELE é membro.
+        $view['self_id']     = $usersId;
+        $view['self_groups'] = implode(' · ', array_values(Access::memberGroups($usersId)));
         $out['view']     = $view;
 
         return $out;
@@ -187,7 +191,7 @@ class Panel
             return [];
         }
 
-        $sectors = Team::sectorOptions($groups);
+        $sectors = Team::sectorOptions($groups, (array) ($scope['members'] ?? [])); // 16i: só setor com membro
 
         $rows = [];
         if (count($sectors) === 1) {

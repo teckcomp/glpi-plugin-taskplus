@@ -151,6 +151,8 @@
             // Ausente = pessoal: o modo "outro técnico" só existe se o
             // servidor disser explicitamente que não é o próprio.
             is_self: (v.is_self === undefined) ? true : !!v.is_self,
+            self_id: Number(v.self_id) || 0,                 // 16i
+            self_groups: (typeof v.self_groups === 'string') ? v.self_groups : '', // 16i
             denied: !!v.denied,
             options: Array.isArray(v.options) ? v.options.map(safeViewOption) : []
         };
@@ -241,8 +243,7 @@
     /**
      * Setor do técnico, tirado das OPÇÕES do seletor (a tabela de
      * responsáveis não carrega o setor). O próprio gestor não está nas
-     * opções — a coluna dele sai vazia, e é assim mesmo: ele aparece na
-     * tabela porque também tem dia, não porque é membro do recorte.
+     * opções — desde o 16i o servidor manda `self_groups` para ele.
      */
     function sectorOf(id) {
         var found = '';
@@ -251,6 +252,11 @@
                 found = String(o.groups || '');
             }
         });
+        // 16i (fila 9): a linha do próprio gestor — ele não está nas
+        // opções; o servidor manda os setores de que ele é membro.
+        if (found === '' && id === state.data.view.self_id) {
+            found = state.data.view.self_groups;
+        }
         return found;
     }
 
@@ -368,7 +374,16 @@
             credentials: 'same-origin',
             headers: { 'Accept': 'application/json' }
         })
-            .then(function (resp) { return resp.json(); })
+            .then(function (resp) {
+                // 16i (fila 8, revê a nº 49): sessão expirada → o core
+                // responde 401; recarregar leva ao login e, depois, de volta
+                // a esta tela. Antes ficava só o toast "sessão expirada".
+                if (resp.status === 401) {
+                    window.location.reload();
+                    return new Promise(function () {}); // nada mais a fazer
+                }
+                return resp.json();
+            })
             .then(function (res) {
                 state.busy = false;
                 // Rotação do token: o que foi enviado já era (uso único)

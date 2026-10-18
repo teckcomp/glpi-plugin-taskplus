@@ -7,6 +7,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ### Corrigido
 
+- **Histórico com validação e colunas de auditoria** (16j, fila 11 e 12):
+  o item concluído mostra "aguardando validação" ou "validada por X em
+  d/m H:i"; o CSV ganha as colunas Comentários, Anexos e Validação.
+- **Miudezas da fila** (16i): sessão expirada em qualquer POST recarrega a
+  página e cai no login do GLPI, voltando à tela depois (fila 8, revê a
+  nº 49); CSV do Painel traz o setor na linha do próprio gestor (fila 9);
+  seletores de setor (Equipe, Painel, Histórico) escondem setor sem
+  nenhum membro com direito (fila 10); restaurar tarefa excluída grava
+  quem e quando (`users_id_restore`/`date_restore`) e o Histórico mostra
+  "restaurada por X em d/m H:i" (fila 7, decisão nº 38).
+
 - **Badge 💬 não acendia para comentário gravado no mesmo segundo em que
   o leitor abriu a thread** (16d, defeito nº 1 da fila): a marca de
   leitura agora guarda o id do último comentário visto

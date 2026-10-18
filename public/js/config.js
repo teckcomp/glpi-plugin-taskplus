@@ -112,7 +112,16 @@
             credentials: 'same-origin',
             headers: { 'Accept': 'application/json' }
         })
-            .then(function (resp) { return resp.json(); })
+            .then(function (resp) {
+                // 16i (fila 8, revê a nº 49): sessão expirada → o core
+                // responde 401; recarregar leva ao login e, depois, de volta
+                // a esta tela. Antes ficava só o toast "sessão expirada".
+                if (resp.status === 401) {
+                    window.location.reload();
+                    return new Promise(function () {}); // nada mais a fazer
+                }
+                return resp.json();
+            })
             .then(function (res) {
                 state.busy = false;
                 // Rotação do token: o que foi enviado já era (uso único)

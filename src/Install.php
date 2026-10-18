@@ -139,6 +139,9 @@ class Install
             'is_done'          => 'TINYINT NOT NULL DEFAULT 0',
             'done_date'        => 'TIMESTAMP NULL DEFAULT NULL',
             'users_id_done'    => 'INT %SIGN% NOT NULL DEFAULT 0',
+            // 16i (nº 38): carimbo de autoria da restauração (Histórico)
+            'users_id_restore' => 'INT %SIGN% NOT NULL DEFAULT 0',
+            'date_restore'     => 'TIMESTAMP NULL DEFAULT NULL',
             // 11b (decisão nº 61): validação da execução pelo gestor.
             // 0 = não se aplica · 1 = aguardando · 2 = validada.
             // Base existente ganha a coluna com DEFAULT 0 e SEM varredura
@@ -300,6 +303,8 @@ class Install
                     `is_done`          TINYINT NOT NULL DEFAULT 0,
                     `done_date`        TIMESTAMP NULL DEFAULT NULL COMMENT 'quando concluiu',
                     `users_id_done`    INT {$sign} NOT NULL DEFAULT 0 COMMENT 'quem concluiu',
+                    `users_id_restore` INT {$sign} NOT NULL DEFAULT 0 COMMENT '16i: quem restaurou',
+                    `date_restore`     TIMESTAMP NULL DEFAULT NULL COMMENT '16i: quando restaurou',
                     `validation`       TINYINT NOT NULL DEFAULT 0 COMMENT '11b: 0 nao se aplica, 1 aguardando, 2 validada',
                     `users_id_validate` INT {$sign} NOT NULL DEFAULT 0 COMMENT 'quem validou',
                     `validation_date`  TIMESTAMP NULL DEFAULT NULL,

@@ -102,7 +102,7 @@ class Team
             // 5c-3: setores administrados COM id — alimenta o seletor de
             // setor do modal de criação (destino "todos do setor").
             // Chave nova → safeData do team.js.
-            'sectors' => self::sectorOptions($groups),
+            'sectors' => self::sectorOptions($groups, $members), // 16i: só setor com membro
             'techs'   => $techs,
             // Eco do recorte normalizado (5b-2 p2). Chave nova → safeData.
             'period' => [
@@ -504,10 +504,25 @@ class Team
      * campo explícito — JSON de mapa com chave inteira viraria objeto
      * com chaves-string no JS e a ordem se perderia.
      */
-    public static function sectorOptions(array $groups): array
+    public static function sectorOptions(array $groups, ?array $members = null): array
     {
+        // 16i (fila 10): com $members (saída de members()/membersOf),
+        // setor sem nenhum membro com direito fica fora do seletor —
+        // ele não tem "aba" a mostrar. Sem $members, lista tudo (como antes).
+        $withMembers = null;
+        if ($members !== null) {
+            $withMembers = [];
+            foreach ($members as $m) {
+                foreach ((array) ($m['group_ids'] ?? []) as $gid) {
+                    $withMembers[(int) $gid] = true;
+                }
+            }
+        }
         $options = [];
         foreach ($groups as $gid => $name) {
+            if ($withMembers !== null && !isset($withMembers[(int) $gid])) {
+                continue;
+            }
             $options[] = ['id' => (int) $gid, 'name' => (string) $name];
         }
         usort($options, static function (array $a, array $b): int {
