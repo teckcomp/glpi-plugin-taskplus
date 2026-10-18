@@ -16,6 +16,8 @@
 use Glpi\Exception\Http\AccessDeniedHttpException;
 use Glpi\Exception\Http\HttpException;
 use GlpiPlugin\Taskplus\Access;
+use GlpiPlugin\Taskplus\Board;
+use GlpiPlugin\Taskplus\Occurrence;
 use GlpiPlugin\Taskplus\TeamBoard;
 
 include('../../../inc/includes.php');
@@ -40,7 +42,9 @@ $pf = isset($_POST['period_from']) ? (string) $_POST['period_from'] : null;
 $pt = isset($_POST['period_to']) ? (string) $_POST['period_to'] : null;
 
 $result['csrf'] = Session::getNewCSRFToken();
-$result['data'] = TeamBoard::payload($usersId, $groupId, $pf, $pt);
+// 16 (nº 73): "Ver tudo" (show_all=1) viaja em todo POST, como o período.
+$up = Occurrence::upcomingDaysFromInput($_POST, Board::UPCOMING_DAYS);
+$result['data'] = TeamBoard::payload($usersId, $groupId, $pf, $pt, $up);
 
 header('Content-Type: application/json; charset=UTF-8');
 echo json_encode($result, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);

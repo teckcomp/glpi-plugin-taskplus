@@ -65,7 +65,7 @@ class TeamBoard
      *
      * ATENÇÃO safeData(): chave nova aqui precisa entrar no teamboard.js.
      */
-    public static function payload(int $usersId, int $groupId = 0, ?string $from = null, ?string $to = null): array
+    public static function payload(int $usersId, int $groupId = 0, ?string $from = null, ?string $to = null, int $upcomingDays = Board::UPCOMING_DAYS): array
     {
         // 13c-2: período opcional, mesma normalização do Quadro pessoal
         // (5b-2 p2). Ativo → tarefas de equipe do setor com DATA no
@@ -97,13 +97,15 @@ class TeamBoard
                 'cards'      => [],
                 'members'    => [],
                 'period'     => $periodEcho,
+                'show_all'      => ($upcomingDays === Occurrence::UPCOMING_ALL),
+                'upcoming_days' => Board::UPCOMING_DAYS,
             ];
         }
 
         $columns = Phase::boardColumns([$groupId]);
         $rows    = $periodActive
             ? self::rowsInPeriod($groupId, $from, $to)
-            : self::rows($groupId, $today);
+            : self::rows($groupId, $today, $upcomingDays);
 
         $items = self::decorate($rows, $usersId, $today, $nowTime, [$groupId => $groups[$groupId]['name']]);
         foreach ($items as $i => $item) {
@@ -127,6 +129,9 @@ class TeamBoard
             'cards'      => $items,
             'members'    => $members,
             'period'     => $periodEcho,
+            // 16 (nº 73): eco do "Ver tudo" → safeData do teamboard.js
+            'show_all'      => ($upcomingDays === Occurrence::UPCOMING_ALL),
+            'upcoming_days' => Board::UPCOMING_DAYS,
         ];
     }
 
@@ -223,7 +228,7 @@ class TeamBoard
      * intervalo, qualquer estado (mesmo recorte da Semana). Ordenadas
      * por data, horário-limite, id. Lista vazia quando não há vínculo.
      */
-    public static function forUser(int $usersId, ?string $from = null, ?string $to = null): array
+    public static function forUser(int $usersId, ?string $from = null, ?string $to = null, int $upcomingDays = 0): array
     {
         /** @var \DBmysql $DB */
         global $DB;
@@ -284,6 +289,21 @@ class TeamBoard
             ]]) as $row) {
                 $row['was_overdue_done'] = 1;
                 $rows[] = $row;
+            }
+            // 16 (nº 73): "Ver tudo" na Hoje — tarefas de equipe abertas
+            // com prazo à frente (0 = nenhuma, como sempre foi).
+            if ($upcomingDays > 0 || $upcomingDays === Occurrence::UPCOMING_ALL) {
+                $where = $common + [
+                    Occurrence::TABLE . '.is_done' => 0,
+                    [Occurrence::TABLE . '.date' => ['>', $today]],
+                ];
+                if ($upcomingDays > 0) {
+                    $until   = date('Y-m-d', strtotime($today . ' +' . $upcomingDays . ' days'));
+                    $where[] = [Occurrence::TABLE . '.date' => ['<=', $until]];
+                }
+                foreach ($DB->request($base + ['WHERE' => $where]) as $row) {
+                    $rows[] = $row;
+                }
             }
         }
         $rows = self::sortRows($rows);
@@ -360,7 +380,7 @@ class TeamBoard
      * (15, nº 71), sem excluídas nem puladas. Quatro consultas, uma por
      * regra, como no Occurrence::payload — nunca divergir dele.
      */
-    private static function rows(int $groupId, string $today): array
+    private static function rows(int $groupId, string $today, int $upcomingDays = Board::UPCOMING_DAYS): array
     {
         /** @var \DBmysql $DB */
         global $DB;
@@ -392,13 +412,19 @@ class TeamBoard
         ]]) as $row) {
             $rows[] = $row;
         }
-        $until = date('Y-m-d', strtotime($today . ' +' . Board::UPCOMING_DAYS . ' days'));
-        foreach ($DB->request($base + ['WHERE' => $common + [
-            Occurrence::TABLE . '.is_done' => 0,
-            [Occurrence::TABLE . '.date' => ['>', $today]],
-            [Occurrence::TABLE . '.date' => ['<=', $until]],
-        ]]) as $row) {
-            $rows[] = $row;
+        // 16 (nº 73): "Ver tudo" = Occurrence::UPCOMING_ALL → sem teto.
+        if ($upcomingDays > 0 || $upcomingDays === Occurrence::UPCOMING_ALL) {
+            $where = $common + [
+                Occurrence::TABLE . '.is_done' => 0,
+                [Occurrence::TABLE . '.date' => ['>', $today]],
+            ];
+            if ($upcomingDays > 0) {
+                $until   = date('Y-m-d', strtotime($today . ' +' . $upcomingDays . ' days'));
+                $where[] = [Occurrence::TABLE . '.date' => ['<=', $until]];
+            }
+            foreach ($DB->request($base + ['WHERE' => $where]) as $row) {
+                $rows[] = $row;
+            }
         }
 
         return self::sortRows($rows);

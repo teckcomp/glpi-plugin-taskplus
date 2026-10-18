@@ -22,6 +22,7 @@
         ajaxUrl: '',
         csrf: '',
         showDone: false,
+        showAll: false,  // 16 (nº 73): "Ver tudo" — futuras sem teto (seção Próximas)
         source: 'all',
         // 5b-2 p2: busca 100% local (título+descrição+categoria) e
         // período de–até — o período vai em TODO POST para o re-render
@@ -164,6 +165,9 @@
             },
             today: Array.isArray(d.today) ? d.today : [],
             overdue: Array.isArray(d.overdue) ? d.overdue : [],
+            // 16 (nº 73): abertas futuras — só chega com "Ver tudo"
+            upcoming: Array.isArray(d.upcoming) ? d.upcoming : [],
+            show_all: !!d.show_all,
             // 8a: payload antigo (sem a chave) vira lista vazia
             tickets: Array.isArray(d.tickets) ? d.tickets : [],
             // 13d: tarefas de equipe do colaborador (payload antigo vira vazio)
@@ -210,6 +214,10 @@
         // re-renderiza a tela e precisa devolver o MESMO recorte.
         if (state.period.from !== '') {
             fd.append('period_from', state.period.from);
+        }
+        // 16 (nº 73): "Ver tudo" acompanha todo POST (sem período)
+        if (state.showAll && state.period.from === '' && state.period.to === '') {
+            fd.append('show_all', '1');
         }
         if (state.period.to !== '') {
             fd.append('period_to', state.period.to);
@@ -288,6 +296,45 @@
             // 8a: "#123" acha o chamado pelo numero (vale tambem para
             // as tarefas de chamado do bloco Tarefas do GLPI)
             || norm(item.ticket_label).indexOf(q) !== -1;
+    }
+
+    // ------------------------------------------------------------------
+    // 16 (nº 73) — "Ver tudo": preferência do navegador, por usuário
+    // ------------------------------------------------------------------
+
+    function showAllKey() {
+        return 'taskplus.board.all.' + String(state.userId || 0);
+    }
+
+    function readShowAll() {
+        try {
+            return window.localStorage.getItem(showAllKey()) === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function setShowAll(on) {
+        state.showAll = !!on;
+        try {
+            if (state.showAll) {
+                window.localStorage.setItem(showAllKey(), '1');
+            } else {
+                window.localStorage.removeItem(showAllKey());
+            }
+        } catch (e) {
+            // storage bloqueado: vale só nesta página
+        }
+    }
+
+    /** Na abertura: o payload embutido não traz futuras — "Ver tudo"
+     *  ligado (sem período) pede um `list` a mais. */
+    function applyShowAll() {
+        if (!state.showAll || periodActive()) {
+            return false;
+        }
+        post({ action: 'list' });
+        return true;
     }
 
     function periodActive() {
@@ -497,6 +544,16 @@
             return OWN_GROUPS.indexOf(groupOf(item)) !== -1
                 && matchesSearch(item);
         });
+        // 16 (nº 73): "Ver tudo" — abertas com prazo à frente, seção
+        // própria "Próximas" (fora dos KPIs). Sem o toggle a lista vem
+        // vazia do servidor e nada muda.
+        var upcomingItems = (state.showAll && !periodActive())
+            ? state.data.upcoming.filter(function (item) {
+                return OWN_GROUPS.indexOf(groupOf(item)) !== -1
+                    && !item.is_done
+                    && matchesSearch(item);
+            })
+            : [];
 
         // 13d: tarefas de EQUIPE em que sou colaborador (decisão nº 65):
         // seção própria no fim do bloco, com conclusão via comentário.
@@ -504,7 +561,7 @@
             return (state.showDone || !item.is_done) && matchesSearch(item);
         });
 
-        if (overdueItems.length === 0 && todayItems.length === 0) {
+        if (overdueItems.length === 0 && todayItems.length === 0 && upcomingItems.length === 0) {
             if (teamItems.length === 0) {
                 list.appendChild(emptyOwn());
                 return;
@@ -551,9 +608,30 @@
                 });
             }
         }
+        if (upcomingItems.length > 0) {
+            list.appendChild(upcomingSection(upcomingItems)); // 16
+        }
         if (teamItems.length > 0) {
             list.appendChild(teamSection(teamItems));
         }
+    }
+
+    /**
+     * 16 (nº 73) — seção "Próximas": abertas com prazo à frente, já em
+     * ordem cronológica (servidor). Mesmo card das demais seções; o
+     * badge de data vem em azul (futura), com o rótulo do prazo.
+     */
+    function upcomingSection(items) {
+        var sec = el('div', 'taskplus-section taskplus-section--upcoming');
+        var head = el('div', 'taskplus-section__title taskplus-section__title--upcoming');
+        head.appendChild(el('span', null, 'Próximas'));
+        head.appendChild(el('span', 'taskplus-section__count', String(items.length)));
+        sec.appendChild(head);
+        items.forEach(function (item) {
+            item.is_upcoming = true; // marca local: o card() sabe que é futura
+            sec.appendChild(card(item, false));
+        });
+        return sec;
     }
 
     // ------------------------------------------------------------------
@@ -603,7 +681,9 @@
         var badges = el('div', 'taskplus-card__badges');
         badges.appendChild(el('span', 'taskplus-badge taskplus-badge--sector', 'equipe · ' + (item.group_name || 'setor')));
         if (item.date && state.data.date && item.date !== state.data.date && item.date_label) {
-            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--late', item.date_label));
+            // 16 (nº 73): de equipe futura (só com "Ver tudo") → azul
+            badges.appendChild(el('span', 'taskplus-badge '
+                + (item.date > state.data.date ? 'taskplus-badge--limit' : 'taskplus-badge--late'), item.date_label));
         }
         if (item.time_limit) {
             badges.appendChild(el('span',
@@ -989,7 +1069,13 @@
         }
 
         var badges = el('div', 'taskplus-card__badges');
-        if ((isOverdue || item.was_overdue
+        if (item.is_upcoming && item.date_label) {
+            // 16 (nº 73): futura — data em azul + "faltam N dias"
+            badges.appendChild(el('span', 'taskplus-badge taskplus-badge--limit', item.date_label));
+            if (item.deadline_label) {
+                badges.appendChild(el('span', 'taskplus-badge', item.deadline_label));
+            }
+        } else if ((isOverdue || item.was_overdue
                 || (periodActive() && item.date !== state.data.date))
             && item.date_label) {
             badges.appendChild(el('span', 'taskplus-badge taskplus-badge--late', item.date_label));
@@ -1275,7 +1361,7 @@
      */
     function clearUnread(occId) {
         var changed = false;
-        ['today', 'overdue'].forEach(function (key) {
+        ['today', 'overdue', 'upcoming'].forEach(function (key) { // 16: + upcoming
             var list = Array.isArray(state.data[key]) ? state.data[key] : [];
             list.forEach(function (it) {
                 if (it && !it.is_native && Number(it.id) === Number(occId)
@@ -1516,6 +1602,19 @@
             state.showDone = !!ev.target.checked;
             render();
         });
+        // 16 (nº 73): "Ver tudo" — checkbox opcional (template antigo em
+        // cache não quebra). Preferência do navegador por usuário, a
+        // MESMA dos quadros: quem liga num lugar vê tudo em todos.
+        var showAll = $('tp-show-all');
+        if (showAll) {
+            state.showAll = readShowAll();
+            showAll.checked = state.showAll;
+            showAll.addEventListener('change', function (ev) {
+                setShowAll(!!ev.target.checked);
+                post({ action: 'list' });
+            });
+            applyShowAll();
+        }
         var filter = $('tp-filter-source');
         if (filter) { // template antigo sem o filtro não quebra
             filter.addEventListener('click', function (ev) {
@@ -1586,6 +1685,8 @@
         init: init,
         render: render,
         safeData: safeData,
+        applyShowAll: applyShowAll,
+        readShowAll: readShowAll,
         openTeamDoneModal: openTeamDoneModal,
         saveTeamDone: saveTeamDone,
         state: state

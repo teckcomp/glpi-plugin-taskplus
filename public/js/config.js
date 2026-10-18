@@ -383,10 +383,40 @@
         });
 
         render();
+        bindQuickLinks(); // 16c
+    }
+
+    // ------------------------------------------------------------------
+    // 16c (nº 74) — prévia viva dos atalhos (nome, ícone, cor). Só UX:
+    // a validação real é do QuickLinks::normalize no POST.
+    // ------------------------------------------------------------------
+    function bindQuickLinks() {
+        var rows = state.root.querySelectorAll('.taskplus-ql-row');
+        Array.prototype.forEach.call(rows, function (row) {
+            var preview = row.querySelector('.taskplus-ql-preview');
+            var name = row.querySelector('input[name$="[name]"]');
+            var icon = row.querySelector('select[name$="[icon]"]');
+            var color = row.querySelector('select[name$="[color]"]');
+            if (!preview || !name || !icon || !color) {
+                return;
+            }
+            var idx = String(Number(row.getAttribute('data-index')) + 1);
+            function sync() {
+                var n = name.value.trim();
+                var ic = /^ti-[a-z0-9-]+$/.test(icon.value) ? icon.value : 'ti-link';
+                preview.querySelector('b').textContent = n !== '' ? n : idx;
+                preview.querySelector('i').className = 'ti ' + ic;
+                preview.className = preview.className.replace(/taskplus-quicklinks__btn--[a-z]+/, 'taskplus-quicklinks__btn--' + color.value);
+            }
+            name.addEventListener('input', sync);
+            icon.addEventListener('change', sync);
+            color.addEventListener('change', sync);
+        });
     }
 
     // Exposto para teste (jsdom) e para depuração no console
     window.TaskplusConfig = {
+        bindQuickLinks: bindQuickLinks,
         init: init,
         render: render,
         safeData: safeData,

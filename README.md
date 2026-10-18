@@ -10,7 +10,7 @@ Desenvolvido pela [Teckcomp I.T. Services](https://github.com/teckcomp).
 Derivado da base do [ProjectPlus](https://github.com/teckcomp/glpi-plugin-projectplus),
 sem os módulos de Projetos, Modelos, Orçamento, Custos e Relatórios.
 
-**Versão atual:** `0.2.9-beta` · **GLPI:** 11.0.x · **Licença:** GPL-2.0-or-later
+**Versão atual:** `0.2.10-beta` · **GLPI:** 11.0.x · **Licença:** GPL-2.0-or-later
 
 ---
 
@@ -52,15 +52,15 @@ filtro por período cobrem a tela inteira.
 
 | Tela | O que faz |
 |------|-----------|
-| **Hoje** | as 2 colunas acima + KPIs (Atrasadas · Para hoje · Pendentes · Concluídas); seção "Da equipe" com as tarefas de equipe do colaborador |
-| **Quadro** | kanban pessoal (Para hoje · fases por setor · Pendentes · Concluídas), arrastar e soltar — a data é o **prazo**: tarefas abertas dos próximos 7 dias já aparecem, com a barra do prazo correndo; soltar numa fase pede o novo prazo; tarefa atrasada fica na fase, com a faixa "Atrasada · há N dias"; criar tarefa avulsa pelo botão `+ Nova tarefa`, descrição no card, diálogo no modal |
+| **Hoje** | as 2 colunas acima + KPIs (Atrasadas · Para hoje · Pendentes · Concluídas); seção "Da equipe" com as tarefas de equipe do colaborador; "Ver tudo" abre a seção "Próximas" (abertas futuras); faixa de **atalhos** (até 10 botões com link, ícone e cor, cadastrados em Configurações) |
+| **Quadro** | kanban pessoal (Para hoje · fases por setor · Pendentes · Concluídas), arrastar e soltar — a data é o **prazo**: tarefas abertas dos próximos 7 dias já aparecem, com a barra do prazo correndo (botão **Ver tudo** tira o teto de dias — preferência por pessoa, vale também no Quadro de Equipe e na seção "Próximas" da Hoje); soltar numa fase pede o novo prazo; tarefa atrasada fica na fase, com a faixa "Atrasada · há N dias"; criar tarefa avulsa pelo botão `+ Nova tarefa`, descrição no card, diálogo no modal |
 | **Quadro de Equipe** | kanban **por setor** com **tarefas de equipe** (uma tarefa, vários colaboradores): todo membro vê, colaborador e gestor movem — todo movimento pede um comentário, que vai ao diálogo; Concluídas conclui para todos; Pendentes com motivo/data/hora; seletor de setor para quem tem mais de um, com setor favorito (★); mover para uma fase pede comentário e novo prazo; atrasada fica na fase, marcada; filtro por período |
 | **Rotinas** | CRUD de rotinas (diária/só dias úteis, semanal, mensal por dia fixo ou posição) |
 | **Semana** | grade seg–dom somente leitura, com a descrição no card e as tarefas de equipe do colaborador |
 | **Equipe** | (gestor) acompanhar técnicos, concluir/editar/pendenciar tarefas deles, criar avulsas e rotinas para técnico ou para todo o setor, dialogar nas tarefas, **validar ou reprovar** a execução das tarefas que criou |
 | **Painel** | indicadores pessoais: heatmap de conclusão, melhor dia da semana, taxa (feitas ÷ devidas) |
 | **Histórico** | trilha auditável por dia, leitura do diálogo de cada tarefa, com restauração de avulsa excluída (só o dono) |
-| **Configurações** | fases por setor, horários dos e-mails, opções gerais |
+| **Configurações** | fases por setor, horários dos e-mails, atalhos da Hoje, opções gerais |
 
 Todas as telas trazem o **sino de alertas** no cabeçalho da sidebar.
 
@@ -155,7 +155,7 @@ plugin, e o GLPI não o reconhece sob outro nome.
 
 ```bash
 cd /var/www/html/glpi/plugins
-git clone --branch v0.2.9-beta \
+git clone --branch v0.2.10-beta \
   https://github.com/teckcomp/glpi-plugin-taskplus.git taskplus
 chown -R www-data:www-data taskplus
 sudo -u www-data php ../bin/console plugin:install taskplus
@@ -181,7 +181,7 @@ Por git:
 
 ```bash
 cd /var/www/html/glpi/plugins/taskplus
-git fetch --tags && git checkout v0.2.9-beta
+git fetch --tags && git checkout v0.2.10-beta
 chown -R www-data:www-data .
 cd /var/www/html/glpi
 sudo -u www-data php bin/console plugin:install --force taskplus

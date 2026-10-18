@@ -42,6 +42,26 @@ class Occurrence
      * dia; late = pendentes de dias anteriores + pendentes de hoje com o
      * horário-limite estourado.
      */
+    /**
+     * 16 (nº 73): valor de $upcomingDays que significa "todas as abertas
+     * com prazo à frente, sem teto de dias" — o "Ver tudo" dos quadros e
+     * da Hoje. 0 = nenhuma futura (Hoje padrão); N > 0 = até N dias.
+     */
+    public const UPCOMING_ALL = -1;
+
+    /**
+     * 16: lê o "Ver tudo" do POST (`show_all=1`) e devolve o
+     * $upcomingDays a usar: UPCOMING_ALL quando ligado, $default quando
+     * não. Régua única para os três endpoints (Hoje, Quadro, Equipe).
+     */
+    public static function upcomingDaysFromInput(array $input, int $default): int
+    {
+        $raw = $input['show_all'] ?? '';
+        return (is_scalar($raw) && in_array((string) $raw, ['1', 'true', 'on'], true))
+            ? self::UPCOMING_ALL
+            : $default;
+    }
+
     public static function payload(int $usersId, ?string $from = null, ?string $to = null, int $upcomingDays = 0): array
     {
         /** @var \DBmysql $DB */
@@ -137,18 +157,20 @@ class Occurrence
             $todayRows[]         = $item;
         }
 
-        if ($upcomingDays > 0) {
-            $until = date('Y-m-d', strtotime($today . ' +' . $upcomingDays . ' days'));
-            foreach ($DB->request(self::baseQuery() + [
-                'WHERE' => [
-                    self::TABLE . '.users_id'   => $usersId,
-                    self::TABLE . '.is_deleted' => 0,
-                    self::TABLE . '.is_done'    => 0,
-                    self::TABLE . '.is_skipped' => 0,
-                    [self::TABLE . '.date' => ['>', $today]],
-                    [self::TABLE . '.date' => ['<=', $until]],
-                ],
-            ]) as $row) {
+        if ($upcomingDays > 0 || $upcomingDays === self::UPCOMING_ALL) {
+            // 16 (nº 73): UPCOMING_ALL = sem teto — só `date > hoje`.
+            $where = [
+                self::TABLE . '.users_id'   => $usersId,
+                self::TABLE . '.is_deleted' => 0,
+                self::TABLE . '.is_done'    => 0,
+                self::TABLE . '.is_skipped' => 0,
+                [self::TABLE . '.date' => ['>', $today]],
+            ];
+            if ($upcomingDays > 0) {
+                $until   = date('Y-m-d', strtotime($today . ' +' . $upcomingDays . ' days'));
+                $where[] = [self::TABLE . '.date' => ['<=', $until]];
+            }
+            foreach ($DB->request(self::baseQuery() + ['WHERE' => $where]) as $row) {
                 $upcomingRows[] = self::format($row, $today, $nowTime);
             }
             usort($upcomingRows, [self::class, 'compareOverdue']);
@@ -281,6 +303,9 @@ class Occurrence
             'overdue' => $overdueRows,
             // 15: abertas com prazo à frente (vazio para quem não pediu)
             'upcoming' => $upcomingRows,
+            // 16 (nº 73): eco do "Ver tudo" (futuras sem teto). Chave
+            // nova → safeData dos JS que a lêem.
+            'show_all' => ($upcomingDays === self::UPCOMING_ALL),
             // Eco do recorte já NORMALIZADO (datas inválidas caem, par
             // invertido vira crescente): é a fonte da verdade que o JS
             // espelha nos inputs e no aviso. Chave nova → safeData.

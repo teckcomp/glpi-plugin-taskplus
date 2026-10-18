@@ -48,6 +48,7 @@
 use Glpi\Exception\Http\HttpException;
 use GlpiPlugin\Taskplus\Access;
 use GlpiPlugin\Taskplus\Board;
+use GlpiPlugin\Taskplus\Occurrence;
 
 include('../../../inc/includes.php');
 
@@ -69,7 +70,9 @@ $pt = isset($_POST['period_to']) ? (string) $_POST['period_to'] : null;
 
 // Token novo para o JS rotacionar + estado atualizado para re-render
 $result['csrf'] = Session::getNewCSRFToken();
-$result['data'] = Board::payload($usersId, $pf, $pt);
+// 16 (nº 73): "Ver tudo" (show_all=1) viaja em todo POST, como o período.
+$up = Occurrence::upcomingDaysFromInput($_POST, Board::UPCOMING_DAYS);
+$result['data'] = Board::payload($usersId, $pf, $pt, $up);
 
 header('Content-Type: application/json; charset=UTF-8');
 echo json_encode($result, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);

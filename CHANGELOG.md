@@ -3,6 +3,25 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.2.10-beta] — 2026-10-18
+
+### Adicionado
+
+- **"Ver tudo" na Hoje, no Quadro e no Quadro de Equipe** (16, decisão
+  nº 73): botão/caixa que mostra **todas** as tarefas abertas com prazo
+  à frente, sem o teto de 7 dias. Nos quadros as futuras entram nas
+  fases (com a barra de prazo); na Hoje ganham a seção **"Próximas"**
+  (data em azul + "faltam N dias"), e a seção "Da equipe" passa a
+  trazer as de equipe futuras. É UMA preferência por pessoa, guardada
+  no navegador (`localStorage`, como o setor favorito): ligou num
+  lugar, vale nos três. KPIs não mudam; com De/Até preenchido vale o
+  período e o botão fica desabilitado.
+- **Atalhos na Hoje** (16c, decisão nº 74): até 10 botões globais no
+  alto da tela Hoje (nome + link + ícone do catálogo + uma de 14 cores +
+  abrir em nova aba), cadastrados pelo admin em Configurações → Preferências. Link
+  completo (`https://…`) ou interno ao GLPI (`/front/…`). Guardados em
+  `glpi_configs` (sem tabela nova). Sem atalhos, a faixa não aparece.
+
 ## [0.2.9-beta] — 2026-10-07
 
 ### Alterado

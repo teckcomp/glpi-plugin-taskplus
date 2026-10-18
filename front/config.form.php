@@ -15,6 +15,7 @@ use Glpi\Exception\Http\AccessDeniedHttpException;
 use GlpiPlugin\Taskplus\Access;
 use GlpiPlugin\Taskplus\Config as PluginConfig;
 use GlpiPlugin\Taskplus\Phase;
+use GlpiPlugin\Taskplus\QuickLinks;
 use GlpiPlugin\Taskplus\Url;
 
 include('../../../inc/includes.php');
@@ -38,6 +39,7 @@ if (isset($_POST['update'])) {
     // mas o POST é validado de novo aqui: JS/HTML nunca é a proteção).
     Session::checkRight('config', UPDATE);
     PluginConfig::set($_POST);
+    QuickLinks::saveFromInput($_POST); // 16c: atalhos da Hoje (nº 74)
     Session::addMessageAfterRedirect(__('Configuração salva', 'taskplus'), true, INFO);
     Html::back();
 }
@@ -66,6 +68,11 @@ TemplateRenderer::getInstance()->display(
         'email_eod_time'     => (string) $config['email_eod_time'],
         'email_digest_time'  => (string) $config['email_digest_time'],
         'purge_on_uninstall' => (int) $config['purge_on_uninstall'],
+        // 16c: 6 linhas (cadastradas + em branco) e o catálogo de cores
+        'quick_links'        => QuickLinks::rowsForForm(),
+        'quick_link_colors'  => QuickLinks::COLORS,
+        'quick_link_icons'   => QuickLinks::ICONS,
+        'quick_link_max'     => QuickLinks::MAX,
         'payload_json'       => json_encode(
             Phase::payload($isAdmin, $managed),
             JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT

@@ -66,7 +66,7 @@ class Board
     /** 15 (nº 71): tarefas abertas até N dias à frente entram no quadro. */
     public const UPCOMING_DAYS = 7;
 
-    public static function payload(int $usersId, ?string $from = null, ?string $to = null): array
+    public static function payload(int $usersId, ?string $from = null, ?string $to = null, int $upcomingDays = self::UPCOMING_DAYS): array
     {
         $memberGroups = Access::memberGroups($usersId);
         $columns      = Phase::boardColumns(array_keys($memberGroups));
@@ -79,7 +79,8 @@ class Board
         // 15: sem período, as abertas dos próximos 7 dias também entram
         // (a data é prazo). 13a: o badge 💬 lê `unread` — a Hoje passava
         // pelo withUnread e o Quadro não (defeito latente, corrigido).
-        $data = Occurrence::payload($usersId, $from, $to, self::UPCOMING_DAYS);
+        // 16 (nº 73): "Ver tudo" passa Occurrence::UPCOMING_ALL (sem teto).
+        $data = Occurrence::payload($usersId, $from, $to, $upcomingDays);
         $data = Comment::withUnread($data, $usersId);
 
         $cards = [];
@@ -110,6 +111,10 @@ class Board
             'period'  => (isset($data['period']) && is_array($data['period']))
                 ? $data['period']
                 : ['from' => '', 'to' => '', 'active' => false],
+            // 16 (nº 73): eco do "Ver tudo" + teto padrão (para o rótulo
+            // do botão). Chaves novas → safeData do board.js.
+            'show_all'      => !empty($data['show_all']),
+            'upcoming_days' => self::UPCOMING_DAYS,
         ];
     }
 

@@ -66,6 +66,56 @@
                         </select>
                     </label>
 
+                    {# 16c (nº 74): atalhos da Hoje — até quick_link_max botões
+                       globais. Linha sem nome ou sem link válido é descartada
+                       ao salvar (deixar em branco = apagar). #}
+                    <h4 class="taskplus-config-subtitle">{{ __('Atalhos da Hoje', 'taskplus') }}</h4>
+                    <p class="taskplus-modal__hint">
+                        {{ __('Botões que aparecem no alto da tela Hoje, para todos. Link completo (https://…) ou interno ao GLPI (/front/ticket.php). Linha em branco não aparece; a ordem aqui é a ordem na tela.', 'taskplus') }}
+                    </p>
+                    <div class="taskplus-ql-rows">
+                        {% for i in 0..(quick_link_max - 1) %}
+                        {% set l = quick_links[i] %}
+                        <div class="taskplus-ql-row" data-index="{{ i }}">
+                            <span class="taskplus-quicklinks__btn taskplus-quicklinks__btn--{{ l.color }} taskplus-ql-preview" aria-hidden="true">
+                                <i class="ti {{ l.icon }}"></i>
+                                <b>{{ l.name != '' ? l.name : (i + 1) }}</b>
+                            </span>
+                            <label class="taskplus-field taskplus-ql-name">
+                                <span>{{ __('Nome', 'taskplus') }}</span>
+                                <input type="text" name="ql[{{ i }}][name]" value="{{ l.name }}" maxlength="40" autocomplete="off" placeholder="IXC">
+                            </label>
+                            <label class="taskplus-field taskplus-ql-url">
+                                <span>{{ __('Link', 'taskplus') }}</span>
+                                <input type="text" name="ql[{{ i }}][url]" value="{{ l.url }}" maxlength="2000" autocomplete="off" placeholder="https://…">
+                            </label>
+                            <label class="taskplus-field taskplus-ql-icon">
+                                <span>{{ __('Ícone', 'taskplus') }}</span>
+                                <select name="ql[{{ i }}][icon]">
+                                    {% for key, label in quick_link_icons %}
+                                    <option value="{{ key }}" {{ l.icon == key ? 'selected' : '' }}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <label class="taskplus-field taskplus-ql-color">
+                                <span>{{ __('Cor', 'taskplus') }}</span>
+                                <select name="ql[{{ i }}][color]">
+                                    {% for key, label in quick_link_colors %}
+                                    <option value="{{ key }}" {{ l.color == key ? 'selected' : '' }}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <label class="taskplus-field taskplus-ql-tab">
+                                <span>{{ __('Abrir', 'taskplus') }}</span>
+                                <select name="ql[{{ i }}][new_tab]">
+                                    <option value="0" {{ not l.new_tab ? 'selected' : '' }}>{{ __('Mesma aba', 'taskplus') }}</option>
+                                    <option value="1" {{ l.new_tab ? 'selected' : '' }}>{{ __('Nova aba', 'taskplus') }}</option>
+                                </select>
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+
                     <button type="submit" name="update" value="1" class="btn btn-primary">
                         {{ __('Salvar', 'taskplus') }}
                     </button>

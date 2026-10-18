@@ -75,7 +75,10 @@ $pt = isset($_POST['period_to']) ? (string) $_POST['period_to'] : null;
 
 // Token novo para o JS rotacionar + estado atualizado para re-render
 $result['csrf'] = Session::getNewCSRFToken();
-$result['data'] = Occurrence::payload($usersId, $pf, $pt);
+// 16 (nº 73): "Ver tudo" da Hoje — futuras sem teto (chave `upcoming`);
+// sem ele passa 0 e o caminho é byte a byte o de sempre.
+$up = Occurrence::upcomingDaysFromInput($_POST, 0);
+$result['data'] = Occurrence::payload($usersId, $pf, $pt, $up);
 
 // Etapa 8a: a coluna Chamados acompanha todo re-render da tela Hoje.
 // Mesma chave e mesmo guarda do front/today.php.
@@ -90,7 +93,7 @@ try {
 // recorte de período da tela).
 $result['data']['team'] = [];
 try {
-    $result['data']['team'] = TeamBoard::forUser($usersId, $pf, $pt);
+    $result['data']['team'] = TeamBoard::forUser($usersId, $pf, $pt, $up);
 } catch (\Throwable $e) {
     // origem indisponível: re-render segue sem a seção
 }

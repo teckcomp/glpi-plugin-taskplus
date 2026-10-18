@@ -25,6 +25,7 @@
         creating: false,
         search: '',
         period: { from: '', to: '' }, // 13c-2: viaja em todo POST
+        showAll: false,                // 16 (nº 73): "Ver tudo", viaja em todo POST
         collab: [],      // 13b-2: ids escolhidos no modal (ordem de escolha)
         collabActive: -1, // índice realçado na lista de sugestões (teclado)
         // 13c
@@ -154,8 +155,58 @@
                 from: (p.from && typeof p.from === 'string') ? p.from : '',
                 to: (p.to && typeof p.to === 'string') ? p.to : '',
                 active: !!p.active
-            }
+            },
+            // 16: eco do "Ver tudo" + teto padrão (payload antigo: 7)
+            show_all: !!d.show_all,
+            upcoming_days: Number(d.upcoming_days) || 7
         };
+    }
+
+    // ------------------------------------------------------------------
+    // 16 (nº 73) — "Ver tudo": preferência do navegador, por usuário
+    // (mesma chave do Quadro pessoal: a preferência é da pessoa, não
+    // da tela — quem liga num quadro vê tudo no outro).
+    // ------------------------------------------------------------------
+
+    function showAllKey() {
+        return 'taskplus.board.all.' + String(state.userId || 0);
+    }
+
+    function readShowAll() {
+        try {
+            return window.localStorage.getItem(showAllKey()) === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function setShowAll(on) {
+        state.showAll = !!on;
+        try {
+            if (state.showAll) {
+                window.localStorage.setItem(showAllKey(), '1');
+            } else {
+                window.localStorage.removeItem(showAllKey());
+            }
+        } catch (e) {
+            // storage bloqueado: vale só nesta página
+        }
+    }
+
+    function toggleShowAll() {
+        setShowAll(!state.showAll);
+        post({ action: 'list', groups_id: String(state.data.group_id) });
+    }
+
+    /** Na abertura: payload embutido é o de 7 dias — "Ver tudo" ligado
+     *  (sem período) pede um `list` a mais. Quando o favorito já pediu
+     *  o `list`, o show_all foi junto e aqui não faz nada. */
+    function applyShowAll() {
+        if (!state.showAll || state.data.period.active || state.data.group_id === 0) {
+            return false;
+        }
+        post({ action: 'list', groups_id: String(state.data.group_id) });
+        return true;
     }
 
     function toast(msg, isError) {
@@ -199,6 +250,10 @@
         }
         if (state.period.to !== '') {
             fd.append('period_to', state.period.to);
+        }
+        // 16 (nº 73): "Ver tudo" acompanha todo POST (sem período)
+        if (state.showAll && state.period.from === '' && state.period.to === '') {
+            fd.append('show_all', '1');
         }
         fd.append('_glpi_csrf_token', state.csrf);
 
@@ -390,6 +445,25 @@
         clear.hidden = !state.data.period.active;
         clear.addEventListener('click', clearPeriod);
         bar.appendChild(clear);
+
+        // 16 (nº 73): "Ver tudo" — todas as abertas futuras do setor,
+        // sem o teto de 7 dias. Preferência do navegador por usuário.
+        var allOn = state.showAll && !state.data.period.active;
+        var all = el('button', 'taskplus-toolbar2__all' + (allOn ? ' taskplus-toolbar2__all--on' : ''),
+            allOn ? 'Vendo tudo' : 'Ver tudo');
+        all.type = 'button';
+        all.id = 'tp-tb-all';
+        all.setAttribute('aria-pressed', allOn ? 'true' : 'false');
+        all.disabled = state.data.period.active || state.data.group_id === 0;
+        all.title = state.data.period.active
+            ? 'Com De/Até preenchido vale o período'
+            : (allOn
+                ? 'Mostrando todas as tarefas abertas do setor, sem limite de data. Clique para voltar aos próximos '
+                    + state.data.upcoming_days + ' dias'
+                : 'Mostrar todas as tarefas abertas futuras do setor (hoje o quadro vai até '
+                    + state.data.upcoming_days + ' dias à frente)');
+        all.addEventListener('click', toggleShowAll);
+        bar.appendChild(all);
 
         var add = el('button', 'btn btn-primary btn-sm taskplus-toolbar2__new');
         add.type = 'button';
@@ -1356,6 +1430,7 @@
             }
         }
         state.data = safeData(raw);
+        state.showAll = readShowAll(); // 16 (nº 73)
 
         $('tp-te-cancel').addEventListener('click', closeModal);
         $('tp-te-save').addEventListener('click', saveModal);
@@ -1390,7 +1465,11 @@
         });
 
         render();
-        applyFavorite(); // 14c
+        // 14c: favorito (um `list`, que já leva o show_all); 16: sem
+        // favorito a aplicar, o "Ver tudo" ligado pede o `list` sozinho.
+        if (!applyFavorite()) {
+            applyShowAll();
+        }
     }
 
     // Exposto para teste (jsdom) e para depuração no console
@@ -1414,6 +1493,9 @@
         favoriteGroup: favoriteGroup,
         setFavoriteGroup: setFavoriteGroup,
         applyFavorite: applyFavorite,
+        applyShowAll: applyShowAll,
+        toggleShowAll: toggleShowAll,
+        readShowAll: readShowAll,
         state: state
     };
 

@@ -12,6 +12,7 @@ use Glpi\Application\View\TemplateRenderer;
 use GlpiPlugin\Taskplus\Access;
 use GlpiPlugin\Taskplus\Comment;
 use GlpiPlugin\Taskplus\Occurrence;
+use GlpiPlugin\Taskplus\QuickLinks;
 use GlpiPlugin\Taskplus\TeamBoard;
 use GlpiPlugin\Taskplus\Tickets;
 use GlpiPlugin\Taskplus\Today;
@@ -73,6 +74,8 @@ TemplateRenderer::getInstance()->display(
         'nav'             => Access::sidebar(),
         'current_user_id' => (int) Session::getLoginUserID(),
         'csrf_token'      => Session::getNewCSRFToken(),
+        // 16c (nº 74): atalhos globais; vazio = a faixa não renderiza
+        'quick_links'     => QuickLinks::all(),
         'payload_json'    => json_encode(
             $payload,
             JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT

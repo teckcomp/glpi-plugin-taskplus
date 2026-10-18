@@ -37,7 +37,11 @@
         // 5b-2 p2: busca local + período (viaja em todo POST)
         search: '',
         period: { from: '', to: '' },
-        data: { date: '', columns: [], cards: [], period: { from: '', to: '', active: false } }
+        // 16 (nº 73): "Ver tudo" — futuras sem teto; preferência do
+        // navegador por usuário (localStorage), viaja em todo POST.
+        userId: 0,
+        showAll: false,
+        data: { date: '', columns: [], cards: [], period: { from: '', to: '', active: false }, show_all: false, upcoming_days: 7 }
     };
 
     function $(id) {
@@ -153,8 +157,55 @@
                 from: (typeof p.from === 'string') ? p.from : '',
                 to: (typeof p.to === 'string') ? p.to : '',
                 active: !!p.active
-            }
+            },
+            // 16: eco do "Ver tudo" + teto padrão (payload antigo: 7)
+            show_all: !!d.show_all,
+            upcoming_days: Number(d.upcoming_days) || 7
         };
+    }
+
+    // ------------------------------------------------------------------
+    // 16 (nº 73) — "Ver tudo": preferência do navegador, por usuário
+    // ------------------------------------------------------------------
+
+    function showAllKey() {
+        return 'taskplus.board.all.' + String(state.userId || 0);
+    }
+
+    function readShowAll() {
+        try {
+            return window.localStorage.getItem(showAllKey()) === '1';
+        } catch (e) {
+            return false; // storage bloqueado: sem preferência
+        }
+    }
+
+    function setShowAll(on) {
+        state.showAll = !!on;
+        try {
+            if (state.showAll) {
+                window.localStorage.setItem(showAllKey(), '1');
+            } else {
+                window.localStorage.removeItem(showAllKey());
+            }
+        } catch (e) {
+            // storage bloqueado: vale só nesta página
+        }
+    }
+
+    function toggleShowAll() {
+        setShowAll(!state.showAll);
+        post({ action: 'list' });
+    }
+
+    /** Na abertura: o payload embutido é o de 7 dias — com "Ver tudo"
+     *  ligado (e sem período) faz um `list` a mais, como o favorito. */
+    function applyShowAll() {
+        if (!state.showAll || periodActive()) {
+            return false;
+        }
+        post({ action: 'list' });
+        return true;
     }
 
     // ------------------------------------------------------------------
@@ -193,6 +244,10 @@
         }
         if (state.period.to !== '') {
             fd.append('period_to', state.period.to);
+        }
+        // 16 (nº 73): "Ver tudo" acompanha todo POST (sem período)
+        if (state.showAll && state.period.from === '' && state.period.to === '') {
+            fd.append('show_all', '1');
         }
 
         // 9e-2: sem o Accept o core devolve a página de erro em HTML, o
@@ -325,6 +380,14 @@
         clear.addEventListener('click', clearPeriod);
         bar.appendChild(clear);
 
+        // 16 (nº 73): "Ver tudo" — todas as abertas futuras, sem o teto
+        // de 7 dias. Preferência do navegador por usuário.
+        var all = el('button', 'taskplus-toolbar2__all', 'Ver tudo');
+        all.type = 'button';
+        all.id = 'tp-bflt-all';
+        all.addEventListener('click', toggleShowAll);
+        bar.appendChild(all);
+
         // 12a: criar tarefa direto do Quadro (mesmo modal da edição)
         var add = el('button', 'btn btn-primary btn-sm taskplus-toolbar2__new');
         add.type = 'button';
@@ -389,6 +452,28 @@
                     + ' — cards do período; os itens do GLPI seguem no estado atual.'
                 : '';
         }
+        syncShowAllButton();
+    }
+
+    /** 16: estado visual do "Ver tudo" (ligado = classe --on; período
+     *  ativo desabilita — o recorte explícito manda). */
+    function syncShowAllButton() {
+        var all = $('tp-bflt-all');
+        if (!all) {
+            return;
+        }
+        var on = state.showAll && !periodActive();
+        all.classList.toggle('taskplus-toolbar2__all--on', on);
+        all.setAttribute('aria-pressed', on ? 'true' : 'false');
+        all.disabled = periodActive();
+        all.textContent = on ? 'Vendo tudo' : 'Ver tudo';
+        all.title = periodActive()
+            ? 'Com De/Até preenchido vale o período'
+            : (on
+                ? 'Mostrando todas as tarefas abertas, sem limite de data. Clique para voltar aos próximos '
+                    + state.data.upcoming_days + ' dias'
+                : 'Mostrar todas as tarefas abertas futuras (hoje o quadro vai até '
+                    + state.data.upcoming_days + ' dias à frente)');
     }
 
     // ------------------------------------------------------------------
@@ -1114,6 +1199,8 @@
         // 13a: endpoints do diálogo (mesmos da tela Hoje)
         state.commentsUrl = state.root.getAttribute('data-comments-url') || '';
         state.attachUrl = state.root.getAttribute('data-attachments-url') || '';
+        state.userId = Number(state.root.getAttribute('data-user-id')) || 0; // 16
+        state.showAll = readShowAll(); // 16
 
         var raw = null;
         var dataEl = $('taskplus-board-data');
@@ -1175,6 +1262,7 @@
         });
 
         render();
+        applyShowAll(); // 16 (nº 73)
     }
 
     // Exposto para teste (jsdom) e para depuração no console
@@ -1190,6 +1278,9 @@
         saveEdit: saveEdit,
         renderDialog: renderDialog,
         sendComment: sendComment,
+        toggleShowAll: toggleShowAll,
+        applyShowAll: applyShowAll,
+        readShowAll: readShowAll,
         state: state
     };
 

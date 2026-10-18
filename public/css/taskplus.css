@@ -335,6 +335,53 @@
 }
 .taskplus-section__count { background: #e7ecf1; color: #45525e; }
 .taskplus-section__title--late .taskplus-section__count { background: #fdebe3; color: #d9480f; }
+/* 16 (nº 73): seção "Próximas" da Hoje (abertas com prazo à frente) */
+.taskplus-section__title--upcoming { color: #2a76a8; border-bottom-color: #cfe3f2; }
+.taskplus-section__title--upcoming .taskplus-section__count { background: #e3f0fa; color: #2a76a8; }
+
+/* 16c (nº 74): atalhos no alto da Hoje */
+.taskplus-quicklinks {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+    margin-bottom: 12px; padding: 8px 10px;
+    background: #fff; border: 1px solid #dde5ec; border-radius: 8px;
+}
+.taskplus-quicklinks__label { font-size: 0.72rem; color: #8a97a5; text-transform: uppercase; letter-spacing: .03em; margin-right: 4px; }
+.taskplus-quicklinks__btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-width: 150px; min-height: 40px; padding: 8px 18px; box-sizing: border-box;
+    border-radius: 8px; border: 1px solid;
+    font-size: 0.92rem; line-height: 1; text-decoration: none; white-space: nowrap;
+}
+.taskplus-quicklinks__btn b { font-weight: 600; }
+.taskplus-quicklinks__btn i { font-size: 1.15rem; }
+.taskplus-quicklinks__btn .taskplus-quicklinks__ext { font-size: 0.75rem; opacity: .7; }
+a.taskplus-quicklinks__btn:hover { filter: brightness(.96); text-decoration: none; }
+.taskplus-quicklinks__btn--blue   { background: #e6f1fb; color: #0c447c; border-color: #378add; }
+.taskplus-quicklinks__btn--green  { background: #e1f5ee; color: #085041; border-color: #1d9e75; }
+.taskplus-quicklinks__btn--purple { background: #eeedfe; color: #3c3489; border-color: #7f77dd; }
+.taskplus-quicklinks__btn--amber  { background: #faeeda; color: #633806; border-color: #ef9f27; }
+.taskplus-quicklinks__btn--coral  { background: #faece7; color: #712b13; border-color: #d85a30; }
+.taskplus-quicklinks__btn--pink   { background: #fbeaf0; color: #72243e; border-color: #d4537e; }
+.taskplus-quicklinks__btn--gray   { background: #f1efe8; color: #444441; border-color: #888780; }
+.taskplus-quicklinks__btn--red    { background: #fcebeb; color: #791f1f; border-color: #e24b4a; }
+.taskplus-quicklinks__btn--indigo { background: #dbe3f3; color: #12264d; border-color: #2a4a8a; }
+.taskplus-quicklinks__btn--cyan   { background: #dcf4fb; color: #084a5e; border-color: #10a3cf; }
+.taskplus-quicklinks__btn--teal   { background: #dcf3ea; color: #0a4a3d; border-color: #16917a; }
+.taskplus-quicklinks__btn--lime   { background: #eff7dc; color: #3f5a0c; border-color: #8ab62a; }
+.taskplus-quicklinks__btn--orange { background: #fdeedd; color: #7a3d08; border-color: #e8822a; }
+.taskplus-quicklinks__btn--brown  { background: #f3ebe4; color: #5a3a22; border-color: #a0714e; }
+
+/* 16c: cadastro dos atalhos em Configurações */
+.taskplus-config-subtitle { font-size: 0.95rem; font-weight: 600; margin: 18px 0 4px; color: #2c3844; }
+.taskplus-ql-rows { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 14px; }
+.taskplus-ql-row {
+    display: grid; grid-template-columns: 130px 1.1fr 2fr 1.1fr 120px 110px;
+    gap: 8px; align-items: end;
+}
+.taskplus-config-form .taskplus-ql-row .taskplus-field { max-width: none; margin-bottom: 0; }
+.taskplus-ql-preview { height: 34px; min-height: 34px; min-width: 0; padding: 6px 10px; font-size: 0.85rem; overflow: hidden; }
+.taskplus-ql-preview b { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 900px) { .taskplus-ql-row { grid-template-columns: 1fr 1fr; } }
 
 /* Tela Configurações no layout do hub */
 .taskplus-config-stack {
@@ -480,6 +527,15 @@
 }
 .taskplus-toolbar2__fav:hover { color: #e8a13c; border-color: #e8a13c; }
 .taskplus-toolbar2__fav--on { color: #e8a13c; border-color: #e8a13c; background: #fff7e6; }
+/* 16 (nº 73): "Ver tudo" na barra dos quadros (futuras sem teto) */
+.taskplus-toolbar2__all {
+    border: 1px solid #dde5ec; background: #fff; border-radius: 6px;
+    height: 32px; padding: 0 10px; font-size: 0.8rem; white-space: nowrap;
+    color: #45525e; cursor: pointer;
+}
+.taskplus-toolbar2__all:hover { color: #2a76a8; border-color: #2a76a8; }
+.taskplus-toolbar2__all--on { color: #2a76a8; border-color: #2a76a8; background: #e3f0fa; font-weight: 600; }
+.taskplus-toolbar2__all:disabled { opacity: .5; cursor: not-allowed; }
 
 /* 4d-2: card nativo no quadro (leitura, clique abre no GLPI) */
 .taskplus-bcard--native { background: #fbfcfd; border-style: dashed; }
