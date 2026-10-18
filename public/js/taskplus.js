@@ -797,6 +797,10 @@
         }
         c.appendChild(body);
 
+        var dlTeam = deadlineBar(item);
+        if (dlTeam) {
+            c.appendChild(dlTeam);
+        }
         var actions = el('div', 'taskplus-card__actions');
         var open = document.createElement('a');
         open.className = 'taskplus-iconbtn';
@@ -1098,6 +1102,29 @@
         return b;
     }
 
+    /**
+     * 16q-5: barra de prazo também na Hoje (a Occurrence::payload já manda
+     * deadline_pct/deadline_label desde o 15; a Hoje só não desenhava).
+     * Mesma peça do Quadro: track + fill + rótulo; o CSS a põe na base do
+     * card. Concluída e nativa não têm prazo consumido.
+     */
+    function deadlineBar(item) {
+        if (item.is_native || item.is_done || item.deadline_pct === undefined) {
+            return null;
+        }
+        var pct = Math.max(0, Math.min(100, Number(item.deadline_pct) || 0));
+        var tone = pct >= 85 ? 'red' : (pct >= 60 ? 'amber' : 'green');
+        var box = el('div', 'taskplus-bcard__deadline taskplus-bcard__deadline--' + tone);
+        var track = el('div', 'taskplus-bcard__deadline-track');
+        var fill = el('div', 'taskplus-bcard__deadline-fill');
+        fill.style.width = pct + '%';
+        track.appendChild(fill);
+        box.appendChild(track);
+        box.appendChild(el('span', 'taskplus-bcard__deadline-label', item.deadline_label || ''));
+        box.title = 'Prazo ' + pct + '% consumido';
+        return box;
+    }
+
     function card(item, isOverdue) {
         var isNative = !!item.is_native;
 
@@ -1317,6 +1344,10 @@
             actions.appendChild(del);
         }
 
+        var dlOwn = deadlineBar(item);
+        if (dlOwn) {
+            c.appendChild(dlOwn);
+        }
         c.appendChild(actions);
 
         return c;

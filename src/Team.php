@@ -850,6 +850,13 @@ class Team
             // (injetado por Comment::withUnread no payload). Nativa
             // nunca tem diálogo — 0 por construção.
             'unread'      => $isOwn ? (int) ($item['unread'] ?? 0) : 0,
+            // 16q-9b: o card da Equipe no padrão das outras telas — barra de
+            // prazo (15, nº 71) e as 3 últimas entradas do diálogo (16g,
+            // nº 76). Já vêm no payload da Hoje (Occurrence::payload +
+            // Comment::withUnread): só repassa, sem consulta nova.
+            'deadline_pct'   => ($isOwn && $status !== 'done') ? (int) ($item['deadline_pct'] ?? 0) : 0,
+            'deadline_label' => ($isOwn && $status !== 'done') ? (string) ($item['deadline_label'] ?? '') : '',
+            'recent'         => $isOwn && is_array($item['recent'] ?? null) ? array_values($item['recent']) : [],
             // 'ticket' | 'project' | '' (própria)
             'source'    => (string) ($item['source'] ?? ''),
             // Link do item nativo (abre no GLPI); vazio nas próprias

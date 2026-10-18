@@ -107,6 +107,10 @@ class Access
             // cada front/ passe mais uma variável — vão junto no `nav`.
             'theme'       => Prefs::get((int) Session::getLoginUserID())['theme'],
             'quick_links' => QuickLinks::all(),
+            // 16q-6: avatar do usuário na faixa e selo nos cards do Quadro
+            // pessoal (mesma régua de rótulo do Comment: firstname+realname,
+            // fallback no login) — vem da sessão, sem consulta.
+            'user_label'  => self::sessionUserLabel(),
         ];
     }
 
@@ -292,5 +296,17 @@ class Access
     public static function canTeam(): bool
     {
         return self::canConfigPhases();
+    }
+
+    /** 16q-6: rótulo do usuário logado a partir da sessão (sem consulta). */
+    public static function sessionUserLabel(): string
+    {
+        $label = trim(
+            (string) ($_SESSION['glpifirstname'] ?? '') . ' ' . (string) ($_SESSION['glpirealname'] ?? '')
+        );
+        if ($label === '') {
+            $label = (string) ($_SESSION['glpiname'] ?? '');
+        }
+        return $label;
     }
 }

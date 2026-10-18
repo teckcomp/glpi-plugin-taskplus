@@ -529,6 +529,14 @@
         clear.addEventListener('click', clearPeriod);
         bar.appendChild(clear);
 
+        // 16q-7: membros do setor — o card.js desenha os avatares (5 + "+N
+        // no setor", expansível) a partir desta lista; aqui só os dados.
+        var membersBox = el('div', 'taskplus-tb-members');
+        membersBox.setAttribute('data-members', JSON.stringify(state.data.members.map(function (m) {
+            return String(m.label || '');
+        })));
+        bar.appendChild(membersBox);
+
         // 16 (nº 73): "Ver tudo" — todas as abertas futuras do setor,
         // sem o teto de 7 dias. Preferência do navegador por usuário.
         var allOn = state.showAll && !state.data.period.active;

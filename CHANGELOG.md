@@ -21,9 +21,43 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
   e atraso num chip só ("⚠ 05/10 · há 13 dias"), prazo junto da data
   ("🕓 30/10 · faltam 12 dias"), motivo da pendência no tooltip, 💬/📎/
   validação como ícones, colaboradores como avatares; rodapé do diálogo
-  mostra só a última entrada (ajuste da nº 76). Equipe: avatar, setores
+  segue com as 3 últimas entradas (nº 76 confirmada). Equipe: avatar, setores
   sob o nome e barra segmentada no placar, com escudo contando as
   concluídas que aguardam validação.
+- **Layout igual ao mockup** (16q-4): a linha do título recebe subtítulo,
+  os interruptores (Ver tudo, Mostrar concluídas/pausadas), o botão
+  primário e, no Quadro de Equipe, o seletor de setor; interruptores no
+  lugar de checkboxes; colunas do quadro com a altura do conteúdo e
+  "+ Adicionar tarefa"; "até hoje" como chip âmbar; "há N d"; check de
+  concluir à direita; KPIs em minúsculas; aviso de período discreto;
+  Histórico como trilha com ponto de estado.
+- Hoje (16q-5): barra de prazo também nos cards da Hoje (próprios e de
+  equipe); check de concluir mais visível; lateral plana com "Quadro eq.".
+- Quadro (16q-6): selo do dono (avatar do usuário) nos cards do Quadro
+  pessoal e avatar na faixa; ícones da lateral em SVG, iguais ao mockup.
+- Quadro de Equipe (16q-7): membros do setor na barra (5 avatares +
+  "+N no setor", expansível); paleta dos selos mais viva, sem cor
+  repetida entre pessoas na mesma tela (até 12).
+- Equipe (16q-9): setores na linha da busca, legenda da barra, seta no
+  fim da linha do técnico e tarefas como cards (chip de prazo/atraso,
+  check à direita, ações em ícone no hover; Validar/Reprovar visíveis).
+  Os cards da Equipe trazem descrição, barra de categoria, barra de
+  prazo, 💬/📎 e as 3 últimas entradas do diálogo (`Team::itemRow`
+  repassa o que o payload da Hoje já tinha — sem consulta nova).
+- Semana (16q-12): navegação "‹ Esta semana ›" na linha do título e o
+  intervalo como subtítulo; dia "12 Seg" com contador só quando há
+  tarefa; "Depois desta semana" em faixa horizontal com a data no chip.
+- Painel (16q-13): período como subtítulo; "ver painel de" e Exportar
+  CSV na linha do título; mapa de calor ocupando a largura; taxa por
+  rotina e por responsável lado a lado.
+- Correção (16q-14): mapa de calor do Painel embaralhado e regras do
+  redesign que perdiam na cascata para regras antigas de mesmo seletor
+  (interruptor "Ver tudo", linha do técnico e lista da Equipe) — bloco
+  final de precedência.
+- Histórico (16q-15): "ver histórico de" na linha do título, busca
+  primeiro; dia por extenso; trilha em linha única (ponto · hora · nome
+  com rotina/categoria · 💬/📎 e estado à direita; descrição e motivo
+  em tooltip).
 
 ### Corrigido
 

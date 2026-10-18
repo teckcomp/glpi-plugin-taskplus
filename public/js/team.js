@@ -222,6 +222,11 @@
             is_native: !!i.is_native,
             // 9a-2: não lidos DO GESTOR nesta tarefa (payload antigo = 0)
             unread: (typeof i.unread === 'number') ? i.unread : 0,
+            // 16q-10b (T144): chaves novas do itemRow têm que passar aqui,
+            // senão somem antes do card — barra de prazo e diálogo
+            deadline_pct: (typeof i.deadline_pct === 'number') ? i.deadline_pct : 0,
+            deadline_label: (typeof i.deadline_label === 'string') ? i.deadline_label : '',
+            recent: Array.isArray(i.recent) ? i.recent.filter(function (c) { return c && typeof c === 'object'; }) : [],
             source: (typeof i.source === 'string') ? i.source : '',
             url: (typeof i.url === 'string') ? i.url : ''
         };
@@ -728,6 +733,11 @@
             row.appendChild(el('span', 'taskplus-team__title', item.name));
         }
 
+        // 16q-9b: categoria como chip (o card.js põe a barra de cor)
+        if (item.category) {
+            row.appendChild(el('span', 'taskplus-badge taskplus-badge--category', item.category));
+        }
+
         if (item.source === 'ticket') {
             row.appendChild(el('span', 'taskplus-badge taskplus-badge--ticket', 'Ticket'));
         } else if (item.source === 'project') {
@@ -844,6 +854,54 @@
 
         if (acts.childNodes.length > 0) {
             row.appendChild(acts);
+        }
+
+        // 16q-9b: descrição, rodapé do diálogo e barra de prazo — o card.js
+        // organiza no padrão dos cards. Clique no rodapé abre o diálogo.
+        if (item.description) {
+            row.appendChild(linkify(el('div', 'taskplus-team__desc'), item.description));
+        }
+        var rec = Array.isArray(item.recent) ? item.recent : [];
+        if (rec.length) {
+            var box = el('div', 'taskplus-card__recent');
+            rec.forEach(function (c) {
+                var line = el('div', 'taskplus-card__recent-line');
+                line.appendChild(el('b', null, c.author || '\u2014'));
+                line.appendChild(document.createTextNode(' \u00b7 ' + (c.date || '') + ' \u00b7 '));
+                var first = String(c.content || '').split(/\r?\n/)[0].trim();
+                if (first.length > 80) {
+                    first = first.slice(0, 79) + '\u2026';
+                }
+                if (first === '' && c.has_file) {
+                    first = '\uD83D\uDCCE anexo';
+                }
+                line.appendChild(linkify(el('span', 'taskplus-card__recent-text'), first));
+                line.title = String(c.content || '');
+                box.appendChild(line);
+            });
+            if (item.id) {
+                box.classList.add('taskplus-card__recent--click');
+                box.addEventListener('click', function () {
+                    var d = row.querySelector('.taskplus-team__act--dialog');
+                    if (d) {
+                        d.click();
+                    }
+                });
+            }
+            row.appendChild(box);
+        }
+        if (item.id && !item.is_done && (item.deadline_label || item.deadline_pct > 0)) {
+            var pct = Math.max(0, Math.min(100, Number(item.deadline_pct) || 0));
+            var tone = pct >= 85 ? 'red' : (pct >= 60 ? 'amber' : 'green');
+            var dl = el('div', 'taskplus-bcard__deadline taskplus-bcard__deadline--' + tone);
+            var track = el('div', 'taskplus-bcard__deadline-track');
+            var fill = el('div', 'taskplus-bcard__deadline-fill');
+            fill.style.width = pct + '%';
+            track.appendChild(fill);
+            dl.appendChild(track);
+            dl.appendChild(el('span', 'taskplus-bcard__deadline-label', item.deadline_label));
+            dl.title = 'Prazo ' + pct + '% consumido';
+            row.appendChild(dl);
         }
 
         return row;

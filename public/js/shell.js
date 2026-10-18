@@ -82,10 +82,88 @@
         }
     }
 
+    /**
+     * 16q-4: a linha do título recebe os controles "de tela" que as telas
+     * montam na barra de filtros — interruptores e botão primário à direita,
+     * seletor de setor ao lado do título — como no mockup aprovado. Não
+     * edita os JS de tela: observa .taskplus-main e MOVE os nós (os
+     * listeners vão junto). Regra para tela que recria a barra a cada
+     * render (teamboard.js): um nó por seletor em cada área — o que chega
+     * novo substitui o que estava lá.
+     */
+    var MOVE_RIGHT = [
+        '.taskplus-block__tools:has(#tp-btn-new)', // Hoje: Ver tudo + Mostrar concluídas + Nova tarefa
+        '.taskplus-toolbar > .taskplus-toolbar__toggle', // Rotinas: Mostrar pausadas
+        '.taskplus-toolbar > .btn-primary',       // Rotinas: Nova rotina
+        '.taskplus-weeknav',                      // Semana: ‹ Esta semana › (16q-12)
+        '.taskplus-toolbar2__all',                // Quadro/Equipe/Semana: Ver tudo
+        '.taskplus-toolbar2__new',                // Quadro/Equipe: Nova tarefa
+        '#tp-p-view', '#tp-h-view',               // Painel/Histórico: ver de quem (16q-13/15)
+        '#tp-p-export', '#tp-h-export'            // Painel/Histórico: Exportar CSV
+    ];
+    var MOVE_MID = ['.taskplus-toolbar2__sector']; // Quadro de Equipe: setor + ★ + papel
+
+    function moveInto(main, areaId, selectors) {
+        var area = document.getElementById(areaId);
+        if (!area) {
+            return;
+        }
+        selectors.forEach(function (sel) {
+            var fresh = main.querySelector(sel);
+            if (!fresh) {
+                return;
+            }
+            var old = area.querySelector(sel);
+            if (old && old !== fresh) {
+                old.parentNode.removeChild(old);
+            }
+            fresh.setAttribute('data-tp-moved', sel);
+            area.appendChild(fresh);
+        });
+        // ordem estável = ordem da lista (um nó movido antes não fica fora de lugar)
+        selectors.forEach(function (sel) {
+            var n = area.querySelector(':scope > ' + sel);
+            if (n && n !== area.lastElementChild) {
+                area.appendChild(n);
+            }
+        });
+    }
+
+    function relocate(main) {
+        moveInto(main, 'taskplus-ctx-right', MOVE_RIGHT);
+        moveInto(main, 'taskplus-ctx-mid', MOVE_MID);
+        // Mês/dia de hoje no subtítulo da Hoje (o servidor não manda)
+        var sub = document.getElementById('taskplus-ctx-sub');
+        var ctx = sub ? sub.closest('.taskplus-ctx') : null;
+        if (sub && ctx && ctx.getAttribute('data-screen') === 'today' && !sub.textContent) {
+            try {
+                var d = new Date();
+                var txt = d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+                sub.textContent = txt.charAt(0).toUpperCase() + txt.slice(1);
+            } catch (e) { /* locale indisponível: fica vazio */ }
+        }
+    }
+
     function init() {
         var shell = document.getElementById('taskplus-shell');
         if (!shell) {
             return;
+        }
+        var main = document.querySelector('.taskplus-app .taskplus-main');
+        if (main && window.MutationObserver) {
+            relocate(main);
+            var busy = false;
+            new MutationObserver(function () {
+                if (busy) {
+                    return;
+                }
+                busy = true;
+                window.setTimeout(function () {
+                    busy = false;
+                    relocate(main);
+                    fit();
+                }, 0);
+            }).observe(main, { childList: true, subtree: true });
         }
         fit();
         window.addEventListener('resize', fit);
@@ -105,7 +183,7 @@
         });
     }
 
-    window.TaskplusShell = { apply: apply, current: current, fit: fit };
+    window.TaskplusShell = { apply: apply, current: current, fit: fit, relocate: relocate };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

@@ -12,20 +12,21 @@
 <script>document.documentElement.setAttribute('data-taskplus-theme', {{ nav.theme == 'light' ? "'light'" : "'dark'" }});</script>
 
 {% set screens = {
-    'today':     { 'icon': 'ti-checkbox',        'label': __('Hoje', 'taskplus'),             'hint': __('Suas tarefas do dia, em um único lugar', 'taskplus') },
-    'board':     { 'icon': 'ti-layout-kanban',   'label': __('Quadro', 'taskplus'),           'hint': __('Arraste os cards entre as colunas. Soltar numa fase pede o novo prazo; em "Concluídas" conclui; em "Pendentes" pede motivo, data e hora. Tarefa atrasada fica na fase onde está, marcada em vermelho com o tempo de atraso.', 'taskplus') },
-    'teamboard': { 'icon': 'ti-users-group',     'label': __('Quadro de Equipe', 'taskplus'), 'hint': __('Tarefas da equipe do setor, com um ou mais colaboradores por tarefa. Arraste entre as fases — todo movimento pede um comentário (e, nas fases, o novo prazo); tarefa atrasada fica onde está, marcada em vermelho. Clique no card para ver ou editar.', 'taskplus') },
-    'routines':  { 'icon': 'ti-repeat',          'label': __('Rotinas', 'taskplus'),          'hint': __('Recorrências que viram tarefa na sua Hoje sozinhas. Rotina criada para a equipe aparece em "Criadas para a equipe".', 'taskplus') },
-    'week':      { 'icon': 'ti-calendar-week',   'label': __('Semana', 'taskplus'),           'hint': __('A grade mostra suas tarefas próprias (rotinas e avulsas) e as de equipe, no dia do PRAZO, com a barra de prazo. As origens do GLPI — tickets e projetos — não têm dado por dia e seguem na tela Hoje.', 'taskplus') },
-    'team':      { 'icon': 'ti-users',           'label': __('Equipe', 'taskplus'),           'hint': __('O dia de cada técnico dos setores que você administra — os mesmos números que ele vê na tela Hoje. Clique no técnico para abrir as tarefas.', 'taskplus') },
-    'panel':     { 'icon': 'ti-chart-bar',       'label': __('Painel', 'taskplus'),           'hint': __('O Painel mede as tarefas próprias do plugin (rotinas e avulsas). As origens do GLPI — tickets e projetos — não têm dado por dia e ficam de fora. Tarefa pendente sai da régua: tem volta marcada.', 'taskplus') },
-    'history':   { 'icon': 'ti-history',         'label': __('Histórico', 'taskplus'),        'hint': __('O Histórico mostra a trilha das tarefas próprias do plugin (rotinas e avulsas), inclusive puladas e excluídas. As origens do GLPI — tickets e projetos — não têm trilha por dia e ficam de fora.', 'taskplus') },
-    'config':    { 'icon': 'ti-settings',        'label': __('Configurações', 'taskplus'),    'hint': '' }
+    'today':     { 'icon': 'ti-checkbox',        'label': __('Hoje', 'taskplus'),             'svg': '<path d="M9 11l3 3l8 -8"/><path d="M20 12v6a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h9"/>', 'sub': '', 'hint': __('Suas tarefas do dia, em um único lugar', 'taskplus') },
+    'board':     { 'icon': 'ti-layout-kanban',   'label': __('Quadro', 'taskplus'),           'svg': '<path d="M4 4h6v16h-6z"/><path d="M14 4h6v10h-6z"/>', 'sub': __('minhas tarefas', 'taskplus'), 'hint': __('Arraste os cards entre as colunas. Soltar numa fase pede o novo prazo; em "Concluídas" conclui; em "Pendentes" pede motivo, data e hora. Tarefa atrasada fica na fase onde está, marcada em vermelho com o tempo de atraso.', 'taskplus') },
+    'teamboard': { 'icon': 'ti-users-group',     'label': __('Quadro de Equipe', 'taskplus'), 'svg': '<circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85"/>', 'sub': '', 'hint': __('Tarefas da equipe do setor, com um ou mais colaboradores por tarefa. Arraste entre as fases — todo movimento pede um comentário (e, nas fases, o novo prazo); tarefa atrasada fica onde está, marcada em vermelho. Clique no card para ver ou editar.', 'taskplus') },
+    'routines':  { 'icon': 'ti-repeat',          'label': __('Rotinas', 'taskplus'),          'svg': '<path d="M4 12v-3a3 3 0 0 1 3 -3h13m-3 -3l3 3l-3 3"/><path d="M20 12v3a3 3 0 0 1 -3 3h-13m3 3l-3 -3l3 -3"/>', 'sub': __('recorrências que geram tarefas sozinhas', 'taskplus'), 'hint': __('Recorrências que viram tarefa na sua Hoje sozinhas. Rotina criada para a equipe aparece em "Criadas para a equipe".', 'taskplus') },
+    'week':      { 'icon': 'ti-calendar',        'label': __('Semana', 'taskplus'),           'svg': '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M16 3v4M8 3v4M4 11h16"/>', 'sub': '', 'hint': __('A grade mostra suas tarefas próprias (rotinas e avulsas) e as de equipe, no dia do PRAZO, com a barra de prazo. As origens do GLPI — tickets e projetos — não têm dado por dia e seguem na tela Hoje.', 'taskplus') },
+    'team':      { 'icon': 'ti-users',           'label': __('Equipe', 'taskplus'),           'svg': '<circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85"/>', 'sub': __('o dia de cada técnico, os mesmos números que ele vê na Hoje', 'taskplus'), 'hint': __('O dia de cada técnico dos setores que você administra — os mesmos números que ele vê na tela Hoje. Clique no técnico para abrir as tarefas.', 'taskplus') },
+    'panel':     { 'icon': 'ti-chart-bar',       'label': __('Painel', 'taskplus'),           'svg': '<path d="M3 20h18"/><path d="M5 20v-8h3v8M10 20v-13h3v13M15 20v-5h3v5"/>', 'sub': '', 'hint': __('O Painel mede as tarefas próprias do plugin (rotinas e avulsas). As origens do GLPI — tickets e projetos — não têm dado por dia e ficam de fora. Tarefa pendente sai da régua: tem volta marcada.', 'taskplus') },
+    'history':   { 'icon': 'ti-history',         'label': __('Histórico', 'taskplus'),        'svg': '<path d="M12 8v4l2 2"/><path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/>', 'sub': '', 'hint': __('O Histórico mostra a trilha das tarefas próprias do plugin (rotinas e avulsas), inclusive puladas e excluídas. As origens do GLPI — tickets e projetos — não têm trilha por dia e ficam de fora.', 'taskplus') },
+    'config':    { 'icon': 'ti-settings',        'label': __('Configurações', 'taskplus'),    'sub': '', 'hint': '' }
 } %}
 {% set cur = screens[active] ?? screens['today'] %}
 
 <header class="taskplus-top" id="taskplus-shell"
-        data-prefs-url="{{ plugin_web_dir }}/ajax/prefs.php">
+        data-prefs-url="{{ plugin_web_dir }}/ajax/prefs.php"
+        data-user-label="{{ nav.user_label ?? '' }}">
     <a class="taskplus-brand" href="{{ plugin_web_dir }}/front/today.php" title="{{ __('Tarefas', 'taskplus') }}">
         <img class="taskplus-brand__mark" alt="" src="{{ plugin_web_dir }}/img/taskplus-mark.svg">
         <span class="taskplus-brand__name">Task+</span>
@@ -71,6 +72,7 @@
            href="{{ plugin_web_dir }}/front/config.form.php" title="{{ __('Configurações', 'taskplus') }}">
             <i class="ti ti-settings"></i></a>
         {% endif %}
+        <span class="taskplus-top__me" id="taskplus-top-me" title="{{ nav.user_label ?? '' }}"></span>
     </div>
 </header>
 
@@ -82,7 +84,7 @@
             {% set fileKey = key == 'config' ? 'config.form' : key %}
             <li class="taskplus-sidebar__item{{ active == key ? ' taskplus-sidebar__item--active' : '' }}">
                 <a href="{{ plugin_web_dir }}/front/{{ fileKey }}.php" title="{{ screens[key].label }}">
-                    <i class="ti {{ screens[key].icon }}"></i><span>{{ screens[key].label }}</span></a>
+                    <svg class="taskplus-sidebar__svg" viewBox="0 0 24 24" aria-hidden="true">{{ screens[key].svg|raw }}</svg><span>{{ key == 'teamboard' ? __('Quadro eq.', 'taskplus') : screens[key].label }}</span></a>
             </li>
             {% endif %}
             {% endfor %}
@@ -91,16 +93,20 @@
             <li class="taskplus-sidebar__item taskplus-sidebar__item--exit">
                 <a href="{{ plugin_web_dir|replace({'/plugins/taskplus': ''}) }}/front/central.php?taskplus_home=0"
                    title="{{ __('Visão Geral', 'taskplus') }}">
-                    <i class="ti ti-layout-dashboard"></i><span>{{ __('Visão Geral', 'taskplus') }}</span></a>
+                    <svg class="taskplus-sidebar__svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg><span>{{ __('Visão Geral', 'taskplus') }}</span></a>
             </li>
             {% endif %}
         </ul>
     </nav>
 </aside>
 
-<div class="taskplus-ctx">
-    <h1 class="taskplus-ctx__title">{{ cur.label }}</h1>
+<div class="taskplus-ctx" data-screen="{{ active }}">
+    <h1 class="taskplus-ctx__title">{{ cur.label }}<em class="taskplus-ctx__sub" id="taskplus-ctx-sub">{{ cur.sub }}</em></h1>
+    {# 16q-4: o shell.js traz para cá o seletor de setor (Quadro de Equipe) #}
+    <span class="taskplus-ctx__mid" id="taskplus-ctx-mid"></span>
     {% if cur.hint %}
     <span class="taskplus-ctx__help" tabindex="0" data-tip="{{ cur.hint }}" aria-label="{{ cur.hint }}">?</span>
     {% endif %}
+    {# 16q-4: o shell.js traz para cá os interruptores e o botão primário da tela #}
+    <span class="taskplus-ctx__right" id="taskplus-ctx-right"></span>
 </div>

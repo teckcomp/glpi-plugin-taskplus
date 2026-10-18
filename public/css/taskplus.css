@@ -109,8 +109,8 @@ html[data-taskplus-theme] #page { padding-bottom: 0 !important; }
 /* Lateral estreita */
 .taskplus-left {
     grid-column: 1; grid-row: 2 / span 2;
-    background: var(--tp-surface); border-right: 1px solid var(--tp-line);
-    padding: 10px 8px; position: sticky; top: 0; align-self: start;
+    background: transparent; border-right: 0;
+    padding: 10px 6px; position: sticky; top: 0; align-self: start;
     max-height: calc(100vh - 52px); overflow-y: auto;
 }
 .taskplus-pagetitle { display: none; }
@@ -120,15 +120,46 @@ html[data-taskplus-theme] #page { padding-bottom: 0 !important; }
     padding: 8px 2px; border-radius: 8px; color: var(--tp-ink-2) !important;
     font-size: 10px; font-weight: 500; text-align: center; line-height: 1.1; text-decoration: none !important;
 }
-.taskplus-sidebar__item i { font-size: 1.25rem; }
+.taskplus-sidebar__item i { font-size: 1.3rem; line-height: 1; }
+.taskplus-sidebar__svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.taskplus-top__me { display: inline-flex; margin-left: 6px; }
+.taskplus-top__me .taskplus-avatar { border-color: rgba(255,255,255,.35); }
 .taskplus-sidebar__item a:hover { background: var(--tp-line-2); color: var(--tp-ink) !important; }
 .taskplus-sidebar__item--active a { background: var(--tp-brand-soft); color: var(--tp-brand) !important; font-weight: 600; }
 .taskplus-sidebar__item--disabled span { color: var(--tp-faint) !important; cursor: not-allowed; }
 .taskplus-sidebar__item--exit { margin-top: 8px; border-top: 1px solid var(--tp-line-2); padding-top: 8px; }
 
 /* Linha de contexto: título + "?" */
-.taskplus-ctx { grid-column: 2; grid-row: 2; display: flex; align-items: center; gap: 10px; padding: 14px 20px 0; }
-.taskplus-ctx__title { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -.3px; line-height: 1.1; color: var(--tp-ink); }
+.taskplus-ctx { grid-column: 2; grid-row: 2; display: flex; align-items: center; gap: 10px; padding: 14px 20px 0; flex-wrap: wrap; }
+.taskplus-ctx__title { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -.3px; line-height: 1.1; color: var(--tp-ink); display: flex; align-items: baseline; gap: 10px; }
+.taskplus-ctx__sub { font-style: normal; font-weight: 500; font-size: 13px; color: var(--tp-muted); letter-spacing: 0; }
+.taskplus-ctx__sub:empty { display: none; }
+.taskplus-ctx__mid { display: flex; align-items: center; gap: 8px; }
+.taskplus-ctx__mid:empty { display: none; }
+.taskplus-ctx__right { margin-left: auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.taskplus-ctx__right:empty { display: none; }
+.taskplus-ctx__right .taskplus-block__tools { display: flex; align-items: center; gap: 14px; }
+.taskplus-ctx__right .btn-primary { margin-left: 4px; }
+.taskplus-ctx__mid .taskplus-toolbar2__sector { margin: 0; }
+.taskplus-ctx__mid .taskplus-toolbar2__sector > span:first-child { display: none; } /* "Setor:" — o título já diz */
+/* Interruptor (checkbox dos toggles vira switch) */
+.taskplus-toolbar__toggle input[type="checkbox"], .taskplus-checkline input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none; width: 32px; height: 18px; border-radius: 9px; background: var(--tp-line);
+    position: relative; margin: 0; cursor: pointer; transition: background .15s; flex: none;
+}
+.taskplus-toolbar__toggle input[type="checkbox"]::after, .taskplus-checkline input[type="checkbox"]::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .15s;
+}
+.taskplus-toolbar__toggle input[type="checkbox"]:checked, .taskplus-checkline input[type="checkbox"]:checked { background: var(--tp-brand); }
+.taskplus-toolbar__toggle input[type="checkbox"]:checked::after, .taskplus-checkline input[type="checkbox"]:checked::after { left: 16px; }
+.taskplus-toolbar__toggle { gap: 8px; }
+.taskplus-toolbar2__all { position: relative; padding-left: 44px !important; }
+.taskplus-toolbar2__all::before { content: ""; position: absolute; left: 8px; top: 8px; width: 28px; height: 16px; border-radius: 8px; background: var(--tp-line); transition: background .15s; }
+.taskplus-toolbar2__all::after { content: ""; position: absolute; left: 10px; top: 10px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: left .15s; }
+.taskplus-toolbar2__all--on::before { background: var(--tp-brand); }
+.taskplus-toolbar2__all--on::after { left: 24px; }
+.taskplus-toolbar2__all, .taskplus-toolbar2__all--on { background: transparent; border-color: transparent; color: var(--tp-ink-2); font-weight: 500; }
+.taskplus-toolbar2__all:hover { border-color: transparent; color: var(--tp-ink); }
 .taskplus-ctx__help {
     width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--tp-line);
     color: var(--tp-muted); display: inline-flex; align-items: center; justify-content: center;
@@ -173,9 +204,9 @@ html[data-taskplus-theme="dark"] .taskplus-app .btn-primary { color: var(--tp-ba
 .taskplus-toolbar2__vcount { font-size: 12px; color: var(--tp-muted); white-space: nowrap; }
 .taskplus-toolbar2__sector { font-size: 13px; color: var(--tp-ink-2); display: flex; align-items: center; gap: 6px; font-weight: 500; }
 .taskplus-toolbar2__new { margin-left: 0; white-space: nowrap; }
-/* 16q-1b: Ver tudo + Nova tarefa à direita, como no mockup (sem mover nós: o teamboard.js recria a barra a cada render) */
-.taskplus-toolbar2 > .taskplus-toolbar2__all, .taskplus-weekbar > .taskplus-toolbar2__all { margin-left: auto; }
-.taskplus-toolbar2__note, .taskplus-native-warn {
+/* 16q-4: Ver tudo e Nova tarefa vivem na linha do título (shell.js os move) */
+.taskplus-toolbar2__note { flex-basis: 100%; padding: 0; margin-top: -4px; color: var(--tp-muted); font-size: 12.5px; display: flex; align-items: center; gap: 8px; }
+.taskplus-native-warn {
     flex-basis: 100%; padding: 7px 10px; border-radius: var(--tp-r-ctl);
     background: var(--tp-warn-soft); color: var(--tp-warn); font-size: 12.5px; display: flex; align-items: center; gap: 8px;
 }
@@ -213,7 +244,7 @@ html[data-taskplus-theme="dark"] .taskplus-app .btn-primary { color: var(--tp-ba
 }
 .taskplus-kpi:last-child { border-right: 0; margin-right: 0; }
 .taskplus-kpi__value { font-size: 24px; font-weight: 700; letter-spacing: -.6px; line-height: 1; color: var(--tp-ink); font-variant-numeric: tabular-nums; }
-.taskplus-kpi__label { font-size: 12.5px; color: var(--tp-muted); font-weight: 500; }
+.taskplus-kpi__label { font-size: 12.5px; color: var(--tp-muted); font-weight: 500; text-transform: lowercase; }
 .taskplus-kpi--late .taskplus-kpi__value { color: var(--tp-late); }
 .taskplus-kpi--pending .taskplus-kpi__value { color: var(--tp-warn); }
 .taskplus-kpi--done .taskplus-kpi__value { color: var(--tp-ok); }
@@ -239,7 +270,7 @@ html[data-taskplus-theme="dark"] .taskplus-app .btn-primary { color: var(--tp-ba
 
 /* Estado vazio: convite, não erro */
 .taskplus-empty { background: transparent; border: 0; border-radius: 0; padding: 36px 20px; text-align: center; color: var(--tp-muted); font-size: 13px; }
-.taskplus-empty__icon { font-size: 1.8rem; color: var(--tp-faint); }
+.taskplus-empty__icon { display: none; }
 .taskplus-empty h3 { margin: 8px 0 4px; font-size: 14px; font-weight: 600; color: var(--tp-ink); }
 .taskplus-empty p { margin: 0 auto; max-width: 460px; color: var(--tp-muted); }
 .taskplus-empty--sm { padding: 16px 8px; }
@@ -252,7 +283,12 @@ html[data-taskplus-theme="dark"] .taskplus-app .btn-primary { color: var(--tp-ba
     position: relative; background: var(--tp-surface); border: 0; border-radius: var(--tp-r);
     box-shadow: var(--tp-shadow); overflow: hidden; color: var(--tp-ink);
 }
-.taskplus-card { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px 11px; margin-bottom: 8px; }
+.taskplus-card { display: flex; align-items: flex-end; gap: 10px; padding: 10px 12px 11px; margin-bottom: 8px; }
+.taskplus-card > .taskplus-bcard__deadline { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; }
+.taskplus-card > .taskplus-bcard__deadline .taskplus-bcard__deadline-label { display: none; }
+.taskplus-card > .taskplus-check { order: 2; margin: 0 0 1px; }
+.taskplus-card > .taskplus-card__body { order: 1; }
+.taskplus-card > .taskplus-card__actions { order: 3; position: absolute; top: 8px; right: 8px; background: var(--tp-surface); padding: 2px; border-radius: 6px; }
 .taskplus-bcard { padding: 10px 12px 11px; cursor: grab; }
 .taskplus-bcard:hover, .taskplus-card:hover { box-shadow: var(--tp-shadow-2); }
 .taskplus-bcard:active { cursor: grabbing; }
@@ -287,7 +323,7 @@ html[data-taskplus-theme="dark"] .taskplus-app .btn-primary { color: var(--tp-ba
 /* Check de concluir (Hoje) */
 .taskplus-check {
     flex: 0 0 auto; width: 22px; height: 22px; margin-top: 2px;
-    border: 1.5px solid var(--tp-line); border-radius: 50%; background: transparent;
+    border: 1.5px solid var(--tp-muted); border-radius: 50%; background: transparent;
     cursor: pointer; padding: 0; color: transparent; font-size: 0.7rem;
     display: inline-flex; align-items: center; justify-content: center;
     transition: border-color .15s, background .15s;
@@ -309,6 +345,7 @@ html[data-taskplus-theme="dark"] .taskplus-app .btn-primary { color: var(--tp-ba
 .taskplus-badge--limit { color: var(--tp-ink-2); font-variant-numeric: tabular-nums; }
 .taskplus-badge--late { background: var(--tp-late-soft); color: var(--tp-late); font-weight: 600; }
 .taskplus-badge--pending { background: var(--tp-warn-soft); color: var(--tp-warn); font-weight: 600; }
+.taskplus-badge--today { font-weight: 600; }
 .taskplus-badge--done { color: var(--tp-ok); }
 .taskplus-badge--validate { background: var(--tp-warn-soft); color: var(--tp-warn); font-weight: 600; }
 .taskplus-badge--validated { color: var(--tp-ok); font-weight: 600; }
@@ -378,7 +415,7 @@ html[data-taskplus-theme="dark"] .taskplus-app .btn-primary { color: var(--tp-ba
 .taskplus-app [hidden] { display: none !important; }
 .taskplus-card__lbl { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--tp-brand); }
 .taskplus-card__lbl--native { background: var(--tp-line); }
-.taskplus-card__lbl--none { background: transparent; }
+.taskplus-card__lbl--none { background: var(--tp-line); }
 .taskplus-badge__dot { display: inline-block; width: 7px; height: 7px; border-radius: 2px; }
 .taskplus-badge i.ti { font-size: 0.95em; line-height: 1; }
 .taskplus-badge--talk, .taskplus-badge--file { color: var(--tp-muted); padding: 0 4px; }
@@ -394,6 +431,54 @@ html[data-taskplus-theme="dark"] .taskplus-app .btn-primary { color: var(--tp-ba
 .taskplus-bcard__collab--avatars, .taskplus-card--team .taskplus-bcard__collab--avatars { margin: 0 0 0 auto; padding-left: 8px; display: inline-flex; }
 .taskplus-bcard__deadline { min-height: 0; }
 .taskplus-bcard__deadline-label[hidden] + * , .taskplus-bcard__deadline:has(.taskplus-bcard__deadline-label[hidden]) { margin-top: 0; }
+/* Equipe (16q-9): legenda, seta no fim, itens como cards */
+.taskplus-team__legend { display: flex; align-items: center; gap: 14px; margin: -4px 0 10px; font-size: 12px; color: var(--tp-muted); }
+.taskplus-team__legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.taskplus-team__legend .taskplus-team__seg { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.taskplus-team__legend-val { margin-left: auto; }
+.taskplus-team__head { flex-wrap: nowrap; }
+.taskplus-team__chevron { order: 99; margin-left: 6px; }
+.taskplus-team__head > .taskplus-team__id { flex: 1 1 auto; }
+.taskplus-team__pills { margin-left: 0; flex-wrap: nowrap; align-items: center; }
+.taskplus-team__body { border-top: 0; padding: 4px 14px 12px 58px; display: flex; flex-direction: column; gap: 6px; }
+.taskplus-team__create { padding: 0 0 4px; }
+.taskplus-team__act--create { border: 0; background: transparent; color: var(--tp-muted); font-weight: 500; padding: 0; height: auto; }
+.taskplus-team__act--create:hover { background: transparent; color: var(--tp-brand); }
+.taskplus-team__item.taskplus-team__item--card {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 0; border-radius: var(--tp-r);
+    background: var(--tp-surface-2); box-shadow: var(--tp-shadow); position: relative; overflow: hidden;
+    padding-top: 12px; padding-bottom: 12px;
+}
+.taskplus-team__item--card > .taskplus-bcard__deadline { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; }
+.taskplus-team__item--card > .taskplus-bcard__deadline .taskplus-bcard__deadline-label { display: none; }
+.taskplus-team__desc { font-size: 12.5px; color: var(--tp-muted); margin-top: 2px; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; white-space: pre-line; }
+.taskplus-team__cardmain .taskplus-card__recent { margin-top: 8px; }
+.taskplus-team__item--card:hover { box-shadow: var(--tp-shadow-2); }
+.taskplus-team__cardmain { flex: 1 1 auto; min-width: 0; }
+.taskplus-team__cardmain .taskplus-team__title, .taskplus-team__cardmain .taskplus-team__link { font-size: 13.5px; font-weight: 600; color: var(--tp-ink); }
+.taskplus-team__cardmain .taskplus-team__link { color: var(--tp-brand); }
+.taskplus-team__cardmain .taskplus-card__badges { margin-top: 6px; }
+.taskplus-team__cardmain .taskplus-team__detail { margin: 0; font-size: 12px; }
+.taskplus-team__item--card .taskplus-team__acts { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; }
+.taskplus-team__act.taskplus-team__act--icon { width: 28px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--tp-muted); display: inline-flex; align-items: center; justify-content: center; gap: 3px; opacity: 0; transition: opacity .12s; font-size: 12px; }
+.taskplus-team__act--icon i { font-size: 1rem; }
+.taskplus-team__item--card:hover .taskplus-team__act--icon, .taskplus-team__item--card:focus-within .taskplus-team__act--icon { opacity: 1; }
+.taskplus-team__act.taskplus-team__act--icon:hover { background: var(--tp-line-2); color: var(--tp-ink); }
+.taskplus-team__act.taskplus-team__act--icon.taskplus-team__act--unread { opacity: 1; width: auto; padding: 0 6px; background: transparent; color: var(--tp-unread); border: 0; font-weight: 600; }
+.taskplus-team__act.taskplus-team__act--check { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 1.5px solid var(--tp-muted); background: transparent; color: transparent; display: inline-flex; align-items: center; justify-content: center; margin-left: 6px; }
+.taskplus-team__act.taskplus-team__act--check i { font-size: 0.7rem; }
+.taskplus-team__act.taskplus-team__act--check:hover { border-color: var(--tp-ok); color: var(--tp-ok); background: var(--tp-ok-soft); }
+.taskplus-team__act.taskplus-team__act--checked { background: var(--tp-ok); border-color: var(--tp-ok); color: #fff; }
+.taskplus-team__item--card .taskplus-team__act--validate, .taskplus-team__item--card .taskplus-team__act--reject { height: 26px; }
+.taskplus-toolbar2 > .taskplus-team__filter { margin: 0; }
+/* Quadro de Equipe: membros do setor na barra */
+.taskplus-tb-members { display: inline-flex; align-items: center; gap: 8px; margin-left: 4px; }
+.taskplus-tb-members:empty { display: none; }
+.taskplus-tb-members__stack .taskplus-avatar { width: 26px; height: 26px; font-size: 10px; }
+.taskplus-tb-members--open .taskplus-tb-members__stack { flex-wrap: wrap; gap: 2px; }
+.taskplus-tb-members--open .taskplus-tb-members__stack .taskplus-avatar { margin-left: 0; }
+.taskplus-tb-members__more { border: 0; background: transparent; color: var(--tp-muted); font-size: 12px; font-weight: 500; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+.taskplus-tb-members__more:hover { color: var(--tp-ink); background: var(--tp-line-2); }
 /* Equipe: identidade + barra segmentada */
 .taskplus-team__id { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
 .taskplus-team__id .taskplus-avatar { width: 34px; height: 34px; font-size: 12.5px; border: 0; }
@@ -414,27 +499,30 @@ html[data-taskplus-theme="dark"] .taskplus-app .btn-primary { color: var(--tp-ba
 @media (max-width: 760px) { .taskplus-team__bar { width: 90px; } }
 
 /* ===================== Quadro ===================== */
-.taskplus-board { display: flex; gap: 12px; align-items: stretch; height: calc(100vh - 330px); min-height: 360px; overflow-x: auto; padding-bottom: 4px; }
+.taskplus-board { display: flex; gap: 12px; align-items: flex-start; height: calc(100vh - 330px); min-height: 360px; overflow-x: auto; padding-bottom: 4px; }
 /* 16q-1b: o shell.js dá a altura exata (viewport − topo) ao quadro e às colunas da Hoje */
 .taskplus-columns > * { min-width: 0; }
 .taskplus-columns > .taskplus-fit { overflow-y: auto; padding-right: 4px; }
-.taskplus-bcol { flex: 1 1 0; min-width: 240px; background: var(--tp-canvas); border: 0; border-radius: 10px; display: flex; flex-direction: column; }
+.taskplus-bcol { flex: 1 1 0; min-width: 240px; max-height: 100%; background: var(--tp-canvas); border: 0; border-radius: 10px; display: flex; flex-direction: column; }
 .taskplus-bcol__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 4px; border-top: 0 !important; border-radius: 10px 10px 0 0; }
 .taskplus-bcol__title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .taskplus-bcol__name { font-size: 12.5px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--tp-ink-2); }
 .taskplus-bcol--late .taskplus-bcol__name { color: var(--tp-late); }
-.taskplus-bcol__body { display: flex; flex-direction: column; gap: 8px; padding: 4px 8px 10px; min-height: 90px; flex: 1 1 auto; overflow-y: auto; }
+.taskplus-bcol__body { display: flex; flex-direction: column; gap: 8px; padding: 4px 8px 4px; min-height: 40px; flex: 0 1 auto; overflow-y: auto; }
+.taskplus-bcol__add { display: flex; align-items: center; gap: 6px; margin: 2px 8px 8px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--tp-muted); font-size: 12.5px; font-weight: 500; cursor: pointer; text-align: left; }
+.taskplus-bcol__add:hover { background: var(--tp-line-2); color: var(--tp-ink); }
+.taskplus-bcol__add i { font-size: 0.95rem; }
 .taskplus-bcol__body > * { flex-shrink: 0; } /* 16q-1b: com overflow:hidden o card encolhia para caber na coluna */
-.taskplus-bcol__empty { border: 0; padding: 14px 8px; text-align: center; font-size: 12.5px; color: var(--tp-faint); }
+.taskplus-bcol__empty { display: none; }
 .taskplus-bcol--allowed { box-shadow: 0 0 0 1.5px var(--tp-brand) inset; }
 .taskplus-bcol--over { background: var(--tp-brand-soft); }
 
 /* ===================== Semana ===================== */
 .taskplus-weekbar__label { font-size: 14px; font-weight: 600; color: var(--tp-ink); min-width: 150px; text-align: center; }
 .taskplus-weekbar .taskplus-toolbar2__all { margin-left: 6px; }
-.taskplus-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; align-items: stretch; }
+.taskplus-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; align-items: start; }
 @media (max-width: 1100px) { .taskplus-week { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.taskplus-wday { background: var(--tp-canvas); border: 0; border-radius: 10px; padding: 8px; min-height: 160px; display: flex; flex-direction: column; }
+.taskplus-wday { background: var(--tp-canvas); border: 0; border-radius: 10px; padding: 8px; min-height: 220px; display: flex; flex-direction: column; }
 .taskplus-wday--today { box-shadow: inset 0 0 0 1.5px var(--tp-brand); background: var(--tp-canvas); }
 .taskplus-wday__head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 2px 4px; }
 .taskplus-wday__title { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: row; align-items: baseline; gap: 6px; }
@@ -445,10 +533,19 @@ html[data-taskplus-theme="dark"] .taskplus-app .btn-primary { color: var(--tp-ba
 .taskplus-wday__link:hover { background: var(--tp-line-2); color: var(--tp-ink); }
 .taskplus-wday__list { flex: 1 1 auto; }
 .taskplus-wday__empty { color: var(--tp-faint); font-size: 12.5px; text-align: center; padding: 14px 0; }
+.taskplus-wday__head .taskplus-section__count { margin-left: auto; font-size: 12px; }
 .taskplus-wcard .taskplus-badge { white-space: normal; overflow-wrap: anywhere; max-width: 100%; line-height: 1.4; }
-.taskplus-wbeyond { margin-top: 14px; background: transparent; border: 1px dashed var(--tp-line); border-radius: 10px; padding: 10px 12px; }
-.taskplus-wbeyond__head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--tp-ink-2); border: 0; padding-bottom: 6px; margin-bottom: 6px; }
-.taskplus-wbeyond__list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.taskplus-wbeyond { margin-top: 14px; background: transparent; border: 1px dashed var(--tp-line); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 14px; }
+.taskplus-wbeyond[hidden] { display: none; }
+.taskplus-weeknav { display: inline-flex; align-items: center; height: 36px; border: 1px solid var(--tp-line); border-radius: var(--tp-r-ctl); background: var(--tp-surface); overflow: hidden; }
+.taskplus-weeknav .btn { border: 0; border-radius: 0; height: 34px; padding: 0 10px; background: transparent; color: var(--tp-muted); }
+.taskplus-weeknav .btn:hover { background: var(--tp-line-2); color: var(--tp-ink); }
+.taskplus-weeknav .taskplus-weekbar__label { min-width: 120px; padding: 0 10px; font-size: 13px; font-weight: 600; color: var(--tp-ink); }
+.taskplus-weeknav #tp-w-current { font-size: 12px; font-weight: 500; }
+.taskplus-wbeyond__head { flex: none; display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--tp-ink-2); border: 0; padding: 0; margin: 0; }
+.taskplus-wbeyond__head .taskplus-section__count { display: none; }
+.taskplus-wbeyond__list { display: flex; gap: 8px; overflow-x: auto; flex: 1 1 auto; padding-bottom: 2px; }
+.taskplus-wbeyond__list > * { flex: 0 0 250px; margin: 0; }
 .taskplus-wbeyond__date { font-size: 12px; font-weight: 600; color: var(--tp-ink-2); margin-bottom: 2px; }
 
 /* ===================== Equipe ===================== */
@@ -516,16 +613,26 @@ html[data-taskplus-theme="dark"] .taskplus-team__act--edit:hover { color: var(--
 .taskplus-panelblock { background: var(--tp-surface); border: 0; border-radius: 10px; box-shadow: var(--tp-shadow); padding: 14px 16px; margin-bottom: 14px; }
 .taskplus-panelblock__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .taskplus-panelblock__head h3 { font-size: 13px; font-weight: 600; color: var(--tp-ink); margin: 0; }
-.taskplus-hm { display: flex; gap: 3px; overflow-x: auto; padding-bottom: 4px; }
+.taskplus-hm { display: grid; grid-auto-flow: column; grid-template-rows: 16px repeat(7, auto); grid-template-columns: 30px; grid-auto-columns: minmax(0, 1fr); gap: 4px; padding-bottom: 4px; }
+/* mais específico que as regras flex antigas, que vêm depois no arquivo */
+.taskplus-hm > .taskplus-hm__dows, .taskplus-hm > .taskplus-hm__weeks, .taskplus-hm__weeks > .taskplus-hm__week { display: contents; }
+.taskplus-hm > .taskplus-hm__empty { grid-row: 1 / -1; }
 .taskplus-hm__dows { display: flex; flex-direction: column; gap: 3px; margin-right: 4px; }
-.taskplus-hm__dow { height: 14px; font-size: 10px; line-height: 14px; color: var(--tp-muted); text-align: right; min-width: 26px; }
+.taskplus-hm__dow { font-size: 10.5px; color: var(--tp-muted); display: flex; align-items: center; justify-content: flex-end; padding-right: 4px; }
 .taskplus-hm__weeks { display: flex; gap: 3px; }
 .taskplus-hm__week { display: flex; flex-direction: column; gap: 3px; }
-.taskplus-hm__month { height: 14px; font-size: 10px; line-height: 14px; color: var(--tp-muted); white-space: nowrap; overflow: visible; }
+.taskplus-hm__month { height: 16px; font-size: 10.5px; line-height: 16px; color: var(--tp-muted); white-space: nowrap; overflow: visible; }
 .taskplus-hm__cell { width: 14px; height: 14px; border-radius: 3px; display: inline-block; background: var(--tp-line-2); }
+.taskplus-hm .taskplus-hm__cell { width: 100%; height: auto; aspect-ratio: 1 / 1; border-radius: 4px; }
 .taskplus-hm__cell--out { background: transparent; }
 .taskplus-hm__cell--empty { background: var(--tp-line-2); }
 .taskplus-hm__cell--l0 { background: var(--tp-late-soft); }
+.taskplus-panel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; }
+.taskplus-panel-grid > [hidden] { display: none; }
+.taskplus-panel-grid > .taskplus-panelblock { margin-bottom: 0; }
+.taskplus-toolbar2__note--moved { display: none !important; }
+#tp-p-viewbox > label { display: none; }
+.taskplus-ctx__right #tp-p-view { height: 36px; border: 1px solid var(--tp-line); border-radius: var(--tp-r-ctl); background: var(--tp-surface); color: var(--tp-ink); font-size: 13px; font-weight: 600; padding: 0 10px; max-width: 260px; }
 .taskplus-hm__cell--l1 { background: #CFE3E5; }
 .taskplus-hm__cell--l2 { background: #8EC3C8; }
 .taskplus-hm__cell--l3 { background: var(--tp-brand); }
@@ -554,16 +661,17 @@ html[data-taskplus-theme="dark"] .taskplus-hm__cell--l2 { background: #2A7A84; }
 .taskplus-hday { background: transparent; border: 0; border-radius: 0; padding: 0; }
 .taskplus-hday__head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .taskplus-hday__head::after { content: ""; flex: 1; height: 1px; background: var(--tp-line-2); }
-.taskplus-hday__label { font-size: 12px; font-weight: 600; color: var(--tp-muted); }
-.taskplus-hday--today .taskplus-hday__label { color: var(--tp-brand); }
-.taskplus-hday__list { display: flex; flex-direction: column; gap: 6px; }
-.taskplus-hcard { padding: 8px 12px 9px 14px; display: flex; flex-direction: column; gap: 3px; }
-.taskplus-hcard::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--tp-line); }
+.taskplus-hday__label { font-size: 12.5px; font-weight: 600; color: var(--tp-ink-2); }
+.taskplus-hday--today .taskplus-hday__label { color: var(--tp-ink-2); }
+.taskplus-hday__list { display: flex; flex-direction: column; gap: 2px; }
+.taskplus-hcard { padding: 8px 12px 9px 30px; display: flex; flex-direction: column; gap: 3px; background: transparent; box-shadow: none; border-radius: 8px; overflow: visible; }
+.taskplus-hcard:hover { background: var(--tp-surface); box-shadow: var(--tp-shadow); }
+.taskplus-hcard::before { content: ""; position: absolute; left: 10px; top: 13px; width: 10px; height: 10px; border-radius: 50%; background: var(--tp-line); }
 .taskplus-hcard--late::before { background: var(--tp-late); }
 .taskplus-hcard--pending::before { background: var(--tp-warn); }
 .taskplus-hcard--done::before { background: var(--tp-ok); }
 .taskplus-hcard--skipped::before { background: var(--tp-faint); }
-.taskplus-hcard--deleted::before { background: transparent; border-left: 2px dashed var(--tp-late); }
+.taskplus-hcard--deleted::before { background: transparent; border: 2px solid var(--tp-late); }
 .taskplus-hcard--late, .taskplus-hcard--pending, .taskplus-hcard--done, .taskplus-hcard--skipped, .taskplus-hcard--deleted { border-left: 0; }
 .taskplus-hcard__name { font-size: 13px; font-weight: 600; color: var(--tp-ink); overflow-wrap: anywhere; }
 .taskplus-hcard--done .taskplus-hcard__name, .taskplus-hcard--skipped .taskplus-hcard__name { opacity: .8; }
@@ -714,3 +822,32 @@ html[data-taskplus-theme="dark"] .taskplus-hm__cell--l2 { background: #2A7A84; }
     .taskplus-ctx { padding: 12px 12px 0; }
     .taskplus-kpi { padding-right: 14px; margin-right: 14px; }
 }
+
+/* ===================== 16q-14: precedência do redesign =====================
+   Regras do redesign que tinham sido escritas ANTES das antigas de mesmo
+   seletor e perdiam na cascata. Ficam aqui, no fim. O harness 16q-14
+   varre o arquivo e falha em qualquer conflito novo fora da lista
+   de intencionais. */
+.taskplus-toolbar__toggle { gap: 8px; }
+.taskplus-toolbar2__all, .taskplus-toolbar2__all--on { background: transparent; border-color: transparent; color: var(--tp-ink-2); font-weight: 500; height: 34px; }
+.taskplus-toolbar2__all:hover { border-color: transparent; color: var(--tp-ink); }
+.taskplus-team__head { flex-wrap: nowrap; }
+.taskplus-team__pills { margin-left: 0; flex-wrap: nowrap; }
+.taskplus-team__body { border-top: 0; padding: 4px 14px 12px 58px; }
+.taskplus-team__create { padding: 0 0 4px; }
+
+/* ===================== 16q-15: Histórico em linha única ===================== */
+.taskplus-hcard.taskplus-hcard--row { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px 12px 8px 30px; flex-direction: row; }
+.taskplus-hcard.taskplus-hcard--row::before { top: 50%; margin-top: -5px; }
+.taskplus-hcard__time { font-size: 12px; color: var(--tp-muted); font-variant-numeric: tabular-nums; }
+.taskplus-hcard__main { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.taskplus-hcard__main .taskplus-hcard__name { font-size: 13px; }
+.taskplus-hcard__tag { font-size: 11.5px; line-height: 17px; }
+.taskplus-hcard__right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.taskplus-hcard__right .taskplus-badge { white-space: nowrap; }
+.taskplus-hcard__iconbtn { display: inline-flex; align-items: center; gap: 3px; border: 0; background: transparent; color: var(--tp-muted); font-size: 12px; padding: 2px 4px; border-radius: 4px; cursor: pointer; }
+.taskplus-hcard__iconbtn:hover { background: var(--tp-line-2); color: var(--tp-ink); }
+.taskplus-hcard__right .taskplus-hcard__restore { padding: 2px 10px; height: 26px; }
+#tp-h-viewbox > label { display: none; }
+.taskplus-ctx__right #tp-h-view { height: 36px; border: 1px solid var(--tp-line); border-radius: var(--tp-r-ctl); background: var(--tp-surface); color: var(--tp-ink); font-size: 13px; font-weight: 600; padding: 0 10px; max-width: 260px; }
+
