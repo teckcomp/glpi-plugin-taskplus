@@ -27,6 +27,12 @@
     --tp-shadow: 0 1px 1px rgba(16,24,40,.06), 0 0 0 1px rgba(16,24,40,.05);
     --tp-shadow-2: 0 2px 6px rgba(16,24,40,.10), 0 0 0 1px rgba(16,24,40,.08);
     --tp-r: 8px; --tp-r-ctl: 6px;
+    /* 16q-16: o CSS legado do core (css/legacy/includes/_inputs.scss) pinta
+       input:not(.form-control) e select:not(.form-select) com --tblr-bg-forms /
+       --tblr-body-color / --tblr-border-color, numa especificidade que nenhum
+       seletor nosso alcanca. Redefinimos os tokens dele dentro do app e dos
+       modais: os campos (data, select, texto) passam a seguir o tema. */
+    --tblr-bg-forms: var(--tp-surface); --tblr-body-color: var(--tp-ink); --tblr-border-color: var(--tp-line);
 }
 html[data-taskplus-theme="dark"] .taskplus-app, html[data-taskplus-theme="dark"] .taskplus-modal {
     --tp-ink: #E8F0F1;      --tp-ink-2: #C3D3D6;  --tp-muted: #86A0A5;  --tp-faint: #5E767B;

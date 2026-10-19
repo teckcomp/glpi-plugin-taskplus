@@ -3,7 +3,17 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
-## [0.2.10-beta] — 2026-10-18
+## [0.2.11-beta] — 2026-10-19
+
+### Corrigido
+
+- **Campos de data e selects no tema escuro** (16q-16): o CSS legado do
+  GLPI pintava `input:not(.form-control)` e `select:not(.form-select)` de
+  branco com os tokens `--tblr-bg-forms`/`--tblr-body-color`, escondendo o
+  ícone do calendário (branco sobre branco) no Quadro de Equipe, Histórico,
+  Painel, Rotinas e nos modais. Os tokens do core são redefinidos dentro de
+  `.taskplus-app`/`.taskplus-modal` a partir dos tokens do tema. A versão
+  `0.2.10-beta` subiu à produção em 18/10 sem tag; esta é a continuação.
 
 ### Alterado
 
